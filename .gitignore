@@ -1,0 +1,12 @@
+# Python environment and caches
+venv/
+__pycache__/
+*.pyc
+
+# Node dependencies
+node_modules/
+node/
+
+# Database and configuration files
+config/database.local.php
+data/

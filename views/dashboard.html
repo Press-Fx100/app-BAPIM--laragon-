@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ms">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Papan Pemuka Pangkalan Data</title>
+
+    <link rel="icon" href="/app.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/style.css?v=20260929-21">
+    <style>
+        #page-content {
+            opacity: 0;
+        }
+
+        #page-content.is-visible {
+            opacity: 1;
+        }
+    </style>
+
+</head>
+
+<body>
+
+    <div class="app-wrapper">
+
+        <div id="sidebar"></div>
+
+        <div class="app-main">
+
+            <div id="header"></div>
+            <main class="main-content" id="page-content">
+                <div class="dashboard-content dashboard-page dashboard-data-pending">
+
+                    <div class="content-card mb-4 dashboard-filter-card">
+                        <div class="card-header-custom">
+                            <div>
+                                <h5>Penerima Bantuan</h5>
+                                <span>Data gabungan semua penerima bantuan</span>
+                            </div>
+
+                            <div class="dashboard-controls">
+
+                                <div class="dataset-control pic-control">
+                                    <select id="picSelect" class="form-select pic-select">
+                                        <option value="">Semua PIC</option>
+                                    </select>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="statsSection" class="row g-3 mb-4">
+
+                        <div class="col-xl-4 col-md-6">
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <div>
+                                        <div class="stat-label">JUMLAH PENERIMA BANTUAN</div>
+                                        <div id="totalRecipients" class="stat-number">0</div>
+                                    </div>
+
+                                    <div class="stat-icon blue"><i class="bi bi-list-ol" aria-hidden="true"></i></div>
+                                </div>
+
+                                <div class="stat-footer">
+                                    <span>Pemohon Dihubungi: <strong id="contactedRecipients">0</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-xl-4 col-md-6">
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <div>
+                                        <div class="stat-label">JUMLAH PESERTA PROGRAM</div>
+                                        <div id="totalParticipants" class="stat-number">0</div>
+                                    </div>
+
+                                    <div class="stat-icon purple"><i class="bi bi-database" aria-hidden="true"></i>
+                                    </div>
+                                </div>
+
+                                <div class="stat-footer">
+                                    <span>Peserta &gt; 1 program: <strong id="multiProgramParticipants">0</strong></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-xl-4 col-md-6">
+                            <div class="stat-card">
+                                <div class="stat-card-header">
+                                    <div>
+                                        <div class="stat-label">TARIKH DAN WAKTU</div>
+                                        <div id="currentDateTime" class="stat-number">
+                                            <span id="currentTime">-</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="stat-icon green"><i class="bi bi-calendar2-week" aria-hidden="true"></i>
+                                    </div>
+                                </div>
+
+                                <div class="stat-footer">
+                                    <span id="currentDate">-</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div id="recipientNoData" class="content-card empty-datasets mb-4" style="display:none;">
+                        <div class="empty-datasets-icon"><i class="bi bi-database-exclamation" aria-hidden="true"></i>
+                        </div>
+                        <h5>Tiada data dalam sistem</h5>
+                        <p>Tiada data Penerima Bantuan untuk dipaparkan.</p>
+                    </div>
+
+                    <div id="datasetAnalysisSection" class="content-card mb-4">
+
+                        <div class="card-header-custom">
+                            <div>
+                                <h5>Analisis Penerima Bantuan</h5>
+                                <span id="analysisDescription">
+                                    Analisis kualiti data penerima bantuan
+                                </span>
+                            </div>
+                        </div>
+
+                        <div id="analysisSummary" class="analysis-grid"></div>
+
+                        <div class="table-container">
+                            <table class="analysis-table">
+                                <thead>
+                                    <tr>
+                                        <th>Lajur</th>
+                                        <th>Diisi</th>
+                                        <th>Kosong</th>
+                                        <th>Unik</th>
+                                        <th>Jenis / julat</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="analysisColumns"></tbody>
+                            </table>
+                        </div>
+
+                    </div>
+
+                    <div id="chartsSection" class="row g-3 mb-4">
+
+                        <div id="recordsOverviewSection" class="col-xl-8">
+
+                            <div class="content-card chart-card">
+
+                                <div class="card-header-custom">
+                                    <div>
+                                        <h5>Gambaran Keseluruhan Rekod</h5>
+                                        <span>Bilangan rekod mengikut kedudukan baris</span>
+                                    </div>
+                                </div>
+
+                                <div class="chart-wrapper">
+                                    <canvas id="lineChart"></canvas>
+                                </div>
+
+                                <div id="lineLegend" class="chart-legend"></div>
+
+                            </div>
+
+                        </div>
+
+                        <div id="pieChartSection" class="col-xl-4 d-flex">
+
+                            <div class="content-card chart-card">
+
+                                <div class="card-header-custom">
+
+                                    <div>
+                                        <h5>Carta Pai Status</h5>
+
+                                        <span>
+                                            Kumpulkan penerima mengikut status dan tunjukkan peratusan
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+                                <div class="pie-wrapper">
+
+                                    <canvas id="pieChart"></canvas>
+
+                                    <div class="pie-center">
+                                        <div id="pieTotal" class="pie-center-number">0</div>
+                                        <div class="pie-center-label">Penerima Bantuan</div>
+                                    </div>
+
+                                </div>
+
+                                <div id="pieLegend" class="chart-legend"></div>
+
+                            </div>
+
+                        </div>
+
+                        <div id="barChartSection" class="col-xl-8 d-flex">
+
+                            <div class="content-card chart-card">
+
+                                <div class="card-header-custom">
+
+                                    <div>
+                                        <h5>Carta Bar Status</h5>
+
+                                        <span>
+                                            Kumpulkan penerima mengikut status dan tunjukkan kuantiti
+                                        </span>
+
+                                    </div>
+
+                                </div>
+
+                                <div class="chart-wrapper">
+                                    <canvas id="barChart"></canvas>
+                                </div>
+
+                                <div id="barLegend" class="chart-legend"></div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div id="datasetRecordsSection" class="content-card">
+
+                        <div class="card-header-custom">
+                            <div>
+                                <h5>Rekod Penerima Bantuan</h5>
+                                <span>Lihat, cari dan susun rekod penerima bantuan</span>
+                            </div>
+                        </div>
+
+                        <div class="data-toolbar">
+
+                            <input type="search" id="tableSearch" class="form-control data-search"
+                                placeholder="Cari set data...">
+
+                            <select id="pageSize" class="form-select form-select-sm" style="width:150px;">
+                                <option value="50">50 setiap halaman</option>
+                                <option value="100">100 setiap halaman</option>
+                                <option value="200">200 setiap halaman</option>
+                            </select>
+
+                        </div>
+
+                        <div id="recipientTableContainer" class="table-container">
+
+                            <table id="dataTable" class="table table-hover dashboard-table">
+
+                                <thead id="dataTableHead"></thead>
+                                <tbody id="dataTableBody"></tbody>
+
+                            </table>
+
+                        </div>
+
+                        <div class="table-footer">
+
+                            <div id="paginationInfo" class="pagination-info">
+                                0 rekod
+                            </div>
+
+                            <div id="paginationButtons" class="pagination-buttons">
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+            </main>
+        </div>
+
+    </div>
+
+    <script src="/js/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="/js/chart.umd.min.js"></script>
+    <script src="/js/xlsx.js"></script>
+    <script src="/js/dataset.js"></script>
+    <script src="/js/upload.js?v=20260928-1"></script>
+    <script src="/js/upload-page.js"></script>
+    <script src="/js/peserta-program.js?v=20260929-5"></script>
+    <script src="/js/penerima-bantuan.js?v=20260929-5"></script>
+    <script src="/js/user.js?v=20260929-8"></script>
+    <script src="/js/dashboard.js"></script>
+    <script src="/js/header.js"></script>
+    <script src="/js/layout.js"></script>
+    <script src="/js/app.js?v=20260929-1"></script>
+
+</body>
+
+</html>

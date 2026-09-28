@@ -51,9 +51,6 @@ public files.
    be signed in automatically after the account is created. Passwords must be
    at least 8 characters.
 
-Double-clicking `start.bat` opens the Laragon virtual host in your browser;
-Laragon and its Apache/MySQL services must already be running.
-
 ## Data and accounts
 
 - Excel files are read and normalized by the existing browser-side spreadsheet

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ms" class="create-account-document">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Cipta Akaun</title>
+
+    <link rel="icon" href="/app.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body class="create-account-document">
+
+    <div class="create-account-page">
+
+        <div class="create-account-card">
+
+            <div class="create-account-header">
+                <h2>Cipta Akaun</h2>
+                <p>Cipta akaun pengguna baharu</p>
+            </div>
+
+            <form id="createAccountForm">
+
+                <div class="form-group">
+                    <label for="username">Nama Pengguna</label>
+
+                    <input type="text" id="username" name="username" class="form-control" placeholder="Masukkan nama pengguna"
+                        autocomplete="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="displayName">Nama Paparan</label>
+
+                    <input type="text" id="displayName" name="displayName" class="form-control"
+                        placeholder="Masukkan nama paparan" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Kata Laluan</label>
+
+                    <input type="password" id="password" name="password" class="form-control"
+                        placeholder="Masukkan kata laluan" autocomplete="new-password" minlength="8" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword">
+                        Sahkan Kata Laluan
+                    </label>
+
+                    <input type="password" id="confirmPassword" name="confirmPassword" class="form-control"
+                        placeholder="Sahkan kata laluan" autocomplete="new-password" required>
+                </div>
+
+                <div id="message" class="message" hidden></div>
+
+                <button type="submit" id="createAccountButton" class="btn btn-primary w-100">
+                    Cipta Akaun
+                </button>
+
+            </form>
+
+            <div class="back-login">
+                <a href="/login">
+                    Kembali ke Log Masuk
+                </a>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script src="/js/create-account.js"></script>
+
+</body>
+
+</html>

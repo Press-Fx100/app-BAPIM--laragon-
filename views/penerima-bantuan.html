@@ -1,0 +1,108 @@
+<main class="main-content">
+    <div class="dashboard-content recipient-page data-content-pending">
+        <div class="content-card mb-4 dataset-page-header">
+            <div>
+                <h4>Penerima Bantuan</h4>
+                <p>Senarai penerima bantuan.</p>
+            </div>
+            <div class="dataset-header-controls">
+                <div class="search-toolbar-group">
+                    <div class="search-box">
+                        <input type="text" id="recipientSearch" placeholder="Cari penerima..." autocomplete="off">
+                    </div>
+                    <div class="toolbar-group toolbar-filter">
+                    <div class="column-menu-wrapper">
+                        <button type="button" id="recipientColumnButton" class="toolbar-button icon-button" title="Lajur">
+                            <i class="bi bi-layout-three-columns"></i>
+                        </button>
+                        <div id="recipientColumnMenu" class="column-menu">
+                            <div class="column-menu-header">
+                                <button type="button" id="recipientSelectAllColumns">Pilih Semua</button>
+                            </div>
+                            <div id="recipientColumnChecklist"></div>
+                        </div>
+                    </div>
+                        <div class="filter-menu-wrapper">
+                        <button type="button" id="recipientFilterButton" class="toolbar-button icon-button" title="Tapis">
+                            <i class="bi bi-funnel"></i>
+                        </button>
+                        <div id="recipientFilterMenu" class="filter-menu"></div>
+                        </div>
+                    </div>
+                    <button type="button" id="recipientSaveButton"
+                        class="toolbar-button icon-button dataset-save-button" disabled
+                        title="Disimpan" aria-label="Disimpan">
+                        <i class="bi bi-floppy"></i>
+                    </button>
+                    <button type="button" id="recipientAddButton" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                    <button type="button" id="recipientDeleteButton" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </div>
+                <div id="recipientDeleteOverlay" class="delete-confirmation-overlay"></div>
+                <div id="recipientDeleteConfirmation" class="delete-confirmation" role="dialog" aria-modal="true" aria-hidden="true">
+                    <div class="delete-confirmation-icon">!</div>
+                    <div class="delete-confirmation-content">
+                        <h6>Padam rekod?</h6>
+                        <p id="recipientDeleteMessage"></p>
+                        <div class="delete-confirmation-actions">
+                            <button type="button" id="recipientCancelDelete" class="cancel-delete">Batal</button>
+                            <button type="button" id="recipientConfirmDelete" class="confirm-delete">Padam</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="recipientAddForm" class="add-form" style="display:none;">
+                <div class="form-card">
+                    <div class="form-title">Tambah Rekod</div>
+                    <div class="form-grid">
+                        <div class="form-field"><label for="recipientAddDataset">Fail sumber</label><select id="recipientAddDataset"></select></div>
+                        <div class="form-field"><label for="recipientAddNama">Nama</label><input id="recipientAddNama" autocomplete="off"></div>
+                        <div class="form-field"><label for="recipientAddKP">KP</label><input id="recipientAddKP" autocomplete="off"></div>
+                        <div class="form-field"><label for="recipientAddTelefon">Telefon</label><input id="recipientAddTelefon" autocomplete="off"></div>
+                        <div class="form-field"><label for="recipientAddEmail">Email</label><input id="recipientAddEmail" autocomplete="off"></div>
+                        <div class="form-field"><label for="recipientAddStatus">Status</label><input id="recipientAddStatus" autocomplete="off"></div>
+                        <div class="form-field"><label for="recipientAddPIC">PIC</label><input id="recipientAddPIC" autocomplete="off"></div>
+                        <div class="form-field full"><label for="recipientAddCatatan">Catatan</label><textarea id="recipientAddCatatan"></textarea></div>
+                    </div>
+                    <div class="form-actions"><button type="button" id="recipientCancelAdd" class="btn btn-light">Batal</button><button type="button" id="recipientConfirmAdd" class="btn btn-primary">Tambah</button></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-card mb-4">
+            <div id="recipientLoading" class="loading">Memuatkan penerima...</div>
+            <div id="recipientEmpty" class="empty-datasets" style="display:none;">
+                <div class="empty-datasets-icon"><i class="bi bi-person-vcard" aria-hidden="true"></i></div>
+                <h5>Tiada penerima bantuan</h5>
+                <p>Muat naik dataset PENERIMA BANTUAN untuk melihat senarai penerima.</p>
+            </div>
+            <div id="recipientTableWrapper" class="table-wrapper" style="display:none;">
+                <table class="dataset-table recipient-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>NAMA</th>
+                            <th>KAD PENGENALAN</th>
+                            <th>TELEFON</th>
+                            <th>EMAIL</th>
+                            <th>STATUS</th>
+                            <th>CATATAN</th>
+                            <th>PIC</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recipientTableBody"></tbody>
+                </table>
+            </div>
+            <div class="pagination-bar"><div class="pagination-info-group"><div id="recipientPaginationInfo" class="pagination-info">0 baris</div><div id="recipientSelectionInfo" class="selection-info">0 baris, 0 lajur, 0 sel dipilih</div></div><div class="pagination-controls"><button type="button" id="recipientFirstPage" class="page-button"><i class="bi bi-chevron-double-left"></i></button><button type="button" id="recipientPreviousPage" class="page-button"><i class="bi bi-chevron-left"></i></button><div id="recipientPageNumbers" class="pagination-controls"></div><button type="button" id="recipientNextPage" class="page-button"><i class="bi bi-chevron-right"></i></button><button type="button" id="recipientLastPage" class="page-button"><i class="bi bi-chevron-double-right"></i></button></div></div>
+            <div id="recipientNoResults" class="empty-datasets" style="display:none;">
+                <div class="empty-datasets-icon"><i class="bi bi-search" aria-hidden="true"></i></div>
+                <h5>Penerima tidak dijumpai</h5>
+                <p>Tiada penerima sepadan dengan carian anda.</p>
+            </div>
+        </div>
+    </div>
+</main>

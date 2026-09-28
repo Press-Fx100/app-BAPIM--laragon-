@@ -1,0 +1,113 @@
+<main class="main-content">
+    <div class="dashboard-content participant-page data-content-pending">
+        <div class="content-card mb-4 dataset-page-header">
+            <div>
+                <h4>Peserta Program</h4>
+                <p>Senarai peserta dan program yang disertai.</p>
+            </div>
+            <div class="dataset-header-controls">
+                <div class="search-toolbar-group">
+                    <div class="search-box">
+                        <input type="text" id="participantSearch" placeholder="Cari peserta..." autocomplete="off">
+                    </div>
+                    <div class="toolbar-group toolbar-filter">
+                    <div class="column-menu-wrapper">
+                        <button type="button" id="participantColumnButton" class="toolbar-button icon-button" title="Lajur">
+                            <i class="bi bi-layout-three-columns"></i>
+                        </button>
+                        <div id="participantColumnMenu" class="column-menu">
+                            <div class="column-menu-header">
+                                <button type="button" id="participantSelectAllColumns">Pilih Semua</button>
+                            </div>
+                            <div id="participantColumnChecklist"></div>
+                        </div>
+                    </div>
+                        <div class="filter-menu-wrapper">
+                        <button type="button" id="participantFilterButton" class="toolbar-button icon-button" title="Tapis">
+                            <i class="bi bi-funnel"></i>
+                        </button>
+                        <div id="participantFilterMenu" class="filter-menu"></div>
+                        </div>
+                    </div>
+                    <button type="button" id="participantSaveButton"
+                        class="toolbar-button icon-button dataset-save-button" disabled
+                        title="Disimpan" aria-label="Disimpan">
+                        <i class="bi bi-floppy"></i>
+                    </button>
+                    <button type="button" id="participantAddButton" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                    <button type="button" id="participantDeleteButton" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </div>
+                <div id="participantDeleteOverlay" class="delete-confirmation-overlay"></div>
+                <div id="participantDeleteConfirmation" class="delete-confirmation" role="dialog" aria-modal="true" aria-hidden="true">
+                    <div class="delete-confirmation-icon">!</div>
+                    <div class="delete-confirmation-content">
+                        <h6>Padam rekod?</h6>
+                        <p id="participantDeleteMessage"></p>
+                        <div class="delete-confirmation-actions">
+                            <button type="button" id="participantCancelDelete" class="cancel-delete">Batal</button>
+                            <button type="button" id="participantConfirmDelete" class="confirm-delete">Padam</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="participantAddForm" class="add-form" style="display:none;">
+                <div class="form-card">
+                    <div class="form-title">Tambah Rekod</div>
+                    <div class="form-grid">
+                        <div class="form-field"><label for="participantAddDataset">Fail sumber</label><select id="participantAddDataset"></select></div>
+                        <div class="form-field"><label for="participantAddNama">Nama</label><input id="participantAddNama" autocomplete="off"></div>
+                        <div class="form-field"><label for="participantAddKP">KP</label><input id="participantAddKP" autocomplete="off"></div>
+                        <div class="form-field"><label for="participantAddCategory">Ketegori</label><input id="participantAddCategory" autocomplete="off"></div>
+                        <div class="form-field full"><label for="participantAddProgram">Program</label><input id="participantAddProgram" autocomplete="off"></div>
+                    </div>
+                    <div class="form-actions"><button type="button" id="participantCancelAdd" class="btn btn-light">Batal</button><button type="button" id="participantConfirmAdd" class="btn btn-primary">Tambah</button></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-card mb-4">
+            <div id="participantLoading" class="loading">Memuatkan peserta...</div>
+            <div id="participantEmpty" class="empty-datasets" style="display:none;">
+                <div class="empty-datasets-icon"><i class="bi bi-people" aria-hidden="true"></i></div>
+                <h5>Tiada peserta program</h5>
+                <p>Muat naik dataset PESERTA PROGRAM untuk melihat senarai peserta.</p>
+            </div>
+            <div id="participantTableWrapper" class="table-wrapper" style="display:none;">
+                <table class="dataset-table participant-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>NAMA</th>
+                            <th>KAD PENGENALAN</th>
+                            <th>KATEGORI</th>
+                            <th>JUMLAH PROGRAM</th>
+                            <th>PROGRAM</th>
+                        </tr>
+                    </thead>
+                    <tbody id="participantTableBody"></tbody>
+                </table>
+            </div>
+            <div class="pagination-bar"><div class="pagination-info-group"><div id="participantPaginationInfo" class="pagination-info">0 baris</div><div id="participantSelectionInfo" class="selection-info">0 baris, 0 lajur, 0 sel dipilih</div></div><div class="pagination-controls"><button type="button" id="participantFirstPage" class="page-button"><i class="bi bi-chevron-double-left"></i></button><button type="button" id="participantPreviousPage" class="page-button"><i class="bi bi-chevron-left"></i></button><div id="participantPageNumbers" class="pagination-controls"></div><button type="button" id="participantNextPage" class="page-button"><i class="bi bi-chevron-right"></i></button><button type="button" id="participantLastPage" class="page-button"><i class="bi bi-chevron-double-right"></i></button></div></div>
+            <div id="participantNoResults" class="empty-datasets" style="display:none;">
+                <div class="empty-datasets-icon"><i class="bi bi-search" aria-hidden="true"></i></div>
+                <h5>Peserta tidak dijumpai</h5>
+                <p>Tiada peserta sepadan dengan carian anda.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="participantProgramsOverlay" class="participant-programs-overlay" style="display:none;">
+        <div class="participant-programs-dialog">
+            <button type="button" id="closeParticipantPrograms" class="dataset-upload-remove" aria-label="Tutup">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+            <h5 id="participantProgramsTitle">Program</h5>
+            <ul id="participantProgramsList"></ul>
+        </div>
+    </div>
+</main>

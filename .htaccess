@@ -1,0 +1,14 @@
+Options -Indexes
+RewriteEngine On
+
+RewriteRule ^(?:config|data|views|__pycache__|build|dist[^/]*)(?:/|$) - [F,L,NC]
+RewriteRule ^migrate_sqlite\.php$ - [F,L,NC]
+RewriteRule (^|/)\. - [F,L]
+RewriteRule ^(css|js|logo\.png|app\.ico|favicon\.ico)(/.*)?$ public/$1$2 [L,NC]
+RewriteRule ^(?:package(?:-lock)?\.json|README\.md|requirements\.txt|DatasetManagement\.spec|database\.sql|[^/]+\.(?:js|py|bat|db|spec|txt))$ - [F,L,NC]
+
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+RewriteRule ^ index.php [QSA,L]

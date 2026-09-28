@@ -1,0 +1,136 @@
+<main class="main-content">
+    <div class="dashboard-content audit-page">
+
+            <!-- STATUS ACTIVITY -->
+            <div class="content-card mb-4">
+
+                <div class="card-header-custom">
+
+                    <div>
+                        <h5>Status Aktiviti</h5>
+
+                        <span>
+                            Kemajuan status terkumpul harian mengikut pengguna
+                        </span>
+                    </div>
+                    <div class="audit-month-navigation">
+                        <button type="button" id="auditPreviousMonth" class="page-button"
+                            title="Bulan sebelumnya" aria-label="Bulan sebelumnya">
+                            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <span id="auditMonthLabel" aria-live="polite"></span>
+                        <button type="button" id="auditNextMonth" class="page-button"
+                            title="Bulan seterusnya" aria-label="Bulan seterusnya">
+                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="audit-chart-wrapper">
+
+                    <canvas id="auditLineChart"></canvas>
+
+                </div>
+
+            </div>
+
+
+            <!-- ACTIVITY HISTORY -->
+            <div class="content-card">
+
+                <div class="card-header-custom">
+
+                    <div>
+                        <h5>Sejarah Aktiviti</h5>
+
+                        <span>
+                            Perubahan pengguna, tindakan, tarikh dan masa
+                        </span>
+                    </div>
+
+                </div>
+
+
+                <div class="table-card">
+
+                    <div id="auditTableWrapper" class="table-wrapper">
+
+                        <table id="auditTable" class="dataset-table">
+
+                            <thead id="auditTableHead">
+
+                                <tr>
+
+                                    <th data-column-index="0" style="width:140px;min-width:140px;max-width:140px;">
+                                        <span>Pengguna</span>
+                                    </th>
+
+                                    <th data-column-index="1" style="width:120px;min-width:120px;max-width:120px;">
+                                        <span>Tindakan</span>
+                                    </th>
+
+                                    <th data-column-index="2" style="width:180px;min-width:180px;max-width:180px;">
+                                        <span>Set Data</span>
+                                    </th>
+
+                                    <th data-column-index="3" style="width:80px;min-width:80px;max-width:80px;">
+                                        <span>Baris</span>
+                                    </th>
+
+                                    <th data-column-index="4" style="width:140px;min-width:140px;max-width:140px;">
+                                        <span>Lajur</span>
+                                    </th>
+
+                                    <th data-column-index="5" style="width:220px;min-width:220px;max-width:220px;">
+                                        <span>Nilai Lama</span>
+                                    </th>
+
+                                    <th data-column-index="6" style="width:220px;min-width:220px;max-width:220px;">
+                                        <span>Nilai Baharu</span>
+                                    </th>
+
+                                    <th data-column-index="7" style="width:180px;min-width:180px;max-width:180px;">
+                                        <span>Tarikh + Masa</span>
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="auditTableBody"></tbody>
+
+                        </table>
+
+                    </div>
+
+                </div>
+
+
+                <div class="pagination-bar">
+                    <div class="pagination-info-group">
+                        <div id="auditPaginationInfo" class="pagination-info">
+                            0 aktiviti
+                        </div>
+                    </div>
+                    <div class="pagination-controls">
+                        <button type="button" id="auditFirstPage" class="page-button" aria-label="Halaman pertama">
+                            <i class="bi bi-chevron-double-left" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" id="auditPreviousPage" class="page-button" aria-label="Halaman sebelumnya">
+                            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <div id="auditPageNumbers" class="pagination-controls"></div>
+                        <button type="button" id="auditNextPage" class="page-button" aria-label="Halaman seterusnya">
+                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" id="auditLastPage" class="page-button" aria-label="Halaman terakhir">
+                            <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+    </div>
+
+</main>
