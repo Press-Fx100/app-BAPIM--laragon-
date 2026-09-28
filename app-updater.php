@@ -126,7 +126,7 @@ function bapimGitHubRequest(string $url, bool $download = false): array
 function bapimLatestGitHubCommit(): array
 {
     $response = bapimGitHubRequest(
-        'https://api.github.com/repos/' . BAPIM_GITHUB_REPOSITORY . '/git/ref/heads/main'
+        'https://api.github.com/repos/' . BAPIM_GITHUB_REPOSITORY . '/git/ref/heads/main?bapim_update_check=' . bin2hex(random_bytes(8))
     );
     try {
         $commit = json_decode($response['body'], true, 512, JSON_THROW_ON_ERROR);
