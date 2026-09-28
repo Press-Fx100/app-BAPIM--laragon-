@@ -5219,12 +5219,19 @@ body {
     color: inherit;
     font: inherit;
     text-align: left;
-    cursor: not-allowed;
-    opacity: .72;
+    cursor: pointer;
+    transition: background .16s ease, border-color .16s ease, opacity .16s ease;
+}
+
+.update-check-button:hover:not(:disabled) {
+    border-color: rgba(151, 168, 255, .25);
+    background: #1d2940;
 }
 
 .update-check-button:disabled {
     color: inherit;
+    cursor: wait;
+    opacity: .72;
 }
 
 .update-check-icon {
@@ -5245,6 +5252,11 @@ body {
 
 .update-check-copy .status-text {
     line-height: 1.4;
+}
+
+.update-check-button.has-update .update-check-icon,
+.update-check-button.has-update .status-text {
+    color: #8fafff;
 }
 
 .main-content {

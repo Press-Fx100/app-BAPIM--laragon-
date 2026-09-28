@@ -67,7 +67,14 @@ public files.
 ## Requirements
 
 - Laragon with Apache, MySQL/MariaDB, PHP 8.1 or newer, `pdo_mysql`, and
-  `mod_rewrite`.
-- No Node.js, Python, Composer packages, or internet connection is required to
-  run the web app.
+  `mod_rewrite`. The GitHub updater also requires PHP `curl` and Windows
+  `tar.exe` (included with supported Windows versions).
+- The sidebar's **Semak Kemas Kini** button checks the public
+  `Press-Fx100/app-BAPIM--laragon-` repository. When an update is available,
+  confirm to download and install it. The updater preserves the `data` and
+  `config` directories; back up your app before updating. If the repository is
+  made private, configure a fine-grained, contents-read-only token as the
+  `BAPIM_GITHUB_TOKEN` environment variable for Apache/PHP.
+- The web app does not require Node.js, Python, or Composer. Internet access is
+  required for GitHub update checks and downloads.
 # app-BAPIM--laragon-
