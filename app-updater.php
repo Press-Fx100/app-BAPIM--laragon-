@@ -16,6 +16,8 @@ function bapimGitHubRequest(string $url, bool $download = false): array
     $token = getenv('BAPIM_GITHUB_TOKEN');
     $headers = [
         'Accept: application/vnd.github+json',
+        'Cache-Control: no-cache',
+        'Pragma: no-cache',
         'X-GitHub-Api-Version: 2022-11-28',
     ];
     if ($token !== false && $token !== '') {
