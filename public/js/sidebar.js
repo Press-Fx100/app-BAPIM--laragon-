@@ -92,7 +92,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     function setActivePage() {
 
         const currentPath =
-            window.location.pathname;
+            typeof window.appPathname === "function"
+                ? window.appPathname(window.location.pathname)
+                : window.location.pathname;
 
         let currentPage;
 

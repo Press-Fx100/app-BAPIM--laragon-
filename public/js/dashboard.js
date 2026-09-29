@@ -2028,7 +2028,10 @@ if (picSelect) {
 initializeDashboard();
 
 document.addEventListener("app:page-loaded", () => {
-    if (window.location.pathname === "/") {
+    const pathname = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    if (pathname === "/") {
         initializeDashboard();
     }
 });

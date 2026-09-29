@@ -86,7 +86,9 @@ form.addEventListener("submit", async event => {
             "success"
         );
 
-        window.location.replace("/");
+        window.location.replace(
+            typeof window.appUrl === "function" ? window.appUrl("/") : "/"
+        );
 
     } catch (error) {
         console.error(error);

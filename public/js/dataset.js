@@ -503,7 +503,10 @@ function getDatasetId() {
         return queryId;
     }
 
-    const parts = window.location.pathname.split("/").filter(Boolean);
+    const pathname = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const parts = pathname.split("/").filter(Boolean);
     return parts[parts.length - 1];
 }
 

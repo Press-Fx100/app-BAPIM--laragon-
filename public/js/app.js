@@ -1,7 +1,12 @@
+const appPathname = pathname =>
+    typeof window.appPathname === "function"
+        ? window.appPathname(pathname)
+        : pathname;
+
 const pageContent =
     document.getElementById("page-content");
 const dashboardNode =
-    window.location.pathname === "/"
+    appPathname(window.location.pathname) === "/"
         ? pageContent?.firstElementChild
         : null;
 const pageCache = new Map();
@@ -231,6 +236,7 @@ async function revealPageContent() {
 }
 
 function updateActiveNavigation(pathname) {
+    pathname = appPathname(pathname);
     document.querySelectorAll("#sidebar .nav-item").forEach(item => {
         const page =
             pathname === "/"
@@ -273,14 +279,23 @@ async function notifyPageLoaded() {
 
 async function navigateTo(url, replace = false) {
     const target = new URL(url, window.location.origin);
+    if (
+        window.APP_BASE_PATH &&
+        target.origin === window.location.origin &&
+        target.pathname !== window.APP_BASE_PATH &&
+        !target.pathname.startsWith(`${window.APP_BASE_PATH}/`)
+    ) {
+        target.pathname = window.appUrl(target.pathname);
+    }
+    const targetPathname = appPathname(target.pathname);
     const supported =
-        target.pathname === "/" ||
-        target.pathname === "/data-set" ||
-        target.pathname.startsWith("/data-set/") ||
-        target.pathname === "/upload" ||
-        target.pathname === "/peserta-program" ||
-        target.pathname === "/penerima-bantuan" ||
-        target.pathname === "/user";
+        targetPathname === "/" ||
+        targetPathname === "/data-set" ||
+        targetPathname.startsWith("/data-set/") ||
+        targetPathname === "/upload" ||
+        targetPathname === "/peserta-program" ||
+        targetPathname === "/penerima-bantuan" ||
+        targetPathname === "/user";
 
     if (
         target.origin !== window.location.origin ||
@@ -295,10 +310,10 @@ async function navigateTo(url, replace = false) {
         if (typeof window.resetTableState === "function") window.resetTableState();
     }
 
-    if (target.pathname === "/" && dashboardNode) {
+    if (targetPathname === "/" && dashboardNode) {
         await replacePageContent(() => pageContent.replaceChildren(dashboardNode));
         updateHistory(target, replace);
-        updateActiveNavigation(target.pathname);
+        updateActiveNavigation(targetPathname);
         await notifyPageLoaded();
         await revealPageContent();
         return;
@@ -340,7 +355,7 @@ async function navigateTo(url, replace = false) {
         pageContent.innerHTML = markup;
     });
     updateHistory(target, replace);
-    updateActiveNavigation(target.pathname);
+    updateActiveNavigation(targetPathname);
 
     await notifyPageLoaded();
     await revealPageContent();
@@ -384,7 +399,7 @@ window.addEventListener("app:navigate", event => {
 document.addEventListener("layout:ready", () => {
     layoutReady = true;
     revealInitialPage();
-    updateActiveNavigation(window.location.pathname);
+    updateActiveNavigation(appPathname(window.location.pathname));
 });
 
 window.addEventListener("load", () => {
@@ -392,4 +407,4 @@ window.addEventListener("load", () => {
     revealInitialPage();
 });
 
-updateActiveNavigation(window.location.pathname);
+updateActiveNavigation(appPathname(window.location.pathname));

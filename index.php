@@ -825,7 +825,16 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-$path = rtrim(rawurldecode($path), '/') ?: '/';
+$path = rawurldecode($path);
+$scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+$basePath = rtrim(dirname($scriptName), '/.');
+if ($basePath === '.' || $basePath === '/') {
+    $basePath = '';
+}
+if ($basePath !== '' && ($path === $basePath || str_starts_with($path, $basePath . '/'))) {
+    $path = substr($path, strlen($basePath)) ?: '/';
+}
+$path = rtrim($path, '/') ?: '/';
 
 if (str_starts_with($path, '/api/')) {
     try {
@@ -850,7 +859,7 @@ $pages = [
 ];
 $page = $pages[$path] ?? null;
 if ($page === null && preg_match('#^/data-set/(\d+)$#', $path, $matches)) {
-    header('Location: /data-set?id=' . rawurlencode($matches[1]), true, 302);
+    header('Location: ' . $basePath . '/data-set?id=' . rawurlencode($matches[1]), true, 302);
     exit;
 }
 if ($page === null) {
@@ -861,7 +870,7 @@ if ($page === null) {
 
 $user = currentUser($pdo);
 if ($path !== '/login' && $path !== '/create-account' && $path !== '/sidebar' && $path !== '/header' && !$user) {
-    header('Location: /login');
+    header('Location: ' . $basePath . '/login');
     exit;
 }
 
@@ -875,6 +884,24 @@ $html = file_get_contents($viewPath);
 if ($html === false) {
     throw new RuntimeException('Could not read the requested page.');
 }
+$rewriteHtmlUrls = static function (string $markup) use ($basePath): string {
+    $rewritten = preg_replace_callback(
+        '~(\b(?:href|src|action)\s*=\s*)(["\'])/(?!/)([^"\']*)\2~i',
+        static function (array $match) use ($basePath): string {
+            $urlPath = $match[3];
+            if ($basePath !== '' && ($urlPath === ltrim($basePath, '/') || str_starts_with($urlPath, ltrim($basePath, '/') . '/'))) {
+                return $match[0];
+            }
+            return $match[1] . $match[2] . $basePath . '/' . $urlPath . $match[2];
+        },
+        $markup
+    );
+    if ($rewritten === null) {
+        throw new RuntimeException('Could not rewrite application URLs.');
+    }
+    return $rewritten;
+};
+$html = $rewriteHtmlUrls($html);
 
 if (isset($_SERVER['HTTP_X_APP_FRAGMENT']) || in_array($path, ['/sidebar', '/header'], true)) {
     header('Content-Type: text/html; charset=utf-8');
@@ -898,6 +925,18 @@ if ($path === '/upload' || $path === '/data-set' || $path === '/peserta-program'
     }
     $inner = substr($html, $fragmentOpenEnd + 1, $fragmentEnd - $fragmentOpenEnd - 1);
     $html = substr($shell, 0, $start) . '<main class="main-content" id="page-content">' . $inner . substr($shell, $end + strlen('</main>'));
+}
+
+if ($basePath !== '') {
+    $bootstrap = '<script>window.APP_BASE_PATH=' . json_encode($basePath, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ';'
+        . 'window.appPathname=function(path){path=path||window.location.pathname;return path===window.APP_BASE_PATH?"/":path.indexOf(window.APP_BASE_PATH+"/")===0?path.slice(window.APP_BASE_PATH.length)||"/":path;};'
+        . 'window.appUrl=function(path){return window.APP_BASE_PATH+(path.charAt(0)==="/"?path:"/"+path);};'
+        . 'var appNativeFetch=window.fetch.bind(window);window.fetch=function(input,init){var value=input;var request=input instanceof Request;var url=request?new URL(input.url):new URL(String(input),window.location.href);if(url.origin===window.location.origin&&url.pathname!==window.APP_BASE_PATH&&url.pathname.indexOf(window.APP_BASE_PATH+"/")!==0){url.pathname=window.APP_BASE_PATH+url.pathname;}if(request){value=new Request(url.href,input);}else if(input instanceof URL){value=url.href;}else if(typeof input==="string"){value=url.href;}return appNativeFetch(value,init);};</script>';
+    $html = $rewriteHtmlUrls($html);
+    $html = preg_replace('~</head>~i', $bootstrap . '</head>', $html, 1, $count) ?? throw new RuntimeException('Could not configure application base path.');
+    if ($count !== 1) {
+        throw new RuntimeException('Application page is missing its head element.');
+    }
 }
 
 header('Content-Type: text/html; charset=utf-8');

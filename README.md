@@ -46,7 +46,10 @@ public files.
    Apache.
 7. Visit `http://app-bapim-laragon.test/`. If Laragon does not resolve the
    automatic virtual host, use Laragon's **www** menu to create a virtual host
-   for this project and open the host name it reports.
+   for this project and open the host name it reports. The app also supports
+   being installed in a web-root subfolder; for example, if its folder is
+   `C:\laragon\www\bapim`, open `http://<computer-ip>/bapim/` from another
+   device on the same network.
 8. Select **Cipta akaun** on the login page to create a local account. You will
    be signed in automatically after the account is created. Passwords must be
    at least 8 characters.

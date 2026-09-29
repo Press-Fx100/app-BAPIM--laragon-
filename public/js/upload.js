@@ -1774,7 +1774,9 @@ document.addEventListener(
     "app:page-loaded",
     () => {
         if (
-            window.location.pathname !== "/upload" &&
+            (typeof window.appPathname === "function"
+                ? window.appPathname(window.location.pathname)
+                : window.location.pathname) !== "/upload" &&
             uploadOverlay?.parentElement === document.body
         ) {
             closeUpload();

@@ -36,7 +36,9 @@
             "[AUTH] No active session. Redirecting to login."
         );
 
-        window.location.replace("/login");
+        window.location.replace(
+            typeof window.appUrl === "function" ? window.appUrl("/login") : "/login"
+        );
 
         return false;
     }
@@ -71,7 +73,9 @@
             "loginSession"
         );
 
-        window.location.replace("/login");
+        window.location.replace(
+            typeof window.appUrl === "function" ? window.appUrl("/login") : "/login"
+        );
     }
 
     window.Auth = {

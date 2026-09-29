@@ -81,7 +81,9 @@ function setupTableTooltips() {
 }
 
 function updatePageInfo() {
-    const path = window.location.pathname;
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
 
     let title = "Papan Pemuka";
     const breadcrumb = "SISTEM PENGURUSAN DATA";
@@ -264,7 +266,9 @@ async function logout() {
     localStorage.removeItem("loggedInUser");
     localStorage.removeItem("displayName");
 
-    window.location.href = "/login";
+    window.location.href = typeof window.appUrl === "function"
+        ? window.appUrl("/login")
+        : "/login";
 }
 
 
@@ -329,8 +333,15 @@ async function loadCurrentUser() {
         localStorage.removeItem("displayName");
         localStorage.removeItem("loginSession");
 
-        if (window.location.pathname !== "/login") {
-            window.location.replace("/login");
+        const path = typeof window.appPathname === "function"
+            ? window.appPathname(window.location.pathname)
+            : window.location.pathname;
+        if (path !== "/login") {
+            window.location.replace(
+                typeof window.appUrl === "function"
+                    ? window.appUrl("/login")
+                    : "/login"
+            );
         }
     }
 }

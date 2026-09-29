@@ -647,7 +647,9 @@ async function loginSuccess(data) {
             `[AUTH] Welcome ${displayName}.`
         );
 
-        window.location.replace("/");
+        window.location.replace(
+            typeof window.appUrl === "function" ? window.appUrl("/") : "/"
+        );
 
     } catch (error) {
         console.error(
