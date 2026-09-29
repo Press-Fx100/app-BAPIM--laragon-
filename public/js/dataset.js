@@ -530,6 +530,112 @@ function normalizeRows(data) {
     });
 }
 
+function normalizeDatasetHeader(value) {
+    return String(value ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+}
+
+function addRecordFieldsForDataset() {
+    if (getDatasetType(dataset || {}) === "peserta") {
+        return [
+            { id: "addNama", label: "Nama", headers: ["nama"] },
+            { id: "addKP", label: "KP", headers: ["kp", "kadpengenalan"] },
+            { id: "addCategory", label: "Ketegori", headers: ["kategori", "ketegori"] },
+            { id: "addProgram", label: "Program", headers: ["program"], full: true }
+        ];
+    }
+
+    return [
+        { id: "addNama", label: "Nama", headers: ["nama"] },
+        { id: "addKP", label: "KP", headers: ["kp", "kadpengenalan"] },
+        { id: "addTelefon", label: "Telefon", headers: ["telefon"] },
+        { id: "addEmail", label: "Email", headers: ["email"] },
+        { id: "addStatus", label: "Status", headers: ["status"], status: true },
+        { id: "addPIC", label: "PIC", headers: ["pic"] },
+        { id: "addCatatan", label: "Catatan", headers: ["catatan"], textarea: true, full: true }
+    ];
+}
+
+function initializeAddRecordForm() {
+    const source = document.getElementById("addSourceDataset");
+    const fieldsContainer = document.getElementById("addRecordFields");
+    const description = document.getElementById("addRecordDescription");
+    if (!source || !fieldsContainer || !dataset) return;
+
+    const sourceId = String(dataset.id || getDatasetId());
+    const sourceName = dataset.filename || dataset.name || "Set Data";
+    source.replaceChildren(new Option(sourceName, sourceId, true, true));
+    source.disabled = true;
+
+    const isParticipant = getDatasetType(dataset) === "peserta";
+    if (description) {
+        description.textContent = isParticipant
+            ? "Masukkan maklumat peserta program baharu."
+            : "Masukkan maklumat penerima bantuan baharu.";
+    }
+
+    const fields = addRecordFieldsForDataset();
+    fieldsContainer.replaceChildren();
+
+    fields.forEach(field => {
+        const wrapper = document.createElement("div");
+        wrapper.className = `form-field${field.full ? " full" : ""}`;
+
+        const label = document.createElement("label");
+        label.htmlFor = field.id;
+        label.textContent = field.label;
+        wrapper.appendChild(label);
+
+        let input;
+        if (field.status) {
+            input = document.createElement("select");
+            input.appendChild(new Option("", ""));
+            const statusIndex = headers.findIndex(
+                header => normalizeDatasetHeader(header) === "status"
+            );
+            const statuses = new Set(
+                statusIndex < 0
+                    ? []
+                    : rows.map(row => String(row[statusIndex] ?? "").trim()).filter(Boolean)
+            );
+            [...statuses].sort((a, b) => a.localeCompare(b, undefined, {
+                sensitivity: "base"
+            })).forEach(status => input.appendChild(new Option(status, status)));
+            input.appendChild(new Option("Tambah status baharu...", "__add_new_status__"));
+        } else if (field.textarea) {
+            input = document.createElement("textarea");
+        } else {
+            input = document.createElement("input");
+            input.type = "text";
+        }
+
+        input.id = field.id;
+        input.autocomplete = "off";
+        wrapper.appendChild(input);
+
+        if (field.status) {
+            const customStatus = document.createElement("input");
+            customStatus.id = "addStatusCustom";
+            customStatus.type = "text";
+            customStatus.autocomplete = "off";
+            customStatus.placeholder = "Masukkan status baharu";
+            customStatus.style.display = "none";
+            wrapper.appendChild(customStatus);
+            input.addEventListener("change", () => {
+                customStatus.style.display = input.value === "__add_new_status__" ? "" : "none";
+                if (customStatus.style.display !== "none") customStatus.focus();
+                else customStatus.value = "";
+            });
+        }
+
+        fieldsContainer.appendChild(wrapper);
+    });
+
+    window.initializeCustomSelects?.();
+}
+
 function createDataSnapshot() {
     return JSON.stringify({
         headers: headers.map(value => String(value ?? "")),
@@ -608,6 +714,7 @@ function initializeDataset() {
     rows = normalizeRows(rows);
     originalRows = rows.map(row => [...row]);
     filteredRows = [...rows];
+    initializeAddRecordForm();
 
     visibleColumns = headers.map(
         header => String(header).trim().toLowerCase() !== "pic"
@@ -2829,59 +2936,51 @@ function addRow() {
     if (deleteMode) return;
 
     const form = document.getElementById("addForm");
+    const card = document.getElementById("addRecordCard");
 
-    if (form) form.style.display = "flex";
+    if (!form || !card) return;
 
+    form.classList.add("show");
+    form.setAttribute("aria-hidden", "false");
+    card.classList.add("show");
+    card.setAttribute("aria-hidden", "false");
     document.getElementById("addNama")?.focus();
 }
 
 function closeAddForm() {
     const form = document.getElementById("addForm");
+    const card = document.getElementById("addRecordCard");
 
-    if (form) form.style.display = "none";
+    form?.classList.remove("show");
+    form?.setAttribute("aria-hidden", "true");
+    card?.classList.remove("show");
+    card?.setAttribute("aria-hidden", "true");
 
-    [
-        "addNama",
-        "addKP",
-        "addTelefon",
-        "addEmail",
-        "addStatus",
-        "addPIC",
-        "addCatatan"
-    ].forEach(id => {
-        const element = document.getElementById(id);
-
-        if (element) element.value = "";
+    document.querySelectorAll(
+        "#addRecordFields input, #addRecordFields select, #addRecordFields textarea"
+    ).forEach(element => {
+        element.value = "";
+        if (element.id === "addStatusCustom") element.style.display = "none";
     });
 }
 
 function confirmAddRow() {
     if (deleteMode) return;
 
-    const values = {
-        Nama: document.getElementById("addNama")?.value || "",
-        KP: document.getElementById("addKP")?.value || "",
-        Telefon: document.getElementById("addTelefon")?.value || "",
-        Email: document.getElementById("addEmail")?.value || "",
-        Status: document.getElementById("addStatus")?.value || "",
-        PIC: document.getElementById("addPIC")?.value || "",
-        Catatan: document.getElementById("addCatatan")?.value || ""
-    };
+    const fields = addRecordFieldsForDataset();
+    const values = new Map(fields.map(field => {
+        const input = document.getElementById(field.id);
+        if (field.status && input?.value === "__add_new_status__") {
+            return [field.id, document.getElementById("addStatusCustom")?.value || ""];
+        }
+        return [field.id, input?.value || ""];
+    }));
 
     const newRow =
         headers.map(header => {
-            const key =
-                String(header)
-                    .trim()
-                    .toLowerCase();
-
-            const match =
-                Object.keys(values).find(
-                    name =>
-                        name.toLowerCase() === key
-                );
-
-            return match ? values[match] : "";
+            const key = normalizeDatasetHeader(header);
+            const field = fields.find(item => item.headers.includes(key));
+            return field ? values.get(field.id) || "" : "";
         });
 
     const insertIndex = rows.length;
@@ -4002,6 +4101,10 @@ document
     ?.addEventListener("click", closeAddForm);
 
 document
+    .getElementById("closeAddFormButton")
+    ?.addEventListener("click", closeAddForm);
+
+document
     .getElementById("confirmAddButton")
     ?.addEventListener("click", confirmAddRow);
 
@@ -4188,6 +4291,9 @@ function bindDatasetViewEvents(detailView) {
     document.getElementById("cancelAddButton")
         ?.addEventListener("click", closeAddForm);
 
+    document.getElementById("closeAddFormButton")
+        ?.addEventListener("click", closeAddForm);
+
     document.getElementById("confirmAddButton")
         ?.addEventListener("click", confirmAddRow);
 
@@ -4230,6 +4336,15 @@ function bindDatasetViewEvents(detailView) {
                 closeAddForm();
             }
         });
+
+    document.addEventListener("keydown", event => {
+        if (
+            event.key === "Escape" &&
+            document.getElementById("addForm")?.classList.contains("show")
+        ) {
+            closeAddForm();
+        }
+    });
 
     document.getElementById("deleteConfirm")
         ?.addEventListener("mousedown", event => {

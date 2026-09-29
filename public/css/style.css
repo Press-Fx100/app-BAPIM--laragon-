@@ -1209,6 +1209,10 @@ body {
         visibility .2s ease;
 }
 
+.dataset-upload-card.dataset-add-card {
+    width: min(760px, calc(100vw - 32px));
+}
+
 .dataset-upload-card.show {
     opacity: 1;
     visibility: visible;
@@ -3171,10 +3175,245 @@ thead .row-select-cell.selection-enabled {
     vertical-align: middle;
 }
 
+.audit-user-cell {
+    white-space: nowrap;
+}
+
+.audit-location-cell {
+    text-align: center !important;
+}
+
+.audit-location-values {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    width: 100%;
+    gap: 4px;
+}
+
+.audit-location-values .audit-location-badge:first-child {
+    justify-self: end;
+}
+
+.audit-location-values .audit-location-badge:last-child {
+    justify-self: start;
+}
+
+.audit-location-transition {
+    justify-self: center;
+}
+
+.audit-location-badge,
+.audit-value-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-height: 24px;
+    padding: 0 9px;
+    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    line-height: 1.2;
+}
+
+.audit-location-badge {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+
+.audit-change-cell {
+    text-align: center !important;
+}
+
+.audit-change-values {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    width: 100%;
+    gap: 6px;
+}
+
+.audit-value-transition {
+    justify-self: center;
+    color: #64748b;
+}
+
+.audit-value-badge.old {
+    justify-self: end;
+}
+
+.audit-value-badge.new {
+    justify-self: start;
+}
+
+.audit-value-badge.old {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.audit-value-badge.new {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.audit-change-cell .audit-value-badge {
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
 .audit-page .table-card,
 #auditTableWrapper,
 #auditTable {
     border-radius: 0 !important;
+}
+
+.audit-page > .content-card:last-child {
+    overflow: visible;
+}
+
+.audit-history-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 24px;
+}
+
+.audit-history-controls .search-toolbar-group {
+    width: min(100%, 520px);
+}
+
+.audit-history-controls .toolbar-button.active {
+    background: #fff;
+    border-color: #c7d2fe;
+    color: #4f46e5;
+}
+
+.audit-calendar-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 1100;
+    width: 280px;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, .12);
+}
+
+.audit-calendar-menu.show {
+    display: block;
+}
+
+.audit-calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: #1f2937;
+}
+
+.audit-calendar-header strong {
+    font-size: 14px;
+    text-transform: capitalize;
+}
+
+.audit-calendar-nav,
+.audit-calendar-footer button {
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #475569;
+    cursor: pointer;
+}
+
+.audit-calendar-nav {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+}
+
+.audit-calendar-nav:hover,
+.audit-calendar-footer button:hover {
+    background: #f1f5f9;
+}
+
+.audit-calendar-weekdays,
+.audit-calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 3px;
+    text-align: center;
+}
+
+.audit-calendar-weekdays {
+    margin-bottom: 5px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.audit-calendar-days button,
+.audit-calendar-empty {
+    display: grid;
+    min-width: 0;
+    height: 30px;
+    place-items: center;
+}
+
+.audit-calendar-days button {
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #334155;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.audit-calendar-days button:hover {
+    background: #eef2ff;
+}
+
+.audit-calendar-days button.today {
+    box-shadow: inset 0 0 0 1px #a5b4fc;
+}
+
+.audit-calendar-days button.selected {
+    background: #4f46e5;
+    color: #fff;
+}
+
+.audit-calendar-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.audit-calendar-footer button {
+    padding: 5px 8px;
+    font-size: 12px;
+}
+
+@media (max-width: 640px) {
+    .audit-page .audit-history-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .audit-history-controls {
+        width: 100%;
+        margin-left: 0;
+    }
 }
 
 .audit-user-badge {
@@ -3937,10 +4176,69 @@ select:focus-visible {
     font: inherit;
 }
 
+.recipient-cell-suggestions {
+    position: fixed;
+    z-index: 1200;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid #d1d5db;
+    border-radius: 0 0 6px 6px;
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, .16);
+}
+
+.recipient-cell-suggestion {
+    display: block;
+    width: 100%;
+    min-height: 32px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #1f2937;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.recipient-cell-suggestion:hover,
+.recipient-cell-suggestion:focus-visible,
+.recipient-cell-suggestion.active {
+    outline: none;
+    background: #eef2ff;
+}
+
 .dataset-table td.editing-cell .inline-edit-input {
     outline: none !important;
     box-shadow: none !important;
 }
+
+.recipient-page .dataset-table td.editing-cell select.inline-edit-input {
+    display: block;
+    box-sizing: border-box;
+    width: calc(100% + 24px);
+    height: calc(100% + 18px);
+    min-height: 0;
+    margin: -9px -12px;
+    padding: 9px 28px 9px 12px;
+    border: 0;
+    border-radius: 0;
+    appearance: none;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%234b5563' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-position: right 8px center;
+    background-repeat: no-repeat;
+    background-size: 14px;
+    color: #1f2937;
+    cursor: pointer;
+}
+
+.recipient-page .dataset-table td.editing-cell select.inline-edit-input:focus {
+    outline: none;
+    box-shadow: none;
+}
+
 .participant-page .dataset-table tbody tr.selected-row td,
 .recipient-page .dataset-table tbody tr.selected-row td {
     background: #e4e8ee;
@@ -4446,6 +4744,14 @@ body {
     cursor: pointer;
 }
 
+.custom-select-button:disabled {
+    border-color: var(--border-color);
+    background: #e5e7eb;
+    color: #6b7280;
+    cursor: not-allowed;
+    opacity: 1;
+}
+
 .custom-select-button::after {
     position: absolute;
     top: 50%;
@@ -4506,6 +4812,12 @@ body {
 .custom-select-option.active {
     background: #eef4ff;
     color: var(--primary-dark);
+}
+
+.custom-select-option:disabled {
+    background: transparent;
+    color: #6b7280;
+    cursor: not-allowed;
 }
 
 .dashboard-filter-card {
@@ -4629,6 +4941,64 @@ body {
 .dataset-upload-body {
     padding: 22px;
     background: #fff;
+}
+
+.dataset-add-body .form-grid {
+    gap: 16px;
+}
+
+.dataset-add-source {
+    margin-bottom: 16px;
+}
+
+.dataset-add-source select:disabled {
+    background-color: #e5e7eb !important;
+    color: #6b7280 !important;
+    -webkit-text-fill-color: #6b7280;
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+.dataset-add-body .form-field.full {
+    grid-column: 1 / -1;
+}
+
+.dataset-add-body .form-field label {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.dataset-add-body .form-field input,
+.dataset-add-body .form-field select,
+.dataset-add-body .form-field textarea {
+    border-color: var(--border-color);
+    border-radius: 8px;
+    background-color: #fff;
+    color: var(--text-primary);
+    font: inherit;
+}
+
+.dataset-add-body .form-field input:focus,
+.dataset-add-body .form-field select:focus,
+.dataset-add-body .form-field textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(80, 111, 244, .12);
+}
+
+.dataset-add-overlay {
+    z-index: 10000;
+}
+
+.dataset-add-overlay.show {
+    display: block;
+}
+
+.dataset-upload-card.dataset-add-card {
+    z-index: 10001;
+}
+
+.dataset-add-card .dataset-upload-footer {
+    flex: 0 0 auto;
 }
 
 .dataset-upload-dropzone {

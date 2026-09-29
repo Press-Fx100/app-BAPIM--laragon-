@@ -121,11 +121,15 @@ function initializeCustomSelects() {
         const syncButton = () => {
             const option = select.options[select.selectedIndex];
             button.textContent = option?.textContent || "";
+            button.disabled = select.disabled;
+            button.setAttribute("aria-disabled", String(select.disabled));
+            wrapper.classList.toggle("disabled", select.disabled);
             menu.querySelectorAll("[role='option']").forEach(item => {
                 item.classList.toggle(
                     "active",
                     item.dataset.value === select.value
                 );
+                item.disabled = select.disabled;
             });
         };
 
@@ -140,6 +144,7 @@ function initializeCustomSelects() {
             item.dataset.value = option.value;
             item.setAttribute("role", "option");
             item.addEventListener("click", () => {
+                if (select.disabled) return;
                 select.value = option.value;
                 select.dispatchEvent(new Event("change", { bubbles: true }));
                 syncButton();
@@ -175,7 +180,11 @@ function initializeCustomSelects() {
         rebuildMenu();
 
         const observer = new MutationObserver(rebuildMenu);
-        observer.observe(select, { childList: true });
+        observer.observe(select, {
+            attributes: true,
+            attributeFilter: ["disabled"],
+            childList: true
+        });
     });
 }
 

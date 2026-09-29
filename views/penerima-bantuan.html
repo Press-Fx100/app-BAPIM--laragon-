@@ -55,20 +55,37 @@
                 </div>
             </div>
 
-            <div id="recipientAddForm" class="add-form" style="display:none;">
-                <div class="form-card">
-                    <div class="form-title">Tambah Rekod</div>
-                    <div class="form-grid">
-                        <div class="form-field"><label for="recipientAddDataset">Fail sumber</label><select id="recipientAddDataset"></select></div>
-                        <div class="form-field"><label for="recipientAddNama">Nama</label><input id="recipientAddNama" autocomplete="off"></div>
-                        <div class="form-field"><label for="recipientAddKP">KP</label><input id="recipientAddKP" autocomplete="off"></div>
-                        <div class="form-field"><label for="recipientAddTelefon">Telefon</label><input id="recipientAddTelefon" autocomplete="off"></div>
-                        <div class="form-field"><label for="recipientAddEmail">Email</label><input id="recipientAddEmail" autocomplete="off"></div>
-                        <div class="form-field"><label for="recipientAddStatus">Status</label><select id="recipientAddStatus"></select><input id="recipientAddStatusCustom" autocomplete="off" placeholder="Masukkan status baharu" style="display:none;"></div>
-                        <div class="form-field"><label for="recipientAddPIC">PIC</label><input id="recipientAddPIC" autocomplete="off"></div>
-                        <div class="form-field full"><label for="recipientAddCatatan">Catatan</label><textarea id="recipientAddCatatan"></textarea></div>
+            <div id="recipientAddForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
+                <div id="recipientAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
+                    aria-modal="true" aria-labelledby="recipientAddTitle" aria-hidden="true">
+                    <div class="dataset-upload-header">
+                        <div>
+                            <h5 id="recipientAddTitle">Tambah Rekod</h5>
+                            <p>Masukkan maklumat penerima bantuan baharu.</p>
+                        </div>
+                        <button type="button" id="recipientCloseAdd" class="dataset-upload-close"
+                            aria-label="Tutup borang tambah rekod">
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </button>
                     </div>
-                    <div class="form-actions"><button type="button" id="recipientCancelAdd" class="btn btn-light">Batal</button><button type="button" id="recipientConfirmAdd" class="btn btn-primary">Tambah</button></div>
+
+                    <div class="dataset-upload-body dataset-add-body">
+                        <div class="form-grid">
+                            <div class="form-field full"><label for="recipientAddDataset">Fail sumber</label><select id="recipientAddDataset"></select></div>
+                            <div class="form-field"><label for="recipientAddNama">Nama</label><input id="recipientAddNama" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddKP">KP</label><input id="recipientAddKP" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddTelefon">Telefon</label><input id="recipientAddTelefon" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddEmail">Email</label><input id="recipientAddEmail" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddStatus">Status</label><select id="recipientAddStatus"></select><input id="recipientAddStatusCustom" autocomplete="off" placeholder="Masukkan status baharu" style="display:none;"></div>
+                            <div class="form-field"><label for="recipientAddPIC">PIC</label><input id="recipientAddPIC" autocomplete="off"></div>
+                            <div class="form-field full"><label for="recipientAddCatatan">Catatan</label><textarea id="recipientAddCatatan"></textarea></div>
+                        </div>
+                    </div>
+
+                    <div class="dataset-upload-footer">
+                        <button type="button" id="recipientCancelAdd" class="btn btn-light">Batal</button>
+                        <button type="button" id="recipientConfirmAdd" class="btn btn-primary">Tambah</button>
+                    </div>
                 </div>
             </div>
         </div>

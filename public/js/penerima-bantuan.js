@@ -26,6 +26,13 @@
         if (currentValue.trim()) options.add(currentValue.trim());
         return [...options].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     }
+    function cellSuggestions(key, currentValue = "") {
+        const options = new Set(
+            data.map(row => value(row, key).trim()).filter(Boolean)
+        );
+        if (currentValue.trim()) options.add(currentValue.trim());
+        return [...options].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    }
     function refreshStatusOptions(select, currentValue = "", includeNewStatus = false) {
         if (!select) return;
         select.replaceChildren(new Option("", ""));
@@ -92,7 +99,11 @@
         body.dataset.ready = "true";
         bind("recipientSearch", "input", apply);
         bind("recipientAddButton", "click", openAdd);
-        bind("recipientCancelAdd", "click", () => { if ($("recipientAddForm")) $("recipientAddForm").style.display = "none"; });
+        bind("recipientCancelAdd", "click", closeAdd);
+        bind("recipientCloseAdd", "click", closeAdd);
+        bind("recipientAddForm", "click", event => {
+            if (event.target === $("recipientAddForm")) closeAdd();
+        });
         bind("recipientAddStatus", "change", () => showNewStatusInput($("recipientAddStatus"), $("recipientAddStatusCustom")));
         bind("recipientConfirmAdd", "click", addRecord);
         bind("recipientDeleteButton", "click", deleteAction);
@@ -125,7 +136,11 @@
     }
     function bind(id, event, fn) { const node = $(id); if (node) node.addEventListener(event, fn); }
     function finishEditOnOutsideClick(event) {
-        if (!currentEdit || currentEdit.cell.contains(event.target)) return;
+        if (
+            !currentEdit ||
+            currentEdit.cell.contains(event.target) ||
+            currentEdit.popup?.contains(event.target)
+        ) return;
         const target = event.target.closest?.("#recipientTableBody td[data-row][data-col]");
         const targetRow = target ? data[Number(target.dataset.row)] : null;
         const targetCol = target ? Number(target.dataset.col) : -1;
@@ -139,8 +154,8 @@
                 `#recipientTableBody td[data-row="${active.row}"][data-col="${active.col}"]`
             );
             if (!currentCell) return;
-            if (columns[targetCol - 1]?.[0] === "status") {
-                edit(currentCell, targetRow, targetCol, undefined, event, false);
+            if (["status", "catatan"].includes(columns[targetCol - 1]?.[0])) {
+                edit(currentCell, targetRow, targetCol, undefined, event);
             } else {
                 focusSelectedCell(targetRow, targetCol);
             }
@@ -166,9 +181,12 @@
     }
     async function loadDatasets() {
         const select = $("recipientAddDataset"); if (!select) return;
-        const response = await fetch("/api/datasets"); if (!response.ok) return;
+        const response = await fetch("/api/datasets");
+        if (!response.ok) throw new Error("Gagal mendapatkan fail sumber penerima.");
         const list = await response.json(); select.innerHTML = "";
-        list.filter(x => x.filename && !String(x.filename).toLowerCase().includes("peserta")).forEach(item => {
+        list.filter(item => item.filename &&
+            String(item.dataset_type ?? item.datasetType ?? "").toLowerCase() === "penerima"
+        ).forEach(item => {
             const option = document.createElement("option");
             option.value = item.id; option.textContent = item.filename; select.appendChild(option);
         });
@@ -303,30 +321,23 @@
         td.addEventListener("mousedown", e => startSelection(e, td));
         td.addEventListener("mouseenter", () => { if (dragging) selectRange(td); });
         td.addEventListener("mousemove", () => { if (dragging) selectRange(td); });
-        td.addEventListener("click", event => {
-            if (
-                !deleteMode &&
-                colIndex > 0 &&
-                columns[colIndex - 1][0] === "status" &&
-                !editing
-            ) {
-                edit(td, row, colIndex, undefined, event, false);
-            }
-        });
         td.addEventListener("dblclick", event => {
             if (deleteMode) return;
             if (currentEdit) {
-                if (currentEdit.cell !== td || columns[colIndex - 1]?.[0] !== "status") return;
+                if (
+                    currentEdit.cell !== td ||
+                    !["status", "catatan"].includes(columns[colIndex - 1]?.[0])
+                ) return;
                 const finish = currentEdit.finish;
                 finish(false).then(() => {
                     const currentCell = document.querySelector(
                         `#recipientTableBody td[data-row="${data.indexOf(row)}"][data-col="${colIndex}"]`
                     );
-                    if (currentCell) edit(currentCell, row, colIndex, undefined, event, true);
+                    if (currentCell) edit(currentCell, row, colIndex, undefined, event);
                 });
                 return;
             }
-            edit(td, row, colIndex, undefined, event, true);
+            edit(td, row, colIndex, undefined, event);
         });
         td.addEventListener("keydown", e => cellKey(e, td));
         if (active && active.row === rowIndex && active.col === colIndex) td.classList.add("active-cell");
@@ -475,31 +486,34 @@
         );
         target?.focus();
     }
-    async function edit(cell, row, col, initial, event, textMode = true) {
+    async function edit(cell, row, col, initial, event) {
         if (editing || col === 0 || columns[col - 1][0] === "sourceFile") return;
         editing = true;
         cell.classList.remove("active-cell", "selected-cell");
         cell.classList.add("editing-cell");
         const key = columns[col - 1][0], old = value(row, key);
-        const input = key === "status" && !textMode
-            ? document.createElement("select")
-            : document.createElement("input");
+        const hasSuggestions = ["status", "catatan"].includes(key);
+        const input = document.createElement("input");
         input.className = "inline-edit-input";
-        let customInput = null;
-        const isStatusDropdown = key === "status" && input instanceof HTMLSelectElement;
-        if (isStatusDropdown) {
-            input.dataset.customSelectSkip = "true";
-            refreshStatusOptions(input, old);
-            customInput = document.createElement("input");
-            customInput.className = "inline-edit-input";
-            customInput.placeholder = "Masukkan status baharu";
-            customInput.style.display = "none";
-        } else {
-            input.value = initial === undefined ? old : initial;
-        }
+        let suggestionPopup = null;
+        let matchingSuggestions = [];
+        let activeSuggestionIndex = -1;
+        let hasTypedQuery = false;
+        input.value = initial === undefined ? old : initial;
         cell.textContent = "";
         cell.appendChild(input);
-        if (customInput) cell.appendChild(customInput);
+        if (hasSuggestions) {
+            suggestionPopup = document.createElement("div");
+            suggestionPopup.className = "recipient-cell-suggestions";
+            suggestionPopup.setAttribute("role", "listbox");
+            const cellStyle = window.getComputedStyle(cell);
+            suggestionPopup.style.fontFamily = cellStyle.fontFamily;
+            suggestionPopup.style.fontSize = cellStyle.fontSize;
+            suggestionPopup.style.fontWeight = cellStyle.fontWeight;
+            suggestionPopup.style.lineHeight = cellStyle.lineHeight;
+            suggestionPopup.style.letterSpacing = cellStyle.letterSpacing;
+            document.body.appendChild(suggestionPopup);
+        }
         input.focus();
         if (initial === undefined && input instanceof HTMLInputElement) {
             const offset = event ? caretOffsetAtPoint(old, cell, event.clientX) : old.length;
@@ -510,9 +524,8 @@
             if (finished) return;
             finished = true;
             if (currentEdit?.cell === cell) currentEdit = null;
-            const next = key === "status" && input.value === newStatusValue
-                ? customInput.value
-                : input.value;
+            suggestionPopup?.remove();
+            const next = input.value;
             const was = old;
             editing = false; cell.classList.remove("editing-cell");
             if (!save || next === was) {
@@ -532,17 +545,74 @@
             catch (e) { error(e); render(); }
             if (restoreFocus) focusSelectedCell(row, col);
         };
-        currentEdit = { cell, row, col, finish };
+        currentEdit = { cell, row, col, finish, popup: suggestionPopup };
+        const updateSuggestions = () => {
+            if (!suggestionPopup) return;
+            const query = input.value.trim().toLocaleLowerCase();
+            matchingSuggestions = [
+                ...(hasTypedQuery ? [] : [""]),
+                ...cellSuggestions(key, old).filter(option =>
+                    option.toLocaleLowerCase().includes(query)
+                )
+            ];
+            activeSuggestionIndex = matchingSuggestions.length
+                ? Math.max(0, matchingSuggestions.indexOf(input.value))
+                : -1;
+            suggestionPopup.replaceChildren();
+            suggestionPopup.style.display = matchingSuggestions.length ? "block" : "none";
+            matchingSuggestions.forEach((suggestion, index) => {
+                const option = document.createElement("button");
+                option.type = "button";
+                option.className = "recipient-cell-suggestion";
+                option.setAttribute("role", "option");
+                option.setAttribute("aria-selected", String(index === activeSuggestionIndex));
+                if (index === activeSuggestionIndex) option.classList.add("active");
+                option.textContent = suggestion;
+                option.addEventListener("mousedown", suggestionEvent => {
+                    suggestionEvent.preventDefault();
+                });
+                option.addEventListener("click", () => {
+                    input.value = suggestion;
+                    finish(true);
+                });
+                suggestionPopup.appendChild(option);
+            });
+
+            const rect = cell.getBoundingClientRect();
+            suggestionPopup.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - rect.width))}px`;
+            suggestionPopup.style.top = `${rect.bottom}px`;
+            suggestionPopup.style.width = `${rect.width}px`;
+        };
+        const updateActiveSuggestion = index => {
+            if (!matchingSuggestions.length || !suggestionPopup) return;
+            activeSuggestionIndex = (index + matchingSuggestions.length) % matchingSuggestions.length;
+            suggestionPopup.querySelectorAll(".recipient-cell-suggestion").forEach((option, optionIndex) => {
+                const isActive = optionIndex === activeSuggestionIndex;
+                option.classList.toggle("active", isActive);
+                option.setAttribute("aria-selected", String(isActive));
+                if (isActive) option.scrollIntoView({ block: "nearest" });
+            });
+        };
+        if (hasSuggestions) {
+            updateSuggestions();
+            input.addEventListener("input", () => {
+                hasTypedQuery = true;
+                updateSuggestions();
+            });
+        }
         const handleEditKey = e => {
             e.stopPropagation();
             if (e.key === "Escape") {
                 e.preventDefault(); e.stopPropagation();
                 finish(false);
+            } else if (hasSuggestions && ["ArrowDown", "ArrowUp"].includes(e.key)) {
+                if (!matchingSuggestions.length) return;
+                e.preventDefault();
+                updateActiveSuggestion(activeSuggestionIndex + (e.key === "ArrowDown" ? 1 : -1));
             } else if (e.key === "Enter") {
                 e.preventDefault();
-                if (isStatusDropdown && input.value === newStatusValue) {
-                    showNewStatusInput(input, customInput);
-                    return;
+                if (hasSuggestions && matchingSuggestions.length) {
+                    input.value = matchingSuggestions[Math.max(activeSuggestionIndex, 0)];
                 }
                 finish(true);
             } else if (e.key === "Tab") {
@@ -552,30 +622,11 @@
             }
         };
         input.onkeydown = handleEditKey;
-        if (isStatusDropdown && typeof input.showPicker === "function") {
-            input.showPicker();
-        }
-        if (customInput) {
-            input.addEventListener("change", () => {
-                if (input.value === newStatusValue) {
-                    showNewStatusInput(input, customInput);
-                } else {
-                    finish(true);
+        input.addEventListener("blur", () => {
+            window.setTimeout(() => {
+                if (!moving && document.activeElement !== input) {
+                    finish(true, false);
                 }
-            });
-            customInput.onkeydown = handleEditKey;
-        }
-        [input, customInput].filter(Boolean).forEach(control => {
-            control.addEventListener("blur", () => {
-                window.setTimeout(() => {
-                    if (
-                        !moving &&
-                        document.activeElement !== input &&
-                        document.activeElement !== customInput
-                    ) {
-                        finish(true, false);
-                    }
-                }, 0);
             });
         });
     }
@@ -645,12 +696,22 @@
     async function historyRun(redo) {
         const source = redo ? redoStack : undoStack, action = source.pop(); if (!action) return;
         try {
-            if (action.type === "changes") for (const change of action.changes) {
-                const next = redo ? change.next : change.old;
-                change.row[change.key] = next;
-                const pendingKey = `${rowKey(change.row)}:${change.key}`;
-                if (next === change.old) pendingChanges.delete(pendingKey);
-                else pendingChanges.set(pendingKey, { row: change.row, key: change.key, old: change.old, next });
+            if (action.type === "changes") {
+                for (const change of action.changes) {
+                    const pendingKey = `${rowKey(change.row)}:${change.key}`;
+                    const pending = pendingChanges.get(pendingKey);
+                    const baseline = pending?.old ?? value(change.row, change.key);
+                    const next = redo ? change.next : change.old;
+                    change.row[change.key] = next;
+                    if (next === baseline) pendingChanges.delete(pendingKey);
+                    else pendingChanges.set(pendingKey, {
+                        row: change.row,
+                        key: change.key,
+                        old: baseline,
+                        next
+                    });
+                }
+            }
             if (action.type === "add" && !redo) {
                 const row = data.find(r => value(r, "nama") === value(action.changes, "nama") && value(r, "kadPengenalan") === value(action.changes, "kadPengenalan"));
                 if (row) await api("DELETE", { record: { datasetId: row.datasetId, rowIndex: row.rowIndex } });
@@ -658,13 +719,19 @@
             if (action.type === "add" && redo) await api("POST", { datasetId: action.datasetId, changes: action.changes });
             if (action.type === "delete" && redo) for (const row of action.rows) await api("DELETE", { record: { datasetId: row.datasetId, rowIndex: row.rowIndex } });
             if (action.type === "delete" && !redo) for (const row of action.rows) await api("POST", { datasetId: row.datasetId, changes: row });
-            }
-            (redo ? undoStack : redoStack).push(action); await load();
+            (redo ? undoStack : redoStack).push(action);
+            if (action.type === "changes") render();
+            else await load();
         } catch (e) { source.push(action); error(e); }
     }
     function updateHistory() { /* Undo/redo are intentionally keyboard-only. */ }
     function keyboard(event) {
         if (!$("recipientTableBody")) return;
+        if (event.key === "Escape" && $("recipientAddForm")?.classList.contains("show")) {
+            event.preventDefault();
+            closeAdd();
+            return;
+        }
         if (editing && event.key === "Escape" && currentEdit) {
             event.preventDefault();
             currentEdit.finish(false);
@@ -680,7 +747,25 @@
         if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); historyRun(event.shiftKey); }
         else if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); historyRun(true); }
     }
-    function openAdd() { const form = $("recipientAddForm"); if (form) { form.style.display = "flex"; const input = $("recipientAddNama"); if (input) input.focus(); } }
+    function openAdd() {
+        const form = $("recipientAddForm");
+        const card = $("recipientAddCard");
+        if (!form || !card) return;
+        form.classList.add("show");
+        card.classList.add("show");
+        form.setAttribute("aria-hidden", "false");
+        card.setAttribute("aria-hidden", "false");
+        $("recipientAddNama")?.focus();
+    }
+    function closeAdd() {
+        const form = $("recipientAddForm");
+        const card = $("recipientAddCard");
+        if (!form || !card) return;
+        form.classList.remove("show");
+        card.classList.remove("show");
+        form.setAttribute("aria-hidden", "true");
+        card.setAttribute("aria-hidden", "true");
+    }
     async function addRecord() {
         const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
         const changes = {}; fields.forEach(([key, id]) => { const input = $(id); changes[key] = input ? input.value : ""; });
@@ -688,7 +773,7 @@
         const customStatus = $("recipientAddStatusCustom");
         changes.status = statusSelect?.value === newStatusValue ? (customStatus?.value || "") : (statusSelect?.value || "");
         const datasetId = $("recipientAddDataset") && $("recipientAddDataset").value;
-        try { await api("POST", { datasetId, changes }); historyPush({ type: "add", datasetId, changes }); const form = $("recipientAddForm"); if (form) form.style.display = "none"; await load(); }
+        try { await api("POST", { datasetId, changes }); historyPush({ type: "add", datasetId, changes }); closeAdd(); await load(); }
         catch (e) { error(e); }
     }
     function deleteAction() {

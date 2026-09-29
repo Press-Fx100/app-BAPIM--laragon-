@@ -55,17 +55,34 @@
                 </div>
             </div>
 
-            <div id="participantAddForm" class="add-form" style="display:none;">
-                <div class="form-card">
-                    <div class="form-title">Tambah Rekod</div>
-                    <div class="form-grid">
-                        <div class="form-field"><label for="participantAddDataset">Fail sumber</label><select id="participantAddDataset"></select></div>
-                        <div class="form-field"><label for="participantAddNama">Nama</label><input id="participantAddNama" autocomplete="off"></div>
-                        <div class="form-field"><label for="participantAddKP">KP</label><input id="participantAddKP" autocomplete="off"></div>
-                        <div class="form-field"><label for="participantAddCategory">Ketegori</label><input id="participantAddCategory" autocomplete="off"></div>
-                        <div class="form-field full"><label for="participantAddProgram">Program</label><input id="participantAddProgram" autocomplete="off"></div>
+            <div id="participantAddForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
+                <div id="participantAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
+                    aria-modal="true" aria-labelledby="participantAddTitle" aria-hidden="true">
+                    <div class="dataset-upload-header">
+                        <div>
+                            <h5 id="participantAddTitle">Tambah Rekod</h5>
+                            <p>Masukkan maklumat peserta program baharu.</p>
+                        </div>
+                        <button type="button" id="participantCloseAdd" class="dataset-upload-close"
+                            aria-label="Tutup borang tambah rekod">
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </button>
                     </div>
-                    <div class="form-actions"><button type="button" id="participantCancelAdd" class="btn btn-light">Batal</button><button type="button" id="participantConfirmAdd" class="btn btn-primary">Tambah</button></div>
+
+                    <div class="dataset-upload-body dataset-add-body">
+                        <div class="form-grid">
+                            <div class="form-field full"><label for="participantAddDataset">Fail sumber</label><select id="participantAddDataset"></select></div>
+                            <div class="form-field"><label for="participantAddNama">Nama</label><input id="participantAddNama" autocomplete="off"></div>
+                            <div class="form-field"><label for="participantAddKP">KP</label><input id="participantAddKP" autocomplete="off"></div>
+                            <div class="form-field"><label for="participantAddCategory">Ketegori</label><input id="participantAddCategory" autocomplete="off"></div>
+                            <div class="form-field full"><label for="participantAddProgram">Program</label><input id="participantAddProgram" autocomplete="off"></div>
+                        </div>
+                    </div>
+
+                    <div class="dataset-upload-footer">
+                        <button type="button" id="participantCancelAdd" class="btn btn-light">Batal</button>
+                        <button type="button" id="participantConfirmAdd" class="btn btn-primary">Tambah</button>
+                    </div>
                 </div>
             </div>
         </div>

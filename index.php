@@ -234,7 +234,7 @@ function updateCsvDataset(PDO $pdo, array $dataset, array $rows, string $usernam
                 $column = $rows[0][$columnIndex] ?? 'Column ' . ($columnIndex + 1);
                 $isStatus = strtolower(trim((string)$column)) === 'status';
                 $progress = $isStatus ? (int)(trim($previous) === '' && trim($value) !== '') - (int)(trim($previous) !== '' && trim($value) === '') : 0;
-                recordActivity($pdo, $activityUsername, (int)$dataset['id'], $dataset['name'], $isStatus ? 'status_change' : 'edit', (string)$newRowNumbers[$key], (string)$column, $previous, $value, $progress);
+                recordActivity($pdo, $activityUsername, (int)$dataset['id'], $dataset['name'], $isStatus ? 'status_change' : 'UPDATE', (string)$newRowNumbers[$key], (string)$column, $previous, $value, $progress);
             }
         }
         foreach ($oldMap as $key => $row) {

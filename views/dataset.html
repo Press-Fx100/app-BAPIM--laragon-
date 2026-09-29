@@ -348,89 +348,31 @@
 
     </button>
 
-    <div id="addForm" class="add-form" style="display:none;">
+    <div id="addForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
 
-        <div class="form-card">
+        <div id="addRecordCard" class="dataset-upload-card dataset-add-card" role="dialog"
+            aria-modal="true" aria-labelledby="addRecordTitle" aria-hidden="true">
 
-            <div class="form-title">
-                Tambah Rekod
+            <div class="dataset-upload-header">
+                <div>
+                    <h5 id="addRecordTitle">Tambah Rekod</h5>
+                    <p id="addRecordDescription">Masukkan maklumat rekod baharu.</p>
+                </div>
+                <button type="button" id="closeAddFormButton" class="dataset-upload-close"
+                    aria-label="Tutup borang tambah rekod">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
             </div>
 
-            <div class="form-grid">
-
-                <div class="form-field">
-
-                    <label for="addNama">
-                        Nama
-                    </label>
-
-                    <input type="text" id="addNama" autocomplete="off">
-
+            <div class="dataset-upload-body dataset-add-body">
+                <div class="form-field dataset-add-source">
+                    <label for="addSourceDataset">Fail sumber</label>
+                    <select id="addSourceDataset" disabled></select>
                 </div>
-
-                <div class="form-field">
-
-                    <label for="addKP">
-                        KP
-                    </label>
-
-                    <input type="text" id="addKP" autocomplete="off">
-
-                </div>
-
-                <div class="form-field">
-
-                    <label for="addTelefon">
-                        Telefon
-                    </label>
-
-                    <input type="text" id="addTelefon" autocomplete="off">
-
-                </div>
-
-                <div class="form-field">
-
-                    <label for="addEmail">
-                        Email
-                    </label>
-
-                    <input type="text" id="addEmail" autocomplete="off">
-
-                </div>
-
-                <div class="form-field">
-
-                    <label for="addStatus">
-                        Status
-                    </label>
-
-                    <input type="text" id="addStatus" autocomplete="off">
-
-                </div>
-
-                <div class="form-field">
-
-                    <label for="addPIC">
-                        PIC
-                    </label>
-
-                    <input type="text" id="addPIC" autocomplete="off">
-
-                </div>
-
-                <div class="form-field full">
-
-                    <label for="addCatatan">
-                        Catatan
-                    </label>
-
-                    <textarea id="addCatatan"></textarea>
-
-                </div>
-
+                <div id="addRecordFields" class="form-grid dataset-add-fields"></div>
             </div>
 
-            <div class="form-actions">
+            <div class="dataset-upload-footer">
 
                 <button type="button" id="cancelAddButton" class="btn btn-light">
                     Batal

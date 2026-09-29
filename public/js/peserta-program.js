@@ -77,6 +77,10 @@
         $("participantConfirmDelete").addEventListener("click", confirmDelete);
         $("participantDeleteOverlay").addEventListener("click", closeDeleteConfirmation);
         $("participantCancelAdd").addEventListener("click", closeAddForm);
+        $("participantCloseAdd").addEventListener("click", closeAddForm);
+        $("participantAddForm").addEventListener("click", event => {
+            if (event.target === $("participantAddForm")) closeAddForm();
+        });
         $("participantConfirmAdd").addEventListener("click", addRecord);
         $("participantDeleteButton").addEventListener("click", toggleDeleteMode);
         $("participantColumnButton").addEventListener("click", event => toggleMenu(event, "participantColumnMenu", "participantFilterMenu"));
@@ -127,7 +131,7 @@
         const select = $("participantAddDataset");
         select.innerHTML = "";
         datasets.filter(dataset => dataset.filename &&
-            !String(dataset.filename).toLowerCase().includes("student"))
+            String(dataset.dataset_type ?? dataset.datasetType ?? "").toLowerCase() === "peserta")
             .forEach(dataset => {
                 const option = document.createElement("option");
                 option.value = dataset.id;
@@ -609,6 +613,11 @@
 
     function handleKeyboard(event) {
         if (!$("participantTableBody")) return;
+        if (event.key === "Escape" && $("participantAddForm")?.classList.contains("show")) {
+            event.preventDefault();
+            closeAddForm();
+            return;
+        }
         const target = event.target;
         const typing = target.matches?.("input, textarea, select, button, [contenteditable='true']");
         const modifier = event.ctrlKey || event.metaKey;
@@ -791,12 +800,24 @@
     }
 
     function openAddForm() {
-        $("participantAddForm").style.display = "flex";
-        $("participantAddNama").focus();
+        const form = $("participantAddForm");
+        const card = $("participantAddCard");
+        if (!form || !card) return;
+        form.classList.add("show");
+        card.classList.add("show");
+        form.setAttribute("aria-hidden", "false");
+        card.setAttribute("aria-hidden", "false");
+        $("participantAddNama")?.focus();
     }
 
     function closeAddForm() {
-        $("participantAddForm").style.display = "none";
+        const form = $("participantAddForm");
+        const card = $("participantAddCard");
+        if (!form || !card) return;
+        form.classList.remove("show");
+        card.classList.remove("show");
+        form.setAttribute("aria-hidden", "true");
+        card.setAttribute("aria-hidden", "true");
     }
 
     async function addRecord() {
