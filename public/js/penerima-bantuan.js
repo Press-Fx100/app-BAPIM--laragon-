@@ -8,18 +8,39 @@
     ];
     const pageSize = 100;
     const $ = id => document.getElementById(id);
+    const newStatusValue = "__add_new_status__";
     let data = [], filtered = [], page = 1, sortKey = "", sortDirection = "asc";
     let visible = columns.map(c => c[0] !== "sourceFile");
     let filters = {}, widths = [45].concat(columns.map(() => 160));
     let deleteMode = false, active = null, anchor = null;
     let pendingChanges = new Map(), pendingDeleteRow = null;
-    let dragging = false, shiftSelecting = false, editing = false, undoStack = [], redoStack = [], initializedBody = null, documentEventsBound = false;
+    let dragging = false, shiftSelecting = false, editing = false, currentEdit = null, undoStack = [], redoStack = [], initializedBody = null, documentEventsBound = false;
 
     const rowKey = row => `${row.datasetId}:${row.rowIndex}`;
     const esc = value => String(value == null ? "" : value).replace(/[&<>"']/g, c => (
         { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
     ));
     const value = (row, key) => String(row[key] == null ? "" : row[key]);
+    function statusOptions(currentValue = "") {
+        const options = new Set(data.map(row => value(row, "status").trim()).filter(Boolean));
+        if (currentValue.trim()) options.add(currentValue.trim());
+        return [...options].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    }
+    function refreshStatusOptions(select, currentValue = "", includeNewStatus = false) {
+        if (!select) return;
+        select.replaceChildren(new Option("", ""));
+        statusOptions(currentValue).forEach(status => select.add(new Option(status, status)));
+        if (includeNewStatus) {
+            select.add(new Option("Tambah status baharu...", newStatusValue));
+        }
+        select.value = currentValue;
+    }
+    function showNewStatusInput(select, input) {
+        if (!select || !input) return;
+        const addingNew = select.value === newStatusValue;
+        input.style.display = addingNew ? "" : "none";
+        if (addingNew) input.focus();
+    }
     const error = e => { console.error(e); window.alert(e && e.message ? e.message : "Operasi gagal"); };
     const api = async (method, body) => {
         const response = await fetch("/api/penerima-bantuan/records", {
@@ -72,6 +93,7 @@
         bind("recipientSearch", "input", apply);
         bind("recipientAddButton", "click", openAdd);
         bind("recipientCancelAdd", "click", () => { if ($("recipientAddForm")) $("recipientAddForm").style.display = "none"; });
+        bind("recipientAddStatus", "change", () => showNewStatusInput($("recipientAddStatus"), $("recipientAddStatusCustom")));
         bind("recipientConfirmAdd", "click", addRecord);
         bind("recipientDeleteButton", "click", deleteAction);
         bind("recipientSaveButton", "click", saveChanges);
@@ -87,6 +109,7 @@
             bind(`recipient${name}Page`, "click", () => paginate(name)));
         if (!documentEventsBound) {
             document.addEventListener("click", closeMenus);
+            document.addEventListener("click", finishEditOnOutsideClick);
             document.addEventListener("keydown", keyboard);
             document.addEventListener("copy", copy);
             document.addEventListener("cut", cut);
@@ -101,6 +124,28 @@
         load();
     }
     function bind(id, event, fn) { const node = $(id); if (node) node.addEventListener(event, fn); }
+    function finishEditOnOutsideClick(event) {
+        if (!currentEdit || currentEdit.cell.contains(event.target)) return;
+        const target = event.target.closest?.("#recipientTableBody td[data-row][data-col]");
+        const targetRow = target ? data[Number(target.dataset.row)] : null;
+        const targetCol = target ? Number(target.dataset.col) : -1;
+        const finish = currentEdit.finish;
+        finish(true).then(() => {
+            if (!targetRow || targetCol <= 0) return;
+            active = { row: data.indexOf(targetRow), col: targetCol };
+            anchor = active;
+            render();
+            const currentCell = document.querySelector(
+                `#recipientTableBody td[data-row="${active.row}"][data-col="${active.col}"]`
+            );
+            if (!currentCell) return;
+            if (columns[targetCol - 1]?.[0] === "status") {
+                edit(currentCell, targetRow, targetCol, undefined, event, false);
+            } else {
+                focusSelectedCell(targetRow, targetCol);
+            }
+        });
+    }
     function menu(event, open, close) {
         event.stopPropagation(); const a = $(open), b = $(close);
         if (b) b.classList.remove("show"); if (a) a.classList.toggle("show");
@@ -115,6 +160,7 @@
             const response = await fetch("/api/penerima-bantuan");
             if (!response.ok) throw new Error("Gagal memuatkan penerima");
             data = (await response.json()).recipients || [];
+            refreshStatusOptions($("recipientAddStatus"), "", true);
             await loadDatasets(); buildColumns(); buildFilters(); apply();
         } catch (e) { error(e); const node = $("recipientLoading"); if (node) node.textContent = "Gagal memuatkan penerima."; }
     }
@@ -257,7 +303,31 @@
         td.addEventListener("mousedown", e => startSelection(e, td));
         td.addEventListener("mouseenter", () => { if (dragging) selectRange(td); });
         td.addEventListener("mousemove", () => { if (dragging) selectRange(td); });
-        td.addEventListener("dblclick", () => { if (!deleteMode) edit(td, row, colIndex); });
+        td.addEventListener("click", event => {
+            if (
+                !deleteMode &&
+                colIndex > 0 &&
+                columns[colIndex - 1][0] === "status" &&
+                !editing
+            ) {
+                edit(td, row, colIndex, undefined, event, false);
+            }
+        });
+        td.addEventListener("dblclick", event => {
+            if (deleteMode) return;
+            if (currentEdit) {
+                if (currentEdit.cell !== td || columns[colIndex - 1]?.[0] !== "status") return;
+                const finish = currentEdit.finish;
+                finish(false).then(() => {
+                    const currentCell = document.querySelector(
+                        `#recipientTableBody td[data-row="${data.indexOf(row)}"][data-col="${colIndex}"]`
+                    );
+                    if (currentCell) edit(currentCell, row, colIndex, undefined, event, true);
+                });
+                return;
+            }
+            edit(td, row, colIndex, undefined, event, true);
+        });
         td.addEventListener("keydown", e => cellKey(e, td));
         if (active && active.row === rowIndex && active.col === colIndex) td.classList.add("active-cell");
         if (inSelection(rowIndex, colIndex)) td.classList.add("selected-cell");
@@ -285,6 +355,7 @@
             col >= Math.min(active.col, end.col) && col <= Math.max(active.col, end.col);
     }
     function startSelection(event, td) {
+        if (event.target.closest?.(".inline-edit-input")) return;
         if (deleteMode) return; event.preventDefault();
         const cell = { row: Number(td.dataset.row), col: Number(td.dataset.col) };
         shiftSelecting = event.shiftKey && !!active;
@@ -319,6 +390,10 @@
         if (info) info.textContent = `${rowCount} baris, ${columnCount} lajur, ${selected.length} sel dipilih`;
     }
     function cellKey(event, td) {
+        if (event.target !== td && event.target.closest?.(".inline-edit-input")) {
+            event.stopPropagation();
+            return;
+        }
         if (event.key === "F2" || event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
             event.preventDefault();
             event.stopPropagation();
@@ -375,48 +450,134 @@
         const cell = document.querySelector(`#recipientTableBody td[data-row="${next.row}"][data-col="${next.col}"]`);
         if (cell) cell.focus();
     }
-    async function edit(cell, row, col, initial) {
+    function caretOffsetAtPoint(text, element, clientX) {
+        const style = window.getComputedStyle(element);
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        if (!context) return text.length;
+        context.font = style.font;
+        const x = Math.max(0, clientX - element.getBoundingClientRect().left - parseFloat(style.paddingLeft || "0"));
+        let bestOffset = 0;
+        let bestDistance = x;
+        for (let offset = 1; offset <= text.length; offset++) {
+            const distance = Math.abs(context.measureText(text.slice(0, offset)).width - x);
+            if (distance < bestDistance) {
+                bestOffset = offset;
+                bestDistance = distance;
+            }
+        }
+        return bestOffset;
+    }
+    function focusSelectedCell(row, col) {
+        const rowIndex = data.indexOf(row);
+        const target = document.querySelector(
+            `#recipientTableBody td[data-row="${rowIndex}"][data-col="${col}"]`
+        );
+        target?.focus();
+    }
+    async function edit(cell, row, col, initial, event, textMode = true) {
         if (editing || col === 0 || columns[col - 1][0] === "sourceFile") return;
         editing = true;
         cell.classList.remove("active-cell", "selected-cell");
         cell.classList.add("editing-cell");
-        const key = columns[col - 1][0], old = value(row, key), input = document.createElement("input");
-        input.className = "inline-edit-input"; input.value = initial === undefined ? old : initial; cell.textContent = ""; cell.appendChild(input); input.focus(); if (initial === undefined) input.select();
+        const key = columns[col - 1][0], old = value(row, key);
+        const input = key === "status" && !textMode
+            ? document.createElement("select")
+            : document.createElement("input");
+        input.className = "inline-edit-input";
+        let customInput = null;
+        const isStatusDropdown = key === "status" && input instanceof HTMLSelectElement;
+        if (isStatusDropdown) {
+            input.dataset.customSelectSkip = "true";
+            refreshStatusOptions(input, old);
+            customInput = document.createElement("input");
+            customInput.className = "inline-edit-input";
+            customInput.placeholder = "Masukkan status baharu";
+            customInput.style.display = "none";
+        } else {
+            input.value = initial === undefined ? old : initial;
+        }
+        cell.textContent = "";
+        cell.appendChild(input);
+        if (customInput) cell.appendChild(customInput);
+        input.focus();
+        if (initial === undefined && input instanceof HTMLInputElement) {
+            const offset = event ? caretOffsetAtPoint(old, cell, event.clientX) : old.length;
+            input.setSelectionRange(offset, offset);
+        }
         let finished = false, moving = false;
-        const finish = async save => {
-            if (finished) return; finished = true; const next = input.value, was = old;
+        const finish = async (save, restoreFocus = true) => {
+            if (finished) return;
+            finished = true;
+            if (currentEdit?.cell === cell) currentEdit = null;
+            const next = key === "status" && input.value === newStatusValue
+                ? customInput.value
+                : input.value;
+            const was = old;
             editing = false; cell.classList.remove("editing-cell");
-            if (!save || next === was) { render(); return; }
+            if (!save || next === was) {
+                render();
+                if (restoreFocus) focusSelectedCell(row, col);
+                return;
+            }
             try {
                 row[key] = next;
                 const pendingKey = `${rowKey(row)}:${key}`;
                 const existing = pendingChanges.get(pendingKey);
                 if (next === (existing?.old ?? was)) pendingChanges.delete(pendingKey);
                 else pendingChanges.set(pendingKey, { row, key, old: existing?.old ?? was, next });
-                historyPush({ type: "changes", changes: [{ row, key, old: was, next }] }); render();
+                historyPush({ type: "changes", changes: [{ row, key, old: was, next }] });
+                render();
             }
             catch (e) { error(e); render(); }
+            if (restoreFocus) focusSelectedCell(row, col);
         };
+        currentEdit = { cell, row, col, finish };
         const handleEditKey = e => {
-            if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
-            else if (e.key === "Enter" || e.key === "Tab") {
+            e.stopPropagation();
+            if (e.key === "Escape") {
                 e.preventDefault(); e.stopPropagation();
-                moving = true;
-                finish(true).then(() => move(
-                    e.key === "Enter" ? (e.shiftKey ? "ArrowUp" : "ArrowDown") : "ArrowRight",
-                    false,
-                    e.key === "Tab" && e.shiftKey
-                ));
-            } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                finish(false);
+            } else if (e.key === "Enter") {
                 e.preventDefault();
-                e.stopPropagation();
-                const start = input.selectionStart ?? input.value.length;
-                const end = input.selectionEnd ?? start;
-                input.setRangeText(e.key, start, end, "end");
+                if (isStatusDropdown && input.value === newStatusValue) {
+                    showNewStatusInput(input, customInput);
+                    return;
+                }
+                finish(true);
+            } else if (e.key === "Tab") {
+                e.preventDefault();
+                moving = true;
+                finish(true).then(() => move("ArrowRight", false, e.shiftKey));
             }
         };
         input.onkeydown = handleEditKey;
-        input.addEventListener("blur", () => { if (!moving) finish(true); });
+        if (isStatusDropdown && typeof input.showPicker === "function") {
+            input.showPicker();
+        }
+        if (customInput) {
+            input.addEventListener("change", () => {
+                if (input.value === newStatusValue) {
+                    showNewStatusInput(input, customInput);
+                } else {
+                    finish(true);
+                }
+            });
+            customInput.onkeydown = handleEditKey;
+        }
+        [input, customInput].filter(Boolean).forEach(control => {
+            control.addEventListener("blur", () => {
+                window.setTimeout(() => {
+                    if (
+                        !moving &&
+                        document.activeElement !== input &&
+                        document.activeElement !== customInput
+                    ) {
+                        finish(true, false);
+                    }
+                }, 0);
+            });
+        });
     }
     function selectedCells() {
         if (!active) return [];
@@ -504,6 +665,11 @@
     function updateHistory() { /* Undo/redo are intentionally keyboard-only. */ }
     function keyboard(event) {
         if (!$("recipientTableBody")) return;
+        if (editing && event.key === "Escape" && currentEdit) {
+            event.preventDefault();
+            currentEdit.finish(false);
+            return;
+        }
         if (editing) return; const mod = event.ctrlKey || event.metaKey;
         if (event.key === "Escape" && deleteMode) {
             deleteMode = false;
@@ -516,8 +682,11 @@
     }
     function openAdd() { const form = $("recipientAddForm"); if (form) { form.style.display = "flex"; const input = $("recipientAddNama"); if (input) input.focus(); } }
     async function addRecord() {
-        const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["status", "recipientAddStatus"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
+        const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
         const changes = {}; fields.forEach(([key, id]) => { const input = $(id); changes[key] = input ? input.value : ""; });
+        const statusSelect = $("recipientAddStatus");
+        const customStatus = $("recipientAddStatusCustom");
+        changes.status = statusSelect?.value === newStatusValue ? (customStatus?.value || "") : (statusSelect?.value || "");
         const datasetId = $("recipientAddDataset") && $("recipientAddDataset").value;
         try { await api("POST", { datasetId, changes }); historyPush({ type: "add", datasetId, changes }); const form = $("recipientAddForm"); if (form) form.style.display = "none"; await load(); }
         catch (e) { error(e); }
