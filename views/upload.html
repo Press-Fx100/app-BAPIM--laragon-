@@ -1,0 +1,248 @@
+<main class="main-content">
+
+    <div class="dashboard-content upload-page">
+
+        <div class="content-card mb-4 dataset-page-header upload-page-header">
+            <div>
+                <h4>Muat Naik Set Data</h4>
+                <p>Lihat, cari dan urus set data yang dimuat naik</p>
+            </div>
+            <div class="dataset-header-controls">
+                <div class="search-toolbar-group">
+                    <div class="search-box">
+                        <input type="text" id="datasetSearch" placeholder="Cari set data..." autocomplete="off">
+                    </div>
+                    <div class="toolbar-group toolbar-filter">
+                        <button type="button" id="openUploadButton" class="toolbar-button icon-button"
+                            title="Muat naik set data" aria-label="Muat naik set data">
+                            <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" id="toggleDatasetFilterButton" class="toolbar-button icon-button"
+                            title="Tapis set data" aria-label="Tapis set data">
+                            <i class="bi bi-funnel" aria-hidden="true"></i>
+                        </button>
+                        <div id="datasetTypeFilterMenu" class="filter-menu dataset-type-filter-menu"
+                            role="menu" aria-label="Tapis jenis set data">
+                            <button type="button" class="dataset-type-filter-option active"
+                                data-dataset-type="" role="menuitem">Semua jenis</button>
+                            <button type="button" class="dataset-type-filter-option"
+                                data-dataset-type="penerima" role="menuitem">Penerima Bantuan</button>
+                            <button type="button" class="dataset-type-filter-option"
+                                data-dataset-type="peserta" role="menuitem">Peserta Program</button>
+                        </div>
+                    </div>
+                    <button type="button" id="toggleDatasetDeleteButton"
+                        class="toolbar-button icon-button toolbar-button-danger"
+                        title="Padam set data" aria-label="Padam set data">
+                        <i class="bi bi-trash3" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="uploadOverlay" class="dataset-upload-overlay" aria-hidden="true">
+        <div id="uploadFloatingCard" class="dataset-upload-card" aria-hidden="true">
+
+            <div class="dataset-upload-header">
+                <div>
+                    <h5>Muat Naik Set Data</h5>
+                    <p>Pilih fail CSV atau Excel untuk pratonton dan import.</p>
+                </div>
+                <button type="button" id="closeUploadButton" class="dataset-upload-close" aria-label="Tutup muat naik">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="dataset-upload-body">
+
+                <div id="uploadDropZone" class="dataset-upload-dropzone">
+                    <div class="dataset-upload-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></div>
+                    <h6>Lepaskan fail di sini</h6>
+                    <p>atau pilih fail daripada komputer anda</p>
+                    <button type="button" id="browseUploadButton" class="btn btn-primary">
+                        Pilih Fail
+                    </button>
+                    <span class="dataset-upload-supported">CSV, XLSX atau XLS</span>
+                    <input type="file" id="datasetFileInput" accept=".csv,.xlsx,.xls" hidden>
+                </div>
+
+                <div id="uploadPreviewSection" class="dataset-upload-preview" style="display:none;">
+
+                    <div class="dataset-upload-file">
+                        <div class="dataset-upload-file-icon"><i class="bi bi-file-earmark-spreadsheet"
+                                aria-hidden="true"></i></div>
+                        <div class="dataset-upload-file-info">
+                            <strong id="uploadFileName">-</strong>
+                            <span id="uploadFileMeta">-</span>
+                        </div>
+                        <button type="button" id="removeUploadFileButton" class="dataset-upload-remove"><i
+                                class="bi bi-x-lg" aria-hidden="true"></i></button>
+                    </div>
+
+                    <div class="dataset-upload-fields">
+                        <div>
+                            <label for="uploadDatasetName">Nama set data</label>
+                            <input type="text" id="uploadDatasetName" class="form-control"
+                                placeholder="Masukkan nama set data">
+                        </div>
+                        <div>
+                            <label for="uploadDatasetType">Jenis set data</label>
+                            <select id="uploadDatasetType" class="form-select">
+                                <option value="penerima">PENERIMA BANTUAN</option>
+                                <option value="peserta">PESERTA PROGRAM</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="participantImportOptions" class="dataset-upload-fields participant-import-options"
+                        style="display:none;">
+                        <div>
+                            <label for="participantImportMethod">Kaedah import peserta</label>
+                            <select id="participantImportMethod" class="form-select">
+                                <option value="color">Padankan mengikut warna sel</option>
+                                <option value="column">Padankan mengikut lajur</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="participantHeaderMapping" class="dataset-upload-header-mapping" style="display:none;">
+                        <div class="dataset-upload-section-title">
+                            <div>
+                                <strong>Padankan Pengepala</strong>
+                                <span>Pilih lajur sumber yang sepadan dengan setiap medan sistem.</span>
+                            </div>
+                        </div>
+                        <div class="dataset-upload-fields">
+                            <div>
+                                <label for="participantNameHeader">NAMA <span class="required">*</span></label>
+                                <select id="participantNameHeader" class="form-select"></select>
+                            </div>
+                            <div>
+                                <label for="participantIdentityHeader">KAD PENGENALAN <span class="required">*</span></label>
+                                <select id="participantIdentityHeader" class="form-select"></select>
+                            </div>
+                            <div>
+                                <label for="participantCategoryHeader">KATEGORI</label>
+                                <select id="participantCategoryHeader" class="form-select"></select>
+                            </div>
+                            <div id="participantProgramHeaderField" style="display:none;">
+                                <label for="participantProgramHeader">PROGRAM <span id="participantProgramRequired" class="required">*</span></label>
+                                <select id="participantProgramHeader" class="form-select"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="recipientHeaderMapping" class="dataset-upload-header-mapping" style="display:none;">
+                        <div class="dataset-upload-section-title">
+                            <div>
+                                <strong>Padankan Pengepala Excel</strong>
+                                <span>Pilih lajur sumber yang sepadan dengan setiap medan sistem.</span>
+                            </div>
+                        </div>
+                        <div class="dataset-upload-fields">
+                            <div><label for="recipientNameHeader">NAMA <span class="required">*</span></label><select id="recipientNameHeader" class="form-select"></select></div>
+                            <div><label for="recipientIdentityHeader">KAD PENGENALAN <span class="required">*</span></label><select id="recipientIdentityHeader" class="form-select"></select></div>
+                            <div><label for="recipientPhoneHeader">TELEFON</label><select id="recipientPhoneHeader" class="form-select"></select></div>
+                            <div><label for="recipientEmailHeader">EMAIL</label><select id="recipientEmailHeader" class="form-select"></select></div>
+                            <div><label for="recipientStatusHeader">STATUS</label><select id="recipientStatusHeader" class="form-select"></select></div>
+                            <div><label for="recipientNotesHeader">CATATAN</label><select id="recipientNotesHeader" class="form-select"></select></div>
+                            <div><label for="recipientPicHeader">PIC</label><select id="recipientPicHeader" class="form-select"></select></div>
+                        </div>
+                    </div>
+
+                    <div id="uploadSheetSection" class="dataset-upload-sheets" style="display:none;">
+                        <div class="dataset-upload-section-title">
+                            <div>
+                                <strong>Helaian Excel</strong>
+                                <span>Pilih lembaran kerja untuk diimport.</span>
+                            </div>
+                            <div class="dataset-upload-sheet-actions">
+                                <button type="button" id="uploadSelectAllSheets"
+                                    class="btn btn-sm btn-outline-primary">Semua</button>
+                                <button type="button" id="uploadDeselectAllSheets"
+                                    class="btn btn-sm btn-outline-secondary">Tiada</button>
+                            </div>
+                        </div>
+                        <div id="uploadSheetList" class="dataset-upload-sheet-list"></div>
+                        <div id="uploadSelectedSheetCount" class="dataset-upload-sheet-count">
+                            0 helaian dipilih
+                        </div>
+                    </div>
+
+                    <div class="dataset-upload-preview-title">
+                        <div>
+                            <strong>Pratonton Data</strong>
+                            <span>10 baris pertama</span>
+                        </div>
+                        <span id="uploadPreviewRows">-</span>
+                    </div>
+
+                    <div class="dataset-upload-table-wrapper">
+                        <table id="uploadPreviewTable" class="dataset-upload-table"></table>
+                    </div>
+
+                    <div id="uploadStatusMessage" class="dataset-upload-status" style="display:none;"></div>
+                </div>
+            </div>
+
+            <div id="uploadCardFooter" class="dataset-upload-footer" style="display:none;">
+                <button type="button" id="cancelUploadButton" class="btn btn-light">
+                    Batal
+                </button>
+                <button type="button" id="importUploadButton" class="btn btn-primary">
+                    Import Data
+                </button>
+            </div>
+
+        </div>
+        </div>
+
+        <div id="datasetListView" class="dataset-list-view">
+
+            <div id="datasetGrid" class="dataset-grid"></div>
+
+            <div id="emptyDatasets" class="content-card" style="display:none;">
+                <div class="empty-datasets">
+                    <div class="empty-datasets-icon">
+                        <i class="bi bi-folder2-open" aria-hidden="true"></i>
+                    </div>
+                    <h5>Tiada set data</h5>
+                    <p>Gunakan bahagian muat naik untuk menambah fail CSV atau Excel.</p>
+                </div>
+            </div>
+
+            <div id="noSearchResults" class="content-card" style="display:none;">
+                <div class="empty-datasets">
+                    <div class="empty-datasets-icon">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </div>
+                    <h5>Set data tidak dijumpai</h5>
+                    <p>Tiada set data sepadan dengan carian anda.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div id="datasetListDeleteOverlay" class="delete-confirmation-overlay"></div>
+
+        <div id="datasetListDeleteConfirmation" class="delete-confirmation" aria-hidden="true">
+            <div class="delete-confirmation-icon">!</div>
+            <div class="delete-confirmation-content">
+                <h6 id="datasetListDeleteConfirmationTitle">Padam set data?</h6>
+                <p id="datasetListDeleteConfirmationMessage">
+                    Adakah anda pasti mahu memadam set data ini?
+                </p>
+                <div class="delete-confirmation-actions">
+                    <button type="button" id="datasetListCancelDeleteButton" class="cancel-delete">
+                        Batal
+                    </button>
+                    <button type="button" id="datasetListConfirmDeleteButton" class="confirm-delete">
+                        Padam
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</main>

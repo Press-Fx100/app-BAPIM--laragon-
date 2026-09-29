@@ -1,0 +1,483 @@
+<main class="main-content">
+
+    <div id="datasetListView">
+
+        <div class="dashboard-content dataset-library-page">
+
+            <div class="dataset-toolbar dataset-detail-toolbar">
+
+                <div class="dataset-search">
+
+                    <span class="dataset-search-icon">⌕</span>
+
+                    <input type="text" id="datasetSearch" class="form-control" placeholder="Cari set data...">
+
+                </div>
+
+            </div>
+
+            <div id="datasetGrid" class="row g-4"></div>
+
+            <div id="emptyDatasets" class="content-card" style="display:none;">
+
+                <div class="empty-datasets">
+
+                    <div class="empty-datasets-icon">
+                        <i class="bi bi-folder2-open" aria-hidden="true"></i>
+                    </div>
+
+                    <h5>Tiada set data</h5>
+
+                    <p>
+                        Gunakan halaman Muat Naik untuk menambah fail CSV atau Excel.
+                    </p>
+
+                </div>
+
+            </div>
+
+            <div id="noSearchResults" class="content-card" style="display:none;">
+
+                <div class="empty-datasets">
+
+                    <div class="empty-datasets-icon">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                    </div>
+
+                    <h5>Set data tidak dijumpai</h5>
+
+                    <p>
+                        Tiada set data sepadan dengan carian anda.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+
+        </div>
+
+    </div>
+
+    <div id="datasetDetailView" style="display:none;">
+
+        <div class="dashboard-content dataset-detail-page">
+
+            <section class="dataset-detail-shell" aria-label="Dataset detail">
+
+                <div id="loading" class="loading">
+                    Memuatkan dataset...
+                </div>
+
+                <div id="datasetContent" style="display:none;">
+
+                    <div class="content-card mb-4 dataset-page-header dataset-detail-header">
+
+                        <div class="dataset-header-main">
+
+                            <div class="dataset-header-details">
+
+                                <div id="datasetName" class="dataset-header-title"></div>
+
+                                <div id="datasetFilename" class="dataset-header-file"></div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="dataset-toolbar">
+
+                        <div class="search-toolbar-group dataset-detail-toolbar-group">
+
+                        <div class="search-box">
+
+                            <input type="text" id="searchInput" placeholder="Cari dataset..." autocomplete="off">
+
+                        </div>
+
+                        <div class="toolbar-group toolbar-filter">
+
+                            <div class="column-menu-wrapper">
+
+                                <button type="button" id="columnButton" class="toolbar-button icon-button" title="Lajur"
+                                    aria-label="Lajur">
+
+                                    <i class="bi bi-layout-three-columns"></i>
+
+                                </button>
+
+                                <div id="columnMenu" class="column-menu">
+
+                                    <div class="column-menu-header">
+
+                                        <button type="button" id="selectAllColumnsButton">
+                                            Pilih Semua
+                                        </button>
+
+                                    </div>
+
+                                    <div id="columnChecklist"></div>
+
+                                </div>
+
+                            </div>
+
+                            <div class="filter-menu-wrapper">
+
+                                <button type="button" id="filterButton" class="toolbar-button icon-button" title="Tapis"
+                                    aria-label="Tapis">
+
+                                    <i class="bi bi-funnel"></i>
+
+                                </button>
+
+                                <div id="filterMenu" class="filter-menu">
+
+                                    <div class="filter-title">
+                                        Tapis
+                                    </div>
+
+                                    <div class="filter-field">
+
+                                        <label for="picFilter">
+                                            PIC
+                                        </label>
+
+                                        <select id="picFilter">
+
+                                            <option value="">
+                                                Semua PIC
+                                            </option>
+
+                                        </select>
+
+                                    </div>
+
+                                    <div class="filter-field">
+
+                                        <label for="statusFilter">
+                                            Status
+                                        </label>
+
+                                        <select id="statusFilter">
+
+                                            <option value="">
+                                                Semua Status
+                                            </option>
+
+                                        </select>
+
+                                    </div>
+
+                                    <button type="button" id="applyDatasetFilters" class="filter-apply-button">
+                                        Gunakan Tapis
+                                    </button>
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="toolbar-group toolbar-actions">
+
+                            <button type="button" id="saveChangesButton"
+                                class="toolbar-button icon-button dataset-save-button" disabled
+                                title="Simpan perubahan" aria-label="Simpan perubahan">
+                                <i class="bi bi-floppy"></i>
+                            </button>
+
+                            <button type="button" id="addRowButton" class="toolbar-button icon-button"
+                                title="Tambah Rekod" aria-label="Tambah Rekod">
+
+                                <i class="bi bi-plus-lg"></i>
+
+                            </button>
+
+                            <button type="button" id="deleteRowButton" class="toolbar-button icon-button delete-button"
+                                title="Pilih Rekod" aria-label="Pilih Rekod">
+
+                                <i class="bi bi-trash3"></i>
+
+                            </button>
+
+                        </div>
+
+                        </div>
+
+                    </div>
+
+                    </div>
+
+                    <div class="table-card">
+
+                        <div id="tableWrapper" class="table-wrapper">
+
+                            <table id="datasetTable" class="dataset-table">
+
+                                <thead id="tableHead"></thead>
+
+                                <tbody id="tableBody"></tbody>
+
+                            </table>
+
+                            <div id="emptyTable" class="empty-table" style="display:none;">
+
+                                <div class="empty-table-icon">
+                                    <i class="bi bi-search"></i>
+                                </div>
+
+                                <div>
+                                    Tiada rekod ditemui.
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <div class="pagination-bar">
+
+                            <div id="paginationInfo" class="pagination-info">
+                                0 baris
+                            </div>
+
+                            <div class="pagination-controls">
+
+                                <button type="button" id="firstPage" class="page-button" title="Halaman pertama"
+                                    aria-label="Halaman pertama">
+
+                                    <i class="bi bi-chevron-double-left"></i>
+
+                                </button>
+
+                                <button type="button" id="previousPage" class="page-button" title="Halaman sebelumnya"
+                                    aria-label="Halaman sebelumnya">
+
+                                    <i class="bi bi-chevron-left"></i>
+
+                                </button>
+
+                                <div id="pageNumbers" class="pagination-controls"></div>
+
+                                <button type="button" id="nextPage" class="page-button" title="Halaman seterusnya"
+                                    aria-label="Halaman seterusnya">
+
+                                    <i class="bi bi-chevron-right"></i>
+
+                                </button>
+
+                                <button type="button" id="lastPage" class="page-button" title="Halaman terakhir"
+                                    aria-label="Halaman terakhir">
+
+                                    <i class="bi bi-chevron-double-right"></i>
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div id="errorMessage" class="alert alert-danger" style="display:none;"></div>
+
+            </section>
+
+        </div>
+
+    </div>
+
+    <div id="datasetListDeleteOverlay" class="delete-confirmation-overlay"></div>
+
+    <div id="datasetListDeleteConfirmation" class="delete-confirmation" aria-hidden="true">
+
+        <div class="delete-confirmation-icon">
+            !
+        </div>
+
+        <div class="delete-confirmation-content">
+
+            <h6 id="datasetListDeleteConfirmationTitle">
+                Padam set data?
+            </h6>
+
+            <p id="datasetListDeleteConfirmationMessage">
+                Adakah anda pasti mahu memadam set data ini?
+            </p>
+
+            <div class="delete-confirmation-actions">
+
+                <button type="button" id="datasetListCancelDeleteButton" class="cancel-delete">
+                    Batal
+                </button>
+
+                <button type="button" id="datasetListConfirmDeleteButton" class="confirm-delete">
+                    Padam
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <button type="button" id="bulkDeleteButton" class="floating-delete-button" aria-hidden="true">
+
+        <div class="floating-delete-icon">
+            <i class="bi bi-trash3"></i>
+        </div>
+
+        <div class="floating-delete-content">
+
+            <strong>
+                0 rekod dipilih
+            </strong>
+
+            <span>
+                Klik untuk membuang rekod yang dipilih
+            </span>
+
+        </div>
+
+        <div class="floating-delete-arrow">
+            <i class="bi bi-chevron-right"></i>
+        </div>
+
+    </button>
+
+    <div id="addForm" class="add-form" style="display:none;">
+
+        <div class="form-card">
+
+            <div class="form-title">
+                Tambah Rekod
+            </div>
+
+            <div class="form-grid">
+
+                <div class="form-field">
+
+                    <label for="addNama">
+                        Nama
+                    </label>
+
+                    <input type="text" id="addNama" autocomplete="off">
+
+                </div>
+
+                <div class="form-field">
+
+                    <label for="addKP">
+                        KP
+                    </label>
+
+                    <input type="text" id="addKP" autocomplete="off">
+
+                </div>
+
+                <div class="form-field">
+
+                    <label for="addTelefon">
+                        Telefon
+                    </label>
+
+                    <input type="text" id="addTelefon" autocomplete="off">
+
+                </div>
+
+                <div class="form-field">
+
+                    <label for="addEmail">
+                        Email
+                    </label>
+
+                    <input type="text" id="addEmail" autocomplete="off">
+
+                </div>
+
+                <div class="form-field">
+
+                    <label for="addStatus">
+                        Status
+                    </label>
+
+                    <input type="text" id="addStatus" autocomplete="off">
+
+                </div>
+
+                <div class="form-field">
+
+                    <label for="addPIC">
+                        PIC
+                    </label>
+
+                    <input type="text" id="addPIC" autocomplete="off">
+
+                </div>
+
+                <div class="form-field full">
+
+                    <label for="addCatatan">
+                        Catatan
+                    </label>
+
+                    <textarea id="addCatatan"></textarea>
+
+                </div>
+
+            </div>
+
+            <div class="form-actions">
+
+                <button type="button" id="cancelAddButton" class="btn btn-light">
+                    Batal
+                </button>
+
+                <button type="button" id="confirmAddButton" class="btn btn-primary">
+
+                    <i class="bi bi-plus-lg me-1"></i>
+                    Tambah
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div id="deleteConfirm" class="delete-confirm" style="display:none;" aria-hidden="true">
+
+        <div class="form-card">
+
+            <div class="form-title">
+                Sahkan Buang
+            </div>
+
+            <div id="deleteConfirmText" class="confirm-text">
+                Adakah anda pasti mahu membuang rekod yang dipilih?
+            </div>
+
+            <div class="form-actions">
+
+                <button type="button" id="cancelDeleteButton" class="btn btn-light">
+                    Batal
+                </button>
+
+                <button type="button" id="confirmDeleteButton" class="btn btn-danger">
+
+                    <i class="bi bi-trash3 me-1"></i>
+                    Buang
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</main>

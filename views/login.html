@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ms">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Log Masuk</title>
+
+    <link rel="icon" href="/app.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/css/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+
+    <main class="login-page">
+
+        <div class="login-card">
+
+            <div class="login-header">
+                <h1>Log Masuk</h1>
+                <p>Selamat datang</p>
+            </div>
+
+            <div id="message" class="message" hidden></div>
+
+            <section id="accountSelection" class="login-section" hidden>
+
+                <h2>Pilih Akaun</h2>
+
+                <p class="section-description">
+                    Pilih akaun yang pernah digunakan pada komputer ini.
+                </p>
+
+                <div id="accountList" class="account-list"></div>
+
+                <button type="button" id="showLoginButton" class="secondary-button">
+                    Gunakan Akaun Lain
+                </button>
+
+            </section>
+
+            <section id="loginFormSection" class="login-section">
+
+                <form id="loginForm" autocomplete="off">
+
+                    <div class="form-group">
+
+                        <label for="username">
+                            Nama Pengguna
+                        </label>
+
+                        <input type="text" id="username" name="username" placeholder="Masukkan nama pengguna"
+                            autocomplete="username" required>
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label for="password">
+                            Kata Laluan
+                        </label>
+
+                        <input type="password" id="password" name="password" placeholder="Masukkan kata laluan"
+                            autocomplete="current-password" required>
+
+                    </div>
+
+                    <button type="submit" id="loginButton" class="primary-button">
+                        Log Masuk
+                    </button>
+
+                </form>
+
+                <div class="back-login">
+                    <a href="/create-account">Akaun baharu? Cipta akaun</a>
+                </div>
+
+                <button type="button" id="backToAccountsButton" class="secondary-button" hidden>
+                    Kembali
+                </button>
+
+            </section>
+
+        </div>
+
+    </main>
+
+    <script src="/js/login.js"></script>
+
+</body>
+
+</html>
