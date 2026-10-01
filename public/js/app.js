@@ -97,7 +97,10 @@ document.addEventListener("click", event => {
 
 function initializeCustomSelects() {
     document.querySelectorAll("select").forEach(select => {
-        if (select.dataset.customSelectInitialized === "true") {
+        if (
+            select.dataset.customSelectInitialized === "true" ||
+            select.dataset.customSelectSkip === "true"
+        ) {
             return;
         }
 

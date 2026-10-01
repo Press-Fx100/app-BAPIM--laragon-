@@ -820,7 +820,8 @@ function renderParticipantHeaderMapping() {
                 option.disabled = selectedType === "csv";
             }
         });
-    participantProgramHeaderField.style.display = "block";
+    participantProgramHeaderField.style.display =
+        participantImportMethod === "column" ? "block" : "none";
     participantProgramRequired.style.display =
         participantImportMethod === "column" ? "inline" : "none";
 
@@ -835,14 +836,14 @@ function renderParticipantHeaderMapping() {
         ".dataset-upload-section-title span"
     ).textContent = participantImportMethod === "column"
         ? "Pilih lajur sumber. Rekod dengan Kad Pengenalan sama akan digabungkan."
-        : "Program dikenal pasti melalui warna sel; padanan pengepala program dipaparkan untuk rujukan.";
+        : "Program dikenal pasti melalui warna sel.";
 
     [
-        [participantNameHeader, "name", true],
-        [participantIdentityHeader, "identity", true],
-        [participantCategoryHeader, "category", false],
-        [participantProgramHeader, "program", participantImportMethod === "column"]
-    ].forEach(([select, field, required]) => {
+        [participantNameHeader, "name", false],
+        [participantIdentityHeader, "identity", false],
+        [participantCategoryHeader, "category", true],
+        [participantProgramHeader, "program", true]
+    ].forEach(([select, field, hasUnselectedOption]) => {
         const currentValue = participantHeaderMapping[field];
         const expectedHeader = {
             name: "NAMA",
@@ -853,7 +854,7 @@ function renderParticipantHeaderMapping() {
 
         select.innerHTML = "";
 
-        if (!required) {
+        if (hasUnselectedOption) {
             const optional = document.createElement("option");
             optional.value = "";
             optional.textContent = "Tidak dipilih";

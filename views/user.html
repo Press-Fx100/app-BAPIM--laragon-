@@ -14,11 +14,11 @@
                         </span>
                     </div>
                     <div class="audit-month-navigation">
+                        <span id="auditMonthLabel" aria-live="polite"></span>
                         <button type="button" id="auditPreviousMonth" class="page-button"
                             title="Bulan sebelumnya" aria-label="Bulan sebelumnya">
                             <i class="bi bi-chevron-left" aria-hidden="true"></i>
                         </button>
-                        <span id="auditMonthLabel" aria-live="polite"></span>
                         <button type="button" id="auditNextMonth" class="page-button"
                             title="Bulan seterusnya" aria-label="Bulan seterusnya">
                             <i class="bi bi-chevron-right" aria-hidden="true"></i>
@@ -38,7 +38,7 @@
             <!-- ACTIVITY HISTORY -->
             <div class="content-card">
 
-                <div class="card-header-custom">
+                <div class="card-header-custom audit-history-header">
 
                     <div>
                         <h5>Sejarah Aktiviti</h5>
@@ -46,6 +46,70 @@
                         <span>
                             Perubahan pengguna, tindakan, tarikh dan masa
                         </span>
+                    </div>
+                    <div class="audit-history-controls">
+                        <div class="search-toolbar-group">
+                            <div class="search-box">
+                                <input type="search" id="auditSearch" placeholder="Cari aktiviti..." autocomplete="off">
+                            </div>
+                            <div class="toolbar-group toolbar-filter">
+                                <div class="filter-menu-wrapper">
+                                    <button type="button" id="auditFilterButton" class="toolbar-button icon-button"
+                                        title="Tapis" aria-label="Tapis" aria-expanded="false">
+                                        <i class="bi bi-funnel" aria-hidden="true"></i>
+                                    </button>
+                                    <button type="button" id="auditDateFilterButton" class="toolbar-button icon-button"
+                                        title="Tapis mengikut tarikh" aria-label="Tapis mengikut tarikh"
+                                        aria-haspopup="dialog" aria-expanded="false">
+                                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                                    </button>
+                                    <div id="auditCalendarMenu" class="audit-calendar-menu" role="dialog"
+                                        aria-label="Pilih tarikh aktiviti">
+                                        <div class="audit-calendar-header">
+                                            <button type="button" class="audit-calendar-nav" data-calendar-offset="-1"
+                                                aria-label="Bulan sebelumnya">
+                                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                                            </button>
+                                            <strong id="auditCalendarMonth"></strong>
+                                            <button type="button" class="audit-calendar-nav" data-calendar-offset="1"
+                                                aria-label="Bulan seterusnya">
+                                                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                                            </button>
+                                        </div>
+                                        <div class="audit-calendar-weekdays" aria-hidden="true">
+                                            <span>Isn</span><span>Sel</span><span>Rab</span><span>Kha</span>
+                                            <span>Jum</span><span>Sab</span><span>Aha</span>
+                                        </div>
+                                        <div id="auditCalendarDays" class="audit-calendar-days"></div>
+                                        <div class="audit-calendar-footer">
+                                            <button type="button" id="auditCalendarToday">Hari ini</button>
+                                            <button type="button" id="auditCalendarClear">Padam tarikh</button>
+                                        </div>
+                                    </div>
+                                    <div id="auditFilterMenu" class="filter-menu">
+                                        <div class="filter-title">Tapis</div>
+                                        <div class="filter-field">
+                                            <label for="auditUserFilter">Pengguna</label>
+                                            <select id="auditUserFilter">
+                                                <option value="">Semua pengguna</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-field">
+                                            <label for="auditActionFilter">Tindakan</label>
+                                            <select id="auditActionFilter">
+                                                <option value="">Semua tindakan</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-field">
+                                            <label for="auditDatasetFilter">Set Data</label>
+                                            <select id="auditDatasetFilter">
+                                                <option value="">Semua set data</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -61,36 +125,28 @@
 
                                 <tr>
 
-                                    <th data-column-index="0" style="width:140px;min-width:140px;max-width:140px;">
+                                    <th data-column-index="0" style="width:160px;min-width:160px;max-width:160px;">
                                         <span>Pengguna</span>
                                     </th>
 
-                                    <th data-column-index="1" style="width:120px;min-width:120px;max-width:120px;">
+                                    <th data-column-index="1" style="width:160px;min-width:160px;max-width:160px;">
                                         <span>Tindakan</span>
                                     </th>
 
-                                    <th data-column-index="2" style="width:180px;min-width:180px;max-width:180px;">
+                                    <th data-column-index="2" style="width:160px;min-width:160px;max-width:160px;">
+                                        <span>Pada</span>
+                                    </th>
+
+                                    <th data-column-index="3" style="width:280px;min-width:280px;max-width:280px;">
+                                        <span>Perubahan</span>
+                                    </th>
+
+                                    <th data-column-index="4" style="width:180px;min-width:180px;max-width:180px;">
                                         <span>Set Data</span>
                                     </th>
 
-                                    <th data-column-index="3" style="width:80px;min-width:80px;max-width:80px;">
-                                        <span>Baris</span>
-                                    </th>
-
-                                    <th data-column-index="4" style="width:140px;min-width:140px;max-width:140px;">
-                                        <span>Lajur</span>
-                                    </th>
-
-                                    <th data-column-index="5" style="width:220px;min-width:220px;max-width:220px;">
-                                        <span>Nilai Lama</span>
-                                    </th>
-
-                                    <th data-column-index="6" style="width:220px;min-width:220px;max-width:220px;">
-                                        <span>Nilai Baharu</span>
-                                    </th>
-
-                                    <th data-column-index="7" style="width:180px;min-width:180px;max-width:180px;">
-                                        <span>Tarikh + Masa</span>
+                                    <th data-column-index="5" style="width:180px;min-width:180px;max-width:180px;">
+                                        <span>Masa</span>
                                     </th>
 
                                 </tr>
