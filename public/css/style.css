@@ -4744,6 +4744,14 @@ body {
     cursor: pointer;
 }
 
+.custom-select-button:disabled {
+    border-color: var(--border-color);
+    background: #e5e7eb;
+    color: #6b7280;
+    cursor: not-allowed;
+    opacity: 1;
+}
+
 .custom-select-button::after {
     position: absolute;
     top: 50%;
@@ -4804,6 +4812,12 @@ body {
 .custom-select-option.active {
     background: #eef4ff;
     color: var(--primary-dark);
+}
+
+.custom-select-option:disabled {
+    background: transparent;
+    color: #6b7280;
+    cursor: not-allowed;
 }
 
 .dashboard-filter-card {
@@ -4935,6 +4949,14 @@ body {
 
 .dataset-add-source {
     margin-bottom: 16px;
+}
+
+.dataset-add-source select:disabled {
+    background-color: #e5e7eb !important;
+    color: #6b7280 !important;
+    -webkit-text-fill-color: #6b7280;
+    cursor: not-allowed;
+    opacity: 1;
 }
 
 .dataset-add-body .form-field.full {
