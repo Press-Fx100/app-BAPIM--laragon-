@@ -450,9 +450,45 @@ function createChartData() {
             };
         });
 
+    const hasSampleData = datasets.length === 0;
+    if (hasSampleData) {
+        const sampleSeries = [
+            { username: "Dini (contoh)", updates: [[2, 1], [5, 3], [9, 2], [15, 4], [22, 3], [28, 2]] },
+            { username: "Ezri (contoh)", updates: [[4, 2], [8, 2], [12, 3], [18, 2], [25, 4]] },
+            { username: "Faiz (contoh)", updates: [[3, 1], [7, 3], [13, 2], [20, 4], [27, 3]] }
+        ];
+
+        sampleSeries.forEach(({ username, updates }) => {
+            const dailyValues = Array(daysInMonth).fill(0);
+            updates.forEach(([day, amount]) => {
+                if (day <= daysInMonth) dailyValues[day - 1] += amount;
+            });
+
+            let cumulative = 0;
+            const color = getUserColor(username.replace(" (contoh)", ""));
+            datasets.push({
+                label: username,
+                data: dailyValues.map(value => {
+                    cumulative += value;
+                    return cumulative;
+                }),
+                borderColor: color,
+                backgroundColor: color,
+                borderWidth: 2,
+                tension: 0.3,
+                fill: false,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                spanGaps: true,
+                isSample: true
+            });
+        });
+    }
+
     return {
         labels,
-        datasets
+        datasets,
+        hasSampleData
     };
 }
 
@@ -471,6 +507,21 @@ function renderChart() {
 
     const data =
         createChartData();
+    const sampleNotice = document.getElementById("auditChartSampleNotice");
+    if (sampleNotice) {
+        sampleNotice.hidden = !data.hasSampleData;
+    }
+
+    const highestProgress = Math.max(
+        0,
+        ...data.datasets.flatMap(dataset =>
+            dataset.data.map(value => Number(value) || 0)
+        )
+    );
+    const progressAxisMaximum = Math.max(
+        25,
+        Math.ceil(highestProgress / 5) * 5
+    );
 
     if (auditChart) {
         auditChart.destroy();
@@ -516,8 +567,9 @@ function renderChart() {
                     mode: "nearest",
                     intersect: false,
                     callbacks: {
-                        label: context =>
-                            `${context.dataset.label}: ${context.raw} progres terkumpul`
+                        label: context => context.dataset.isSample
+                            ? `${context.dataset.label}: ${context.raw} progres contoh (bukan data sebenar)`
+                            : `${context.dataset.label}: ${context.raw} progres terkumpul`
                     }
                 }
             },
@@ -532,12 +584,13 @@ function renderChart() {
                 y: {
                     beginAtZero: true,
                     min: 0,
+                    max: progressAxisMaximum,
                     title: {
                         display: true,
                         text: "PROGRES"
                     },
                     ticks: {
-                        stepSize: 1
+                        stepSize: 5
                     }
                 }
             }
