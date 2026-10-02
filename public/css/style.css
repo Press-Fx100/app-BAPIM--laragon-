@@ -2993,14 +2993,6 @@ thead .row-select-cell.selection-enabled {
     box-sizing: border-box;
 }
 
-.audit-chart-sample-notice {
-    margin: 0;
-    padding: 8px 20px 0;
-    color: var(--text-secondary);
-    font-size: 12px;
-    text-align: center;
-}
-
 .audit-month-navigation {
     display: inline-flex;
     align-items: center;
