@@ -36,14 +36,15 @@ function getUserColor(displayName) {
         hash ^= hash >>> 16;
 
         const hue = (hash >>> 0) / 0x100000000 * 2 * Math.PI;
-        const saturation = 55 + ((hash >>> 8) % 36);
-        const lightness = 42 + ((hash >>> 16) % 25);
+        const saturation = 70 + ((hash >>> 8) % 31);
+        const lightness = 55 + ((hash >>> 16) % 16);
         hueX += saturation * Math.cos(hue);
         hueY += saturation * Math.sin(hue);
         lightnessTotal += lightness;
     }
 
-    const saturation = Math.hypot(hueX, hueY) / characters.length / 100;
+    const saturation = Math.max(0.75, Math.min(0.98,
+        Math.hypot(hueX, hueY) / characters.length / 100));
     const lightness = lightnessTotal / characters.length / 100;
     const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
     const hue = (Math.atan2(hueY, hueX) * 180 / Math.PI + 360) % 360;
@@ -65,7 +66,19 @@ function getUserColor(displayName) {
 }
 
 function getUserBadgeStyle(displayName) {
-    return `background:${getUserColor(displayName)};color:#fff`;
+    const color = getUserColor(displayName);
+    const background = `#${[1, 3, 5].map(offset => {
+        const channel = parseInt(color.slice(offset, offset + 2), 16);
+        return Math.round(channel + (255 - channel) * 0.85)
+            .toString(16)
+            .padStart(2, "0");
+    }).join("").toUpperCase()}`;
+    const textColor = `#${[1, 3, 5].map(offset =>
+        Math.round(parseInt(color.slice(offset, offset + 2), 16) * 0.72)
+            .toString(16)
+            .padStart(2, "0")
+    ).join("").toUpperCase()}`;
+    return `background:${background};color:${textColor}`;
 }
 
 async function loadActivities() {
