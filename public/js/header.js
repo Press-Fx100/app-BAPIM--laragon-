@@ -97,7 +97,7 @@ function updatePageInfo() {
     } else if (path.startsWith("/data-set/")) {
         title = "Paparan Set Data";
     } else if (path === "/user") {
-        title = "Aktiviti";
+        title = "Aktiviti Pengguna";
     } else if (path === "/peserta-program") {
         title = "Peserta Program";
     } else if (path === "/penerima-bantuan") {
