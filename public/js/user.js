@@ -19,17 +19,39 @@ let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(
 const rowsPerPage = 10;
 
 function getUserColor(displayName) {
-    let hash = 0x811c9dc5;
-    for (const character of String(displayName || "")) {
-        hash ^= character.codePointAt(0);
-        hash = Math.imul(hash, 0x01000193);
+    const characters = Array.from(String(displayName || ""));
+    if (!characters.length) return "#808080";
+
+    let hueX = 0;
+    let hueY = 0;
+    let lightness = 0;
+    for (const character of characters) {
+        const codePoint = character.codePointAt(0);
+        const hue = (codePoint + 289.52682070142566) % 360;
+        const saturation = 86 + (codePoint % 5) - 2;
+        const radians = hue * Math.PI / 180;
+        hueX += saturation * Math.cos(radians);
+        hueY += saturation * Math.sin(radians);
+        lightness += 57 + (codePoint % 13);
     }
-    hash ^= hash >>> 16;
-    hash = Math.imul(hash, 0x85ebca6b);
-    hash ^= hash >>> 13;
-    hash = Math.imul(hash, 0xc2b2ae35);
-    hash ^= hash >>> 16;
-    return `#${((hash >>> 0) & 0xffffff).toString(16).padStart(6, "0").toUpperCase()}`;
+
+    const blendedHue = (Math.atan2(hueY, hueX) * 180 / Math.PI + 360) % 360;
+    const blendedSaturation = Math.hypot(hueX, hueY) / characters.length;
+    const blendedLightness = lightness / characters.length;
+    const chroma = (1 - Math.abs(2 * blendedLightness / 100 - 1)) * blendedSaturation / 100;
+    const hueSegment = blendedHue / 60;
+    const secondComponent = chroma * (1 - Math.abs(hueSegment % 2 - 1));
+    const match = blendedLightness / 100 - chroma / 2;
+    const channels = hueSegment < 1 ? [chroma, secondComponent, 0]
+        : hueSegment < 2 ? [secondComponent, chroma, 0]
+            : hueSegment < 3 ? [0, chroma, secondComponent]
+                : hueSegment < 4 ? [0, secondComponent, chroma]
+                    : hueSegment < 5 ? [secondComponent, 0, chroma]
+                        : [chroma, 0, secondComponent];
+
+    return `#${channels.map(channel =>
+        Math.round((channel + match) * 255).toString(16).padStart(2, "0")
+    ).join("").toUpperCase()}`;
 }
 
 function getUserBadgeStyle(displayName) {
