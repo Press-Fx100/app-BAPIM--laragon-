@@ -73,6 +73,7 @@
         $("participantSearch").addEventListener("input", applyFilters);
         $("participantAddButton").addEventListener("click", openAddForm);
         $("participantSaveButton").addEventListener("click", saveChanges);
+        $("participantExportButton").addEventListener("click", exportToExcel);
         $("participantCancelDelete").addEventListener("click", closeDeleteConfirmation);
         $("participantConfirmDelete").addEventListener("click", confirmDelete);
         $("participantDeleteOverlay").addEventListener("click", closeDeleteConfirmation);
@@ -588,6 +589,31 @@
         } catch (error) {
             showError(error);
             render();
+        }
+    }
+
+    async function exportToExcel() {
+        try {
+            if (editingCell) await finishEditing(true);
+            applyFilters();
+            if (!window.XLSX) throw new Error("Pustaka eksport Excel tidak tersedia.");
+
+            const exportColumns = columns.filter((_, index) => visibleColumns[index]);
+            const worksheetData = [
+                exportColumns.map(([, label]) => label),
+                ...filteredRows.map(row =>
+                    exportColumns.map(([key]) => cellValue(row, key))
+                )
+            ];
+            const worksheet = window.XLSX.utils.aoa_to_sheet(worksheetData);
+            const workbook = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(workbook, worksheet, "Peserta Program");
+            window.XLSX.writeFile(
+                workbook,
+                `peserta-program-${new Date().toISOString().slice(0, 10)}.xlsx`
+            );
+        } catch (error) {
+            showError(error);
         }
     }
 

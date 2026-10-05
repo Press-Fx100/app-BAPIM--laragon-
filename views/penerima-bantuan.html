@@ -34,6 +34,10 @@
                         title="Disimpan" aria-label="Disimpan">
                         <i class="bi bi-floppy"></i>
                     </button>
+                    <button type="button" id="recipientExportButton" class="toolbar-button icon-button"
+                        title="Muat turun Excel" aria-label="Muat turun Excel">
+                        <i class="bi bi-download" aria-hidden="true"></i>
+                    </button>
                     <button type="button" id="recipientAddButton" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
                         <i class="bi bi-plus-lg"></i>
                     </button>
@@ -77,6 +81,7 @@
                             <div class="form-field"><label for="recipientAddTelefon">Telefon</label><input id="recipientAddTelefon" autocomplete="off"></div>
                             <div class="form-field"><label for="recipientAddEmail">Email</label><input id="recipientAddEmail" autocomplete="off"></div>
                             <div class="form-field"><label for="recipientAddStatus">Status</label><select id="recipientAddStatus"></select><input id="recipientAddStatusCustom" autocomplete="off" placeholder="Masukkan status baharu" style="display:none;"></div>
+                            <div class="form-field"><label for="recipientAddStatusPekerjaan">Status Pekerjaan</label><input id="recipientAddStatusPekerjaan" autocomplete="off"></div>
                             <div class="form-field"><label for="recipientAddPIC">PIC</label><input id="recipientAddPIC" autocomplete="off"></div>
                             <div class="form-field full"><label for="recipientAddCatatan">Catatan</label><textarea id="recipientAddCatatan"></textarea></div>
                         </div>
@@ -107,6 +112,7 @@
                             <th>TELEFON</th>
                             <th>EMAIL</th>
                             <th>STATUS</th>
+                            <th>STATUS PEKERJAAN</th>
                             <th>CATATAN</th>
                             <th>PIC</th>
                         </tr>

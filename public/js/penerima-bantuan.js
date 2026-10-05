@@ -4,7 +4,8 @@
     const columns = [
         ["nama", "NAMA"], ["kadPengenalan", "KAD PENGENALAN"],
         ["telefon", "TELEFON"], ["email", "EMAIL"], ["status", "STATUS"],
-        ["catatan", "CATATAN"], ["pic", "PIC"], ["sourceFile", "SUMBER FAIL"]
+        ["statusPekerjaan", "STATUS PEKERJAAN"], ["catatan", "CATATAN"],
+        ["pic", "PIC"], ["sourceFile", "SUMBER FAIL"]
     ];
     const pageSize = 100;
     const $ = id => document.getElementById(id);
@@ -108,6 +109,7 @@
         bind("recipientConfirmAdd", "click", addRecord);
         bind("recipientDeleteButton", "click", deleteAction);
         bind("recipientSaveButton", "click", saveChanges);
+        bind("recipientExportButton", "click", exportToExcel);
         bind("recipientCancelDelete", "click", closeDeleteConfirmation);
         bind("recipientConfirmDelete", "click", confirmDelete);
         bind("recipientDeleteOverlay", "click", closeDeleteConfirmation);
@@ -767,7 +769,7 @@
         card.setAttribute("aria-hidden", "true");
     }
     async function addRecord() {
-        const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
+        const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["statusPekerjaan", "recipientAddStatusPekerjaan"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
         const changes = {}; fields.forEach(([key, id]) => { const input = $(id); changes[key] = input ? input.value : ""; });
         const statusSelect = $("recipientAddStatus");
         const customStatus = $("recipientAddStatusCustom");
@@ -775,6 +777,27 @@
         const datasetId = $("recipientAddDataset") && $("recipientAddDataset").value;
         try { await api("POST", { datasetId, changes }); historyPush({ type: "add", datasetId, changes }); closeAdd(); await load(); }
         catch (e) { error(e); }
+    }
+    async function exportToExcel() {
+        try {
+            if (currentEdit) await currentEdit.finish(true, false);
+            if (!window.XLSX) throw new Error("Pustaka eksport Excel tidak tersedia.");
+
+            const exportColumns = columns.filter((_, index) => visible[index]);
+            const worksheetData = [
+                exportColumns.map(([, label]) => label),
+                ...filtered.map(row => exportColumns.map(([key]) => value(row, key)))
+            ];
+            const worksheet = window.XLSX.utils.aoa_to_sheet(worksheetData);
+            const workbook = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(workbook, worksheet, "Penerima Bantuan");
+            window.XLSX.writeFile(
+                workbook,
+                `penerima-bantuan-${new Date().toISOString().slice(0, 10)}.xlsx`
+            );
+        } catch (e) {
+            error(e);
+        }
     }
     function deleteAction() {
         deleteMode = !deleteMode;

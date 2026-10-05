@@ -75,9 +75,18 @@ public files.
 - The sidebar's **Semak Kemas Kini** button checks the public
   `Press-Fx100/app-BAPIM--laragon-` repository. When an update is available,
   confirm to download and install it. The updater preserves the `data` and
-  `config` directories; back up your app before updating. If the repository is
+  `config` directories and applies any new database migrations included in the
+  update. Back up your app and database before updating. If the repository is
   made private, configure a fine-grained, contents-read-only token as the
   `BAPIM_GITHUB_TOKEN` environment variable for Apache/PHP.
+- Add schema changes as ordered PHP files in `database/migrations`, named
+  `YYYYMMDDHHMM_description.php` (for example,
+  `202610050900_add_example_column.php`). Each file must return a callable that
+  accepts the PDO connection and app root path, then applies that migration.
+  The updater records each successful migration in `app_schema_migrations`;
+  write migrations to be safe to retry if an error occurs before the record is
+  saved. Prefer backward-compatible, additive changes such as new nullable
+  columns.
 - The web app does not require Node.js, Python, or Composer. Internet access is
   required for GitHub update checks and downloads.
 # app-BAPIM--laragon-

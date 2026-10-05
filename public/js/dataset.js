@@ -553,6 +553,7 @@ function addRecordFieldsForDataset() {
         { id: "addTelefon", label: "Telefon", headers: ["telefon"] },
         { id: "addEmail", label: "Email", headers: ["email"] },
         { id: "addStatus", label: "Status", headers: ["status"], status: true },
+        { id: "addStatusPekerjaan", label: "Status Pekerjaan", headers: ["statuspekerjaan"] },
         { id: "addPIC", label: "PIC", headers: ["pic"] },
         { id: "addCatatan", label: "Catatan", headers: ["catatan"], textarea: true, full: true }
     ];
@@ -1690,6 +1691,34 @@ function finishEditingCell() {
     td.title = newValue;
 
     checkForChanges();
+}
+
+function exportDatasetToExcel() {
+    try {
+        finishEditingCell();
+        applyFilters();
+        if (!window.XLSX) throw new Error("Pustaka eksport Excel tidak tersedia.");
+
+        const exportHeaders = headers.filter((_, index) => visibleColumns[index]);
+        const worksheetData = [
+            exportHeaders,
+            ...filteredRows.map(row =>
+                headers.flatMap((_, index) =>
+                    visibleColumns[index] ? [row[index] ?? ""] : []
+                )
+            )
+        ];
+        const worksheet = window.XLSX.utils.aoa_to_sheet(worksheetData);
+        const workbook = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+        window.XLSX.writeFile(
+            workbook,
+            `dataset-${getDatasetId()}-${new Date().toISOString().slice(0, 10)}.xlsx`
+        );
+    } catch (error) {
+        console.error(error);
+        showError(error.message || "Eksport Excel gagal.");
+    }
 }
 
 function handleCellKeydown(event, td) {
@@ -4311,6 +4340,9 @@ function bindDatasetViewEvents(detailView) {
 
     document.getElementById("saveChangesButton")
         ?.addEventListener("click", saveDataset);
+
+    document.getElementById("exportDatasetButton")
+        ?.addEventListener("click", exportDatasetToExcel);
 
     document.getElementById("undoButton")
         ?.addEventListener("click", undo);

@@ -129,6 +129,31 @@ function normalizeRows(array $rows): array
     return array_map(static fn(array $row): array => array_pad(array_slice($row, 0, $width), $width, ''), $rows);
 }
 
+function ensureRecipientEmploymentStatusColumn(array $rows): array
+{
+    if ($rows === []) {
+        return [];
+    }
+
+    $headers = array_map(
+        static fn($value): string => strtoupper(trim((string)$value)),
+        $rows[0]
+    );
+    if (in_array('STATUS PEKERJAAN', $headers, true)) {
+        return normalizeRows($rows);
+    }
+
+    $statusIndex = array_search('STATUS', $headers, true);
+    $insertIndex = $statusIndex === false ? count($headers) : $statusIndex + 1;
+    $width = max(array_map('count', $rows));
+    foreach ($rows as &$row) {
+        $row = array_pad($row, $width, '');
+        array_splice($row, $insertIndex, 0, ['']);
+    }
+    unset($row);
+    return normalizeRows($rows);
+}
+
 function encodeCsv(array $rows): string
 {
     $stream = fopen('php://temp', 'r+');
@@ -409,7 +434,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'The requested update version is invalid.'], 400);
         }
         try {
-            $result = bapimApplyGitHubUpdate(__DIR__, dirname($storageDirectory), $commit);
+            $result = bapimApplyGitHubUpdate(__DIR__, dirname($storageDirectory), $commit, $pdo);
         } catch (Throwable $error) {
             error_log('App update installation failed: ' . $error->getMessage());
             $status = $error->getMessage() === 'The app is already up to date.' ? 409 : 500;
@@ -602,11 +627,11 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
                 continue;
             }
             $indices = [];
-            foreach (['NAMA', 'KAD PENGENALAN', 'TELEFON', 'EMAIL', 'STATUS', 'CATATAN', 'PIC'] as $field) {
+            foreach (['NAMA', 'KAD PENGENALAN', 'TELEFON', 'EMAIL', 'STATUS', 'STATUS PEKERJAAN', 'CATATAN', 'PIC'] as $field) {
                 $indices[$field] = array_search($field, $headers, true);
             }
             foreach (array_slice($rows, 1, null, true) as $rowIndex => $row) {
-                $recipients[] = ['nama' => $indices['NAMA'] !== false ? trim($row[$indices['NAMA']] ?? '') : '', 'kadPengenalan' => $indices['KAD PENGENALAN'] !== false ? trim($row[$indices['KAD PENGENALAN']] ?? '') : '', 'telefon' => $indices['TELEFON'] !== false ? trim($row[$indices['TELEFON']] ?? '') : '', 'email' => $indices['EMAIL'] !== false ? trim($row[$indices['EMAIL']] ?? '') : '', 'status' => $indices['STATUS'] !== false ? trim($row[$indices['STATUS']] ?? '') : '', 'catatan' => $indices['CATATAN'] !== false ? trim($row[$indices['CATATAN']] ?? '') : '', 'pic' => $indices['PIC'] !== false ? trim($row[$indices['PIC']] ?? '') : '', 'sourceFile' => $dataset['filename'], 'datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceRecords' => [['datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceFile' => $dataset['filename']]]];
+                $recipients[] = ['nama' => $indices['NAMA'] !== false ? trim($row[$indices['NAMA']] ?? '') : '', 'kadPengenalan' => $indices['KAD PENGENALAN'] !== false ? trim($row[$indices['KAD PENGENALAN']] ?? '') : '', 'telefon' => $indices['TELEFON'] !== false ? trim($row[$indices['TELEFON']] ?? '') : '', 'email' => $indices['EMAIL'] !== false ? trim($row[$indices['EMAIL']] ?? '') : '', 'status' => $indices['STATUS'] !== false ? trim($row[$indices['STATUS']] ?? '') : '', 'statusPekerjaan' => $indices['STATUS PEKERJAAN'] !== false ? trim($row[$indices['STATUS PEKERJAAN']] ?? '') : '', 'catatan' => $indices['CATATAN'] !== false ? trim($row[$indices['CATATAN']] ?? '') : '', 'pic' => $indices['PIC'] !== false ? trim($row[$indices['PIC']] ?? '') : '', 'sourceFile' => $dataset['filename'], 'datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceRecords' => [['datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceFile' => $dataset['filename']]]];
             }
         }
         jsonResponse(['success' => true, 'recipients' => $recipients]);
@@ -703,6 +728,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ($rows === []) {
             jsonResponse(['success' => false, 'error' => 'CSV is empty.'], 400);
         }
+        $datasetType = ($payload['datasetType'] ?? '') === 'peserta' ? 'peserta' : 'penerima';
+        if ($datasetType === 'penerima') {
+            $rows = ensureRecipientEmploymentStatusColumn($rows);
+        }
         $safeOriginal = preg_replace('/[^A-Za-z0-9._ -]/', '_', basename($file['name'])) ?: 'dataset.csv';
         $storedName = bin2hex(random_bytes(16)) . '.csv';
         $filepath = $storageDirectory . DIRECTORY_SEPARATOR . $storedName;
@@ -714,7 +743,6 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ($name === '') {
             $name = pathinfo($safeOriginal, PATHINFO_FILENAME);
         }
-        $datasetType = ($payload['datasetType'] ?? '') === 'peserta' ? 'peserta' : 'penerima';
         $pdo->beginTransaction();
         try {
             $statement = $pdo->prepare("INSERT INTO datasets (name, filename, filepath, row_count, column_count, file_size, dataset_type, created_at, updated_at, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'local')");
