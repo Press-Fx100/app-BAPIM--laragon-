@@ -19,10 +19,16 @@ let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(
 const rowsPerPage = 10;
 
 function getUserColor(displayName) {
-    let hash = 0;
+    let hash = 0x811c9dc5;
     for (const character of String(displayName || "")) {
-        hash = (hash * 31 + character.codePointAt(0)) | 0;
+        hash ^= character.codePointAt(0);
+        hash = Math.imul(hash, 0x01000193);
     }
+    hash ^= hash >>> 16;
+    hash = Math.imul(hash, 0x85ebca6b);
+    hash ^= hash >>> 13;
+    hash = Math.imul(hash, 0xc2b2ae35);
+    hash ^= hash >>> 16;
     return `#${((hash >>> 0) & 0xffffff).toString(16).padStart(6, "0").toUpperCase()}`;
 }
 
