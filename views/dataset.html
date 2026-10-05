@@ -137,42 +137,7 @@
                                     <div class="filter-title">
                                         Tapis
                                     </div>
-
-                                    <div class="filter-field">
-
-                                        <label for="picFilter">
-                                            PIC
-                                        </label>
-
-                                        <select id="picFilter">
-
-                                            <option value="">
-                                                Semua PIC
-                                            </option>
-
-                                        </select>
-
-                                    </div>
-
-                                    <div class="filter-field">
-
-                                        <label for="statusFilter">
-                                            Status
-                                        </label>
-
-                                        <select id="statusFilter">
-
-                                            <option value="">
-                                                Semua Status
-                                            </option>
-
-                                        </select>
-
-                                    </div>
-
-                                    <button type="button" id="applyDatasetFilters" class="filter-apply-button">
-                                        Gunakan Tapis
-                                    </button>
+                                    <div id="datasetFilterFields"></div>
 
                                 </div>
 
@@ -353,7 +318,7 @@
 
     </button>
 
-    <div id="addForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
+    <div id="addForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
 
         <div id="addRecordCard" class="dataset-upload-card dataset-add-card" role="dialog"
             aria-modal="true" aria-labelledby="addRecordTitle" aria-hidden="true">

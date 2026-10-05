@@ -14,6 +14,8 @@ let documentLoaded = document.readyState === "complete";
 let layoutReady = false;
 let tableHeaderDrag = null;
 let suppressTableHeaderClick = null;
+const customSelectPortalMenus = new WeakMap();
+const customSelectPortalPositions = new WeakMap();
 
 document.addEventListener("pointerdown", event => {
     if (event.button !== 0 || !(event.target instanceof Element)) {
@@ -95,7 +97,45 @@ document.addEventListener("click", event => {
     event.stopImmediatePropagation();
 }, true);
 
+function closeCustomSelect(wrapper) {
+    wrapper.classList.remove("show", "drop-up");
+    wrapper.querySelector(".custom-select-button")
+        ?.setAttribute("aria-expanded", "false");
+    const menu = customSelectPortalMenus.get(wrapper);
+    const position = customSelectPortalPositions.get(wrapper);
+    const select = wrapper.querySelector("select");
+    if (position) {
+        window.removeEventListener("resize", position);
+        window.removeEventListener("scroll", position, true);
+        customSelectPortalPositions.delete(wrapper);
+    }
+    if (!menu || !select) return;
+    customSelectPortalMenus.delete(wrapper);
+    menu.classList.remove("custom-select-menu-portal", "recipient-add-select-menu");
+    menu.style.removeProperty("left");
+    menu.style.removeProperty("top");
+    menu.style.removeProperty("bottom");
+    menu.style.removeProperty("width");
+    menu.style.removeProperty("max-height");
+    wrapper.insertBefore(menu, select);
+}
+
+function positionCustomSelectPortal(menu, button) {
+    const bounds = button.getBoundingClientRect();
+    const menuHeight = Math.min(260, menu.children.length * 34 + 12);
+    const availableBelow = Math.max(0, window.innerHeight - bounds.bottom - 8);
+    const availableAbove = Math.max(0, bounds.top - 8);
+    const dropUp = availableBelow < menuHeight && availableAbove > availableBelow;
+    const available = dropUp ? availableAbove : availableBelow;
+    menu.style.left = `${bounds.left}px`;
+    menu.style.width = `${bounds.width}px`;
+    menu.style.maxHeight = `${Math.max(60, Math.min(260, available))}px`;
+    menu.style.top = dropUp ? "auto" : `${bounds.bottom + 7}px`;
+    menu.style.bottom = dropUp ? `${window.innerHeight - bounds.top + 7}px` : "auto";
+}
+
 function initializeCustomSelects() {
+
     document.querySelectorAll("select").forEach(select => {
         if (
             select.dataset.customSelectInitialized === "true" ||
@@ -148,8 +188,7 @@ function initializeCustomSelects() {
                 select.value = option.value;
                 select.dispatchEvent(new Event("change", { bubbles: true }));
                 syncButton();
-                wrapper.classList.remove("show");
-                button.setAttribute("aria-expanded", "false");
+                closeCustomSelect(wrapper);
             });
             menu.appendChild(item);
             });
@@ -160,16 +199,45 @@ function initializeCustomSelects() {
             event.stopPropagation();
             document.querySelectorAll(".custom-select.show").forEach(open => {
                 if (open !== wrapper) {
-                    open.classList.remove("show");
-                    open.querySelector(".custom-select-button")
-                        ?.setAttribute("aria-expanded", "false");
+                    closeCustomSelect(open);
                 }
             });
-            wrapper.classList.toggle("show");
-            button.setAttribute(
-                "aria-expanded",
-                wrapper.classList.contains("show") ? "true" : "false"
-            );
+            const opening = !wrapper.classList.contains("show");
+            if (!opening) {
+                closeCustomSelect(wrapper);
+                return;
+            }
+            wrapper.classList.add("show");
+            button.setAttribute("aria-expanded", "true");
+            if (wrapper.closest("#recipientAddCard")) {
+                menu.classList.add("custom-select-menu-portal", "recipient-add-select-menu");
+                document.body.appendChild(menu);
+                customSelectPortalMenus.set(wrapper, menu);
+                positionCustomSelectPortal(menu, button);
+                const reposition = () => {
+                    if (menu.classList.contains("custom-select-menu-portal")) {
+                        positionCustomSelectPortal(menu, button);
+                    }
+                };
+                customSelectPortalPositions.set(wrapper, reposition);
+                window.addEventListener("resize", reposition);
+                window.addEventListener("scroll", reposition, true);
+            } else {
+                const card = wrapper.closest(".dataset-upload-card.dataset-add-card");
+                if (card) {
+                    const buttonBounds = button.getBoundingClientRect();
+                    const menuHeight = Math.min(260, menu.children.length * 34 + 12);
+                    const availableBelow = Math.max(0, window.innerHeight - buttonBounds.bottom - 20);
+                    const availableAbove = Math.max(0, buttonBounds.top - 20);
+                    const dropUp = availableBelow < menuHeight && availableAbove > availableBelow;
+                    const available = dropUp ? availableAbove : availableBelow;
+                    wrapper.classList.toggle("drop-up", dropUp);
+                    menu.style.setProperty(
+                        "--custom-select-max-height",
+                        `${Math.max(60, Math.min(260, available))}px`
+                    );
+                }
+            }
         });
 
         select.dataset.customSelectInitialized = "true";
@@ -186,13 +254,12 @@ function initializeCustomSelects() {
             childList: true
         });
     });
+
 }
 
 document.addEventListener("click", () => {
     document.querySelectorAll(".custom-select.show").forEach(wrapper => {
-        wrapper.classList.remove("show");
-        wrapper.querySelector(".custom-select-button")
-            ?.setAttribute("aria-expanded", "false");
+        closeCustomSelect(wrapper);
     });
 });
 

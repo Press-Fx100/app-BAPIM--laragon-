@@ -59,7 +59,7 @@
                 </div>
             </div>
 
-            <div id="participantAddForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
+            <div id="participantAddForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
                 <div id="participantAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
                     aria-modal="true" aria-labelledby="participantAddTitle" aria-hidden="true">
                     <div class="dataset-upload-header">
@@ -107,7 +107,6 @@
                             <th>KAD PENGENALAN</th>
                             <th>KATEGORI</th>
                             <th>JUMLAH PROGRAM</th>
-                            <th>PROGRAM</th>
                         </tr>
                     </thead>
                     <tbody id="participantTableBody"></tbody>
@@ -122,13 +121,26 @@
         </div>
     </div>
 
-    <div id="participantProgramsOverlay" class="participant-programs-overlay" style="display:none;">
-        <div class="participant-programs-dialog">
-            <button type="button" id="closeParticipantPrograms" class="dataset-upload-remove" aria-label="Tutup">
-                <i class="bi bi-x-lg" aria-hidden="true"></i>
-            </button>
-            <h5 id="participantProgramsTitle">Program</h5>
-            <ul id="participantProgramsList"></ul>
+    <div id="participantProgramsOverlay" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay participant-programs-overlay"
+        aria-hidden="true">
+        <div id="participantProgramsCard" class="dataset-upload-card dataset-add-card participant-programs-dialog"
+            role="dialog" aria-modal="true" aria-labelledby="participantProgramsTitle" aria-hidden="true">
+            <div class="dataset-upload-header">
+                <div>
+                    <h5 id="participantProgramsTitle">Program</h5>
+                    <p>Senarai program yang disertai oleh peserta ini.</p>
+                </div>
+                <button type="button" id="closeParticipantPrograms" class="dataset-upload-close"
+                    aria-label="Tutup senarai program">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="dataset-upload-body participant-programs-body">
+                <ul id="participantProgramsList" class="participant-programs-list"></ul>
+            </div>
+            <div class="dataset-upload-footer">
+                <button type="button" id="closeParticipantProgramsFooter" class="btn btn-light">Tutup</button>
+            </div>
         </div>
     </div>
 </main>

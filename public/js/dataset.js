@@ -493,6 +493,7 @@ let mouseSelecting = false;
 
 let chartFilterColumn = "";
 let chartFilterValue = "";
+let datasetColumnFilters = {};
 
 function getDatasetId() {
     const queryId = new URLSearchParams(
@@ -718,9 +719,7 @@ function initializeDataset() {
     initializeAddRecordForm();
 
     visibleColumns = headers.map(
-        header => !["pic", "status pekerjaan"].includes(
-            String(header).trim().toLowerCase()
-        )
+        header => String(header).trim().toLowerCase() !== "pic"
     );
 
     columnWidths = headers.map(() => 160);
@@ -737,6 +736,7 @@ function initializeDataset() {
 
     currentSortColumn = null;
     currentSortDirection = "asc";
+    datasetColumnFilters = {};
     currentPage = 1;
     deleteMode = false;
     hasUnsavedChanges = false;
@@ -906,141 +906,91 @@ function updateColumnCheckboxes() {
 }
 
 function createFilterOptions() {
-    const picSelect = document.getElementById("picFilter");
-    const statusSelect = document.getElementById("statusFilter");
+    const fields = document.getElementById("datasetFilterFields");
+    if (!fields) return;
+    fields.replaceChildren();
+    const isParticipantDataset = getDatasetType(dataset || {}) === "peserta";
 
-    if (!picSelect || !statusSelect) return;
+    headers.forEach((header, columnIndex) => {
+        const counts = new Map();
+        let hasEmpty = false;
+        const isParticipantProgramColumn =
+            isParticipantDataset &&
+            normalizeDatasetHeader(header) === "program";
+        rows.forEach(row => {
+            const values = isParticipantProgramColumn
+                ? String(row[columnIndex] ?? "").split(",").map(value => value.trim()).filter(Boolean)
+                : [String(row[columnIndex] ?? "").trim()].filter(Boolean);
+            if (!values.length) {
+                hasEmpty = true;
+                return;
+            }
+            values.forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
+        });
 
-    const oldPic = picSelect.value;
-    const oldStatus = statusSelect.value;
+        const repeatedValues = [...counts]
+            .filter(([, count]) => count > 1)
+            .map(([value]) => value)
+            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+        if (!hasEmpty && !repeatedValues.length) return;
 
-    picSelect.innerHTML = '<option value="">Semua</option>';
-    statusSelect.innerHTML = '<option value="">Semua</option>';
-
-    const picIndex = findColumnIndex("PIC");
-    const statusIndex = findColumnIndex("Status");
-
-    const pics = new Set();
-    const statuses = new Set();
-
-    rows.forEach(row => {
-        if (picIndex !== -1) {
-            pics.add(String(row[picIndex] ?? "").trim());
-        }
-
-        if (statusIndex !== -1) {
-            statuses.add(String(row[statusIndex] ?? "").trim());
-        }
+        const field = document.createElement("div");
+        field.className = "filter-field";
+        const label = document.createElement("label");
+        label.textContent = header || `Lajur ${columnIndex + 1}`;
+        const select = document.createElement("select");
+        select.dataset.columnIndex = String(columnIndex);
+        select.appendChild(new Option("Semua", ""));
+        if (hasEmpty) select.appendChild(new Option("Kosong", "__EMPTY__"));
+        repeatedValues.forEach(value => select.appendChild(new Option(value, value)));
+        select.value = datasetColumnFilters[columnIndex] || "";
+        field.append(label, select);
+        fields.appendChild(field);
     });
-
-    [...pics]
-        .sort((a, b) =>
-            a.localeCompare(b, undefined, {
-                sensitivity: "base"
-            })
-        )
-        .forEach(value => {
-            const option = document.createElement("option");
-            option.value = value === "" ? "__EMPTY__" : value;
-            option.textContent = value === "" ? "Kosong" : value;
-            picSelect.appendChild(option);
-        });
-
-    [...statuses]
-        .sort((a, b) =>
-            a.localeCompare(b, undefined, {
-                sensitivity: "base"
-            })
-        )
-        .forEach(value => {
-            const option = document.createElement("option");
-            option.value = value === "" ? "__EMPTY__" : value;
-            option.textContent = value === "" ? "Kosong" : value;
-            statusSelect.appendChild(option);
-        });
-
-    if ([...picSelect.options].some(option => option.value === oldPic)) {
-        picSelect.value = oldPic;
-    }
-
-    if ([...statusSelect.options].some(option => option.value === oldStatus)) {
-        statusSelect.value = oldStatus;
-    }
 
     applyChartFilterToSelects();
 }
 
 function applyURLFilters() {
     const params = new URLSearchParams(window.location.search);
-
-    const urlPIC = params.get("PIC");
-    const urlStatus = params.get("Status");
-
-    const picFilter = document.getElementById("picFilter");
-    const statusFilter = document.getElementById("statusFilter");
-
-    if (urlPIC !== null && picFilter) {
-        const requestedPIC = urlPIC.trim().toLowerCase();
-
-        const option = [...picFilter.options].find(item =>
-            item.value.trim().toLowerCase() === requestedPIC
-        );
-
-        if (option) {
-            picFilter.value = option.value;
-        } else if (requestedPIC === "__empty__") {
-            const emptyOption = [...picFilter.options].find(
-                item => item.value === "__EMPTY__"
-            );
-
-            if (emptyOption) {
-                picFilter.value = emptyOption.value;
-            }
-        }
-    }
-
-    if (urlStatus !== null && statusFilter) {
-        const requestedStatus = urlStatus.trim().toLowerCase();
-
-        const option = [...statusFilter.options].find(item =>
-            item.value.trim().toLowerCase() === requestedStatus
-        );
-
-        if (option) {
-            statusFilter.value = option.value;
-        } else if (requestedStatus === "__empty__") {
-            const emptyOption = [...statusFilter.options].find(
-                item => item.value === "__EMPTY__"
-            );
-
-            if (emptyOption) {
-                statusFilter.value = emptyOption.value;
-            }
-        }
-    }
+    [["PIC", "PIC"], ["Status", "Status"]].forEach(([parameter, header]) => {
+        const requested = params.get(parameter);
+        if (requested !== null) setDatasetColumnFilter(header, requested);
+    });
 
     currentPage = 1;
     applyFilters();
 }
 
+function setDatasetColumnFilter(header, requestedValue) {
+    const columnIndex = findColumnIndex(header);
+    if (columnIndex === -1) return;
+
+    const requested = requestedValue.trim();
+    const requestedOption = requested.toLowerCase() === "__empty__"
+        ? "__EMPTY__"
+        : requested;
+    const select = document.querySelector(
+        `#datasetFilterFields select[data-column-index="${columnIndex}"]`
+    );
+    const option = select && [...select.options].find(item =>
+        item.value.toLowerCase() === requestedOption.toLowerCase()
+    );
+    const filterValue = option ? option.value : requestedOption;
+    datasetColumnFilters[columnIndex] = filterValue;
+    if (select) select.value = filterValue;
+}
+
 function applyFilters() {
     const searchInput = document.getElementById("searchInput");
-    const picFilter = document.getElementById("picFilter");
-    const statusFilter = document.getElementById("statusFilter");
-
     const search =
         String(searchInput?.value || "")
             .trim()
             .toLowerCase();
-
-    const selectedPIC =
-        String(picFilter?.value || "").trim();
-
-    const selectedStatus =
-        String(statusFilter?.value || "").trim();
-
-    const picIndex = findColumnIndex("PIC");
-    const statusIndex = findColumnIndex("Status");
+    const selectedFilters = Object.entries(datasetColumnFilters)
+        .filter(([, value]) => value)
+        .map(([index, value]) => [Number(index), value]);
+    const isParticipantDataset = getDatasetType(dataset || {}) === "peserta";
 
     filteredRows = rows.filter(row => {
         if (search) {
@@ -1053,32 +1003,18 @@ function applyFilters() {
             if (!matchesSearch) return false;
         }
 
-        if (selectedPIC && selectedPIC !== "all") {
-            if (picIndex === -1) return false;
-
-            const value =
-                String(row[picIndex] ?? "").trim();
-
-            if (selectedPIC === "__EMPTY__") {
-                if (value !== "") return false;
-            } else if (
-                value.toLowerCase() !== selectedPIC.toLowerCase()
-            ) {
-                return false;
-            }
-        }
-
-        if (selectedStatus && selectedStatus !== "all") {
-            if (statusIndex === -1) return false;
-
-            const value =
-                String(row[statusIndex] ?? "").trim();
-
-            if (selectedStatus === "__EMPTY__") {
-                if (value !== "") return false;
-            } else if (
-                value.toLowerCase() !== selectedStatus.toLowerCase()
-            ) {
+        for (const [columnIndex, filterValue] of selectedFilters) {
+            const value = String(row[columnIndex] ?? "").trim();
+            const isParticipantProgramColumn =
+                isParticipantDataset &&
+                normalizeDatasetHeader(headers[columnIndex]) === "program";
+            const values = isParticipantProgramColumn
+                ? value.split(",").map(item => item.trim()).filter(Boolean)
+                : [value];
+            const matchesFilter = filterValue === "__EMPTY__"
+                ? values.length === 0
+                : values.includes(filterValue);
+            if (!matchesFilter) {
                 return false;
             }
         }
@@ -1158,10 +1094,11 @@ function applyChartFilterToSelects() {
 
     let select = null;
 
-    if (column === "pic") {
-        select = document.getElementById("picFilter");
-    } else if (column === "status") {
-        select = document.getElementById("statusFilter");
+    const columnIndex = findColumnIndex(column);
+    if (columnIndex >= 0) {
+        select = document.querySelector(
+            `#datasetFilterFields select[data-column-index="${columnIndex}"]`
+        );
     }
 
     if (!select) return;
@@ -4108,22 +4045,6 @@ document
     });
 
 document
-    .getElementById("picFilter")
-    ?.addEventListener("change", () => {
-        currentPage = 1;
-        applyFilters();
-        renderTable();
-    });
-
-document
-    .getElementById("statusFilter")
-    ?.addEventListener("change", () => {
-        currentPage = 1;
-        applyFilters();
-        renderTable();
-    });
-
-document
     .getElementById("addRowButton")
     ?.addEventListener("click", addRow);
 
@@ -4263,6 +4184,11 @@ function initializeDatasetViewController() {
         return;
     }
 
+    const addForm = document.getElementById("addForm");
+    if (hasId && addForm && addForm.parentElement !== document.body) {
+        document.body.appendChild(addForm);
+    }
+
     listView.style.display = hasId ? "none" : "block";
     detailView.style.display = hasId ? "block" : "none";
 
@@ -4283,19 +4209,20 @@ function bindDatasetViewEvents(detailView) {
 
     detailView.dataset.eventsBound = "true";
 
-    const columnButton = document.getElementById("columnButton");
-    const filterButton = document.getElementById("filterButton");
-
-    columnButton?.addEventListener("click", event => {
+    detailView.addEventListener("click", event => {
+        const button = event.target.closest("#columnButton, #filterButton");
+        if (!button) return;
         event.stopPropagation();
-        document.getElementById("filterMenu")?.classList.remove("show");
-        document.getElementById("columnMenu")?.classList.toggle("show");
-    });
 
-    filterButton?.addEventListener("click", event => {
-        event.stopPropagation();
-        document.getElementById("columnMenu")?.classList.remove("show");
-        document.getElementById("filterMenu")?.classList.toggle("show");
+        const isFilterButton = button.id === "filterButton";
+        document.getElementById("filterMenu")?.classList.toggle(
+            "show",
+            isFilterButton && !document.getElementById("filterMenu")?.classList.contains("show")
+        );
+        document.getElementById("columnMenu")?.classList.toggle(
+            "show",
+            !isFilterButton && !document.getElementById("columnMenu")?.classList.contains("show")
+        );
     });
 
     document.getElementById("selectAllColumnsButton")
@@ -4308,12 +4235,14 @@ function bindDatasetViewEvents(detailView) {
             renderTable();
         });
 
-    document.getElementById("applyDatasetFilters")
-        ?.addEventListener("click", () => {
+    document.getElementById("datasetFilterFields")
+        ?.addEventListener("change", event => {
+            const select = event.target.closest("select[data-column-index]");
+            if (!select) return;
+            datasetColumnFilters[select.dataset.columnIndex] = select.value;
             currentPage = 1;
             applyFilters();
             renderTable();
-            document.getElementById("filterMenu")?.classList.remove("show");
         });
 
     document.getElementById("addRowButton")
@@ -4389,6 +4318,20 @@ function bindDatasetViewEvents(detailView) {
 }
 
 document.addEventListener("DOMContentLoaded", initializeDatasetViewController);
-document.addEventListener("app:page-loaded", initializeDatasetViewController);
+document.addEventListener("app:page-loaded", () => {
+    const pathname = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const isDatasetDetail = pathname === "/data-set" &&
+        new URLSearchParams(window.location.search).has("id");
+    if (isDatasetDetail) {
+        initializeDatasetViewController();
+        return;
+    }
+    closeAddForm();
+    const addForm = document.getElementById("addForm");
+    if (addForm?.parentElement === document.body) addForm.remove();
+    initializeDatasetViewController();
+});
 
 })();

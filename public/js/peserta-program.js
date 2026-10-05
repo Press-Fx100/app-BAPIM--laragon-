@@ -42,6 +42,12 @@
         const body = $("participantTableBody");
         if (!body || body.dataset.ready === "true") return;
         body.dataset.ready = "true";
+        ["participantAddForm", "participantProgramsOverlay"].forEach(id => {
+            const overlay = $(id);
+            if (overlay && overlay.parentElement !== document.body) {
+                document.body.appendChild(overlay);
+            }
+        });
         rows = [];
         filteredRows = [];
         visibleColumns = columns.map((_, index) => index !== columns.length - 1);
@@ -90,7 +96,11 @@
         ["First", "Previous", "Next", "Last"].forEach(name =>
             $(`participant${name}Page`).addEventListener("click", () => changePage(name))
         );
-        $("closeParticipantPrograms")?.addEventListener("click", () => $("participantProgramsOverlay").style.display = "none");
+        $("closeParticipantPrograms")?.addEventListener("click", closeProgramsModal);
+        $("closeParticipantProgramsFooter")?.addEventListener("click", closeProgramsModal);
+        $("participantProgramsOverlay")?.addEventListener("click", event => {
+            if (event.target === $("participantProgramsOverlay")) closeProgramsModal();
+        });
         if (!documentEventsBound) {
             document.addEventListener("click", closeMenus);
             document.addEventListener("keydown", handleKeyboard);
@@ -103,6 +113,18 @@
     }
 
     document.addEventListener("DOMContentLoaded", initialize);
+    document.addEventListener("app:page-loaded", () => {
+        const pathname = typeof window.appPathname === "function"
+            ? window.appPathname(window.location.pathname)
+            : window.location.pathname;
+        if (pathname === "/peserta-program") return;
+        closeAddForm();
+        closeProgramsModal();
+        ["participantAddForm", "participantProgramsOverlay"].forEach(id => {
+            const overlay = $(id);
+            if (overlay?.parentElement === document.body) overlay.remove();
+        });
+    });
     window.addEventListener("beforeunload", event => {
         if (!pendingChanges.size) return;
         event.preventDefault();
@@ -158,6 +180,7 @@
         const checklist = $("participantColumnChecklist");
         checklist.innerHTML = "";
         columns.forEach(([key, label], index) => {
+            if (key === "programs") return;
             const item = document.createElement("label");
             item.className = "column-checkbox";
             item.innerHTML = `<input type="checkbox" ${visibleColumns[index] ? "checked" : ""}><span>${label}</span>`;
@@ -245,7 +268,8 @@
         head.innerHTML = "";
         const headerRow = head.insertRow();
         appendHeader(headerRow, "", -1);
-        columns.forEach(([, label], index) => {
+        columns.forEach(([key, label], index) => {
+            if (key === "programs") return;
             if (visibleColumns[index]) appendHeader(headerRow, label, index);
         });
         const body = $("participantTableBody");
@@ -276,11 +300,37 @@
             }
             tr.appendChild(numberCell);
             columns.forEach(([key], columnIndex) => {
+                if (key === "programs") return;
                 if (!visibleColumns[columnIndex]) return;
                 const td = document.createElement("td");
                 td.className = "excel-cell";
-                td.textContent = cellValue(row, key);
-                td.title = td.textContent;
+                if (key === "jumlahProgram") {
+                    const programCell = document.createElement("div");
+                    programCell.className = "participant-program-cell";
+                    const count = document.createElement("span");
+                    count.textContent = cellValue(row, key);
+                    programCell.appendChild(count);
+                    const programButton = document.createElement("button");
+                    programButton.type = "button";
+                    programButton.className = "participant-programs-button";
+                    programButton.setAttribute(
+                        "aria-label",
+                        `Lihat senarai program untuk ${row.nama || row.kadPengenalan || "peserta"}`
+                    );
+                    programButton.title = "Lihat senarai program";
+                    programButton.innerHTML = '<i class="bi bi-three-dots" aria-hidden="true"></i>';
+                    programButton.addEventListener("mousedown", event => event.stopPropagation());
+                    programButton.addEventListener("dblclick", event => event.stopPropagation());
+                    programButton.addEventListener("click", event => {
+                        event.stopPropagation();
+                        openProgramsModal(row);
+                    });
+                    programCell.appendChild(programButton);
+                    td.appendChild(programCell);
+                } else {
+                    td.textContent = cellValue(row, key);
+                    td.title = td.textContent;
+                }
                 td.tabIndex = 0;
                 td.dataset.rowIndex = String(actualIndex);
                 td.dataset.columnIndex = String(columnIndex);
@@ -321,6 +371,46 @@
         return header.cells[0];
     }
 
+    function openProgramsModal(row) {
+        const overlay = $("participantProgramsOverlay");
+        const card = $("participantProgramsCard");
+        const title = $("participantProgramsTitle");
+        const list = $("participantProgramsList");
+        if (!overlay || !card || !title || !list) return;
+
+        const programs = Array.isArray(row.programs) ? row.programs : [];
+        title.textContent = `Program — ${row.nama || row.kadPengenalan || "Peserta"}`;
+        list.replaceChildren();
+        if (programs.length) {
+            programs.forEach(program => {
+                const item = document.createElement("li");
+                item.textContent = String(program);
+                list.appendChild(item);
+            });
+        } else {
+            const item = document.createElement("li");
+            item.textContent = "Tiada program disenaraikan.";
+            item.className = "participant-programs-empty";
+            list.appendChild(item);
+        }
+
+        overlay.classList.add("show");
+        card.classList.add("show");
+        overlay.setAttribute("aria-hidden", "false");
+        card.setAttribute("aria-hidden", "false");
+        $("closeParticipantPrograms")?.focus();
+    }
+
+    function closeProgramsModal() {
+        const overlay = $("participantProgramsOverlay");
+        const card = $("participantProgramsCard");
+        if (!overlay || !card) return;
+        overlay.classList.remove("show");
+        card.classList.remove("show");
+        overlay.setAttribute("aria-hidden", "true");
+        card.setAttribute("aria-hidden", "true");
+    }
+
     function appendHeader(row, label, columnIndex) {
         const th = document.createElement("th");
         const content = document.createElement("span");
@@ -345,19 +435,29 @@
             });
         }
         th.appendChild(content);
-        const handle = document.createElement("span");
-        handle.className = "column-resize-handle";
-        handle.addEventListener("mousedown", event => beginResize(event, columnIndex + 1));
-        th.appendChild(handle);
+        if (columnIndex !== 0) {
+            const handle = document.createElement("span");
+            handle.className = "column-resize-handle";
+            handle.addEventListener("mousedown", event => beginResize(event, columnIndex + 1));
+            th.appendChild(handle);
+        }
         applyWidth(th, columnIndex + 1);
         row.appendChild(th);
     }
 
     function applyWidth(element, index) {
-        const width = columnWidths[index] || 160;
-        element.style.width = `${width}px`;
-        element.style.minWidth = `${width}px`;
-        element.style.maxWidth = `${width}px`;
+        if (index === 0) {
+            element.style.width = "45px";
+            element.style.minWidth = "45px";
+            element.style.maxWidth = "45px";
+            return;
+        }
+        if (index > 0) {
+            element.style.width = "auto";
+            element.style.minWidth = `${columnWidths[index] || 160}px`;
+            element.style.maxWidth = "none";
+            return;
+        }
     }
 
     function beginResize(event, index) {
@@ -638,6 +738,10 @@
     }
 
     function handleKeyboard(event) {
+        if (event.key === "Escape" && $("participantProgramsOverlay")?.classList.contains("show")) {
+            closeProgramsModal();
+            return;
+        }
         if (!$("participantTableBody")) return;
         if (event.key === "Escape" && $("participantAddForm")?.classList.contains("show")) {
             event.preventDefault();

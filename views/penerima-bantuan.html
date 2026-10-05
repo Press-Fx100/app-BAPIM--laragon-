@@ -59,7 +59,7 @@
                 </div>
             </div>
 
-            <div id="recipientAddForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
+            <div id="recipientAddForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
                 <div id="recipientAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
                     aria-modal="true" aria-labelledby="recipientAddTitle" aria-hidden="true">
                     <div class="dataset-upload-header">
@@ -80,9 +80,9 @@
                             <div class="form-field"><label for="recipientAddKP">KP</label><input id="recipientAddKP" autocomplete="off"></div>
                             <div class="form-field"><label for="recipientAddTelefon">Telefon</label><input id="recipientAddTelefon" autocomplete="off"></div>
                             <div class="form-field"><label for="recipientAddEmail">Email</label><input id="recipientAddEmail" autocomplete="off"></div>
-                            <div class="form-field"><label for="recipientAddStatus">Status</label><select id="recipientAddStatus"></select><input id="recipientAddStatusCustom" autocomplete="off" placeholder="Masukkan status baharu" style="display:none;"></div>
-                            <div class="form-field"><label for="recipientAddStatusPekerjaan">Status Pekerjaan</label><input id="recipientAddStatusPekerjaan" autocomplete="off"></div>
-                            <div class="form-field"><label for="recipientAddPIC">PIC</label><input id="recipientAddPIC" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddStatus">Status</label><input id="recipientAddStatus" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddStatusPekerjaan">Pekerjaan</label><input id="recipientAddStatusPekerjaan" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddPIC">PIC</label><select id="recipientAddPIC"></select></div>
                             <div class="form-field full"><label for="recipientAddCatatan">Catatan</label><textarea id="recipientAddCatatan"></textarea></div>
                         </div>
                     </div>
@@ -111,8 +111,8 @@
                             <th>KAD PENGENALAN</th>
                             <th>TELEFON</th>
                             <th>EMAIL</th>
+                            <th>PEKERJAAN</th>
                             <th>STATUS</th>
-                            <th>STATUS PEKERJAAN</th>
                             <th>CATATAN</th>
                             <th>PIC</th>
                         </tr>

@@ -97,7 +97,7 @@ function updatePageInfo() {
     } else if (path.startsWith("/data-set/")) {
         title = "Paparan Set Data";
     } else if (path === "/user") {
-        title = "Pengguna";
+        title = "Aktiviti";
     } else if (path === "/peserta-program") {
         title = "Peserta Program";
     } else if (path === "/penerima-bantuan") {
@@ -151,30 +151,12 @@ function typeHeaderTitle(element, text) {
 }
 
 
-/* ==========================================
-   USER INITIALS
-   ========================================== */
-
-function getUserInitials(name) {
-    if (!name) {
-        return "?";
+function getUserColor(name) {
+    let hash = 0;
+    for (const character of String(name || "")) {
+        hash = (hash * 31 + character.codePointAt(0)) | 0;
     }
-
-    const parts = name
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-    if (parts.length >= 2) {
-        return (
-            parts[0].charAt(0) +
-            parts[1].charAt(0)
-        ).toUpperCase();
-    }
-
-    return parts[0]
-        .slice(0, 2)
-        .toUpperCase();
+    return `#${((hash >>> 0) & 0xffffff).toString(16).padStart(6, "0").toUpperCase()}`;
 }
 
 
@@ -319,8 +301,7 @@ async function loadCurrentUser() {
         }
 
         if (userIcon) {
-            userIcon.textContent =
-                getUserInitials(displayName);
+            userIcon.style.backgroundColor = getUserColor(displayName);
         }
 
     } catch (error) {

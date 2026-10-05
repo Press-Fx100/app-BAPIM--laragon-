@@ -17,41 +17,17 @@ let selectedActivityDate = "";
 let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
 const rowsPerPage = 10;
-const userColors = {
-    Dini: "#2563eb",
-    Ezri: "#db2777",
-    Faiz: "#059669",
-    Rais: "#d97706"
-};
-const fallbackUserColors = [
-    "#7c3aed", "#0891b2", "#dc2626", "#4f46e5", "#65a30d", "#c026d3"
-];
 
-function getUserColor(username) {
-    if (userColors[username]) {
-        return userColors[username];
+function getUserColor(displayName) {
+    let hash = 0;
+    for (const character of String(displayName || "")) {
+        hash = (hash * 31 + character.codePointAt(0)) | 0;
     }
-
-    const hash = Array.from(username).reduce(
-        (total, character) => (total * 31 + character.charCodeAt(0)) >>> 0,
-        0
-    );
-    return fallbackUserColors[hash % fallbackUserColors.length];
+    return `#${((hash >>> 0) & 0xffffff).toString(16).padStart(6, "0").toUpperCase()}`;
 }
 
-function getUserBadgeStyle(username) {
-    const color = getUserColor(username);
-    const hex = color.slice(1);
-    const channels = [0, 2, 4].map(
-        offset => parseInt(hex.slice(offset, offset + 2), 16)
-    );
-    const background = `#${channels
-        .map(channel => Math.round(channel + (255 - channel) * 0.88)
-            .toString(16)
-            .padStart(2, "0"))
-        .join("")}`;
-
-    return `background:${background};color:${color}`;
+function getUserBadgeStyle(displayName) {
+    return `background:${getUserColor(displayName)};color:#fff`;
 }
 
 async function loadActivities() {
@@ -677,9 +653,9 @@ function renderTable() {
 
                 <td class="audit-location-cell">
                     <div class="audit-location-values">
-                        <span class="audit-location-badge">${escapeHTML(activity.row || "—")}</span>
+                        <span class="audit-location-badge" title="${escapeHTML(activity.row || "—")}"><span class="audit-location-text">${escapeHTML(activity.row || "—")}</span></span>
                         <span class="audit-location-transition" aria-hidden="true">, </span>
-                        <span class="audit-location-badge">${escapeHTML(activity.column || "—")}</span>
+                        <span class="audit-location-badge" title="${escapeHTML(activity.column || "—")}"><span class="audit-location-text">${escapeHTML(activity.column || "—")}</span></span>
                     </div>
                 </td>
 
