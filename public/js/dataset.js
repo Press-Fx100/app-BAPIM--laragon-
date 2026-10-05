@@ -718,7 +718,9 @@ function initializeDataset() {
     initializeAddRecordForm();
 
     visibleColumns = headers.map(
-        header => String(header).trim().toLowerCase() !== "pic"
+        header => !["pic", "status pekerjaan"].includes(
+            String(header).trim().toLowerCase()
+        )
     );
 
     columnWidths = headers.map(() => 160);

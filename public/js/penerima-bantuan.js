@@ -11,7 +11,7 @@
     const $ = id => document.getElementById(id);
     const newStatusValue = "__add_new_status__";
     let data = [], filtered = [], page = 1, sortKey = "", sortDirection = "asc";
-    let visible = columns.map(c => c[0] !== "sourceFile");
+    let visible = columns.map(c => !["sourceFile", "statusPekerjaan"].includes(c[0]));
     let filters = {}, widths = [45].concat(columns.map(() => 160));
     let deleteMode = false, active = null, anchor = null;
     let pendingChanges = new Map(), pendingDeleteRow = null;
@@ -68,7 +68,7 @@
         page = 1;
         sortKey = "";
         sortDirection = "asc";
-        visible = columns.map(c => c[0] !== "sourceFile");
+        visible = columns.map(c => !["sourceFile", "statusPekerjaan"].includes(c[0]));
         filters = {};
         widths = [45].concat(columns.map(() => 160));
         deleteMode = false;
