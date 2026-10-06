@@ -1450,6 +1450,16 @@ function updateBarChart() {
         return;
     }
 
+    const canvas = document.getElementById("barChart");
+    if (!canvas) {
+        return;
+    }
+
+    const registeredChart = Chart.getChart(canvas);
+    if (barChart !== registeredChart) {
+        barChart = registeredChart || null;
+    }
+
     const wrapper =
         section.querySelector(
             ".chart-wrapper"
@@ -1510,6 +1520,8 @@ function updateBarChart() {
         values.every((value, index) => barChart.data.datasets[0].data[index] === value);
 
     if (hasSameData) {
+        barChart.resize();
+        barChart.update("none");
         renderCategoryLegend(
             barLegend,
             entries,
@@ -1524,7 +1536,7 @@ function updateBarChart() {
     }
 
     barChart = new Chart(
-        document.getElementById("barChart"),
+        canvas,
         {
             type: "bar",
             data: {
@@ -1596,6 +1608,16 @@ function updatePieChart() {
         return;
     }
 
+    const canvas = document.getElementById("pieChart");
+    if (!canvas) {
+        return;
+    }
+
+    const registeredChart = Chart.getChart(canvas);
+    if (pieChart !== registeredChart) {
+        pieChart = registeredChart || null;
+    }
+
     const wrapper =
         section.querySelector(
             ".pie-wrapper"
@@ -1663,6 +1685,8 @@ function updatePieChart() {
         values.every((value, index) => pieChart.data.datasets[0].data[index] === value);
 
     if (hasSameData) {
+        pieChart.resize();
+        pieChart.update("none");
         renderCategoryLegend(
             pieLegend,
             entries,
@@ -1681,7 +1705,7 @@ function updatePieChart() {
         total.toLocaleString();
 
     pieChart = new Chart(
-        document.getElementById("pieChart"),
+        canvas,
         {
             type: "doughnut",
             data: {
