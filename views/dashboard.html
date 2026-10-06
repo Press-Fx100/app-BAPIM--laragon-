@@ -9,7 +9,7 @@
     <link rel="icon" href="/app.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/bootstrap-icons.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/css/style.css?v=20261005-29">
+    <link rel="stylesheet" href="/css/style.css?v=20261006-9">
     <style>
         #page-content {
             opacity: 0;
@@ -23,6 +23,16 @@
 </head>
 
 <body>
+    <script>
+        try {
+            document.body.classList.toggle(
+                "sidebar-collapsed",
+                localStorage.getItem("sidebarCollapsed") === "true"
+            );
+        } catch (error) {
+            console.error("Could not restore sidebar state:", error);
+        }
+    </script>
 
     <div class="app-wrapper">
 
@@ -55,19 +65,25 @@
 
                     <div id="statsSection" class="row g-3 mb-4">
 
+                        <div id="statsLoading" class="dashboard-loading-state dashboard-summary-loading"
+                            role="status" aria-live="polite">
+                            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            Memuatkan ringkasan...
+                        </div>
+
                         <div class="col-xl-4 col-md-6">
                             <div class="stat-card">
                                 <div class="stat-card-header">
                                     <div>
                                         <div class="stat-label">JUMLAH PENERIMA BANTUAN</div>
-                                        <div id="totalRecipients" class="stat-number">0</div>
+                                        <div id="totalRecipients" class="stat-number">—</div>
                                     </div>
 
                                     <div class="stat-icon blue"><i class="bi bi-list-ol" aria-hidden="true"></i></div>
                                 </div>
 
                                 <div class="stat-footer">
-                                    <span>Pemohon Dihubungi: <strong id="contactedRecipients">0</strong></span>
+                                    <span>Pemohon Dihubungi: <strong id="contactedRecipients">—</strong></span>
                                 </div>
                             </div>
                         </div>
@@ -77,7 +93,7 @@
                                 <div class="stat-card-header">
                                     <div>
                                         <div class="stat-label">JUMLAH PESERTA PROGRAM</div>
-                                        <div id="totalParticipants" class="stat-number">0</div>
+                                        <div id="totalParticipants" class="stat-number">—</div>
                                     </div>
 
                                     <div class="stat-icon purple"><i class="bi bi-database" aria-hidden="true"></i>
@@ -85,7 +101,7 @@
                                 </div>
 
                                 <div class="stat-footer">
-                                    <span>Peserta &gt; 1 program: <strong id="multiProgramParticipants">0</strong></span>
+                                    <span>Peserta &gt; 1 program: <strong id="multiProgramParticipants">—</strong></span>
                                 </div>
                             </div>
                         </div>
@@ -130,6 +146,11 @@
                             </div>
                         </div>
 
+                        <div id="analysisLoading" class="dashboard-loading-state" role="status" aria-live="polite">
+                            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            Memuatkan analisis penerima bantuan...
+                        </div>
+
                         <div id="analysisSummary" class="analysis-grid"></div>
 
                         <div class="table-container">
@@ -164,6 +185,10 @@
                                 </div>
 
                                 <div class="chart-wrapper">
+                                    <div id="recordsChartLoading" class="dashboard-loading-state" role="status" aria-live="polite">
+                                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                                        Memuatkan carta...
+                                    </div>
                                     <canvas id="lineChart"></canvas>
                                 </div>
 
@@ -192,6 +217,10 @@
 
                                 <div class="pie-wrapper">
 
+                                    <div id="statusPieLoading" class="dashboard-loading-state" role="status" aria-live="polite">
+                                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                                        Memuatkan carta...
+                                    </div>
                                     <canvas id="pieChart"></canvas>
 
                                     <div class="pie-center">
@@ -225,6 +254,10 @@
                                 </div>
 
                                 <div class="chart-wrapper">
+                                    <div id="statusBarLoading" class="dashboard-loading-state" role="status" aria-live="polite">
+                                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                                        Memuatkan carta...
+                                    </div>
                                     <canvas id="barChart"></canvas>
                                 </div>
 
@@ -243,6 +276,12 @@
                                 <h5>Rekod Penerima Bantuan</h5>
                                 <span>Lihat, cari dan susun rekod penerima bantuan</span>
                             </div>
+                        </div>
+
+                        <div id="recordsLoading" class="dashboard-loading-state dashboard-records-loading"
+                            role="status" aria-live="polite">
+                            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            Memuatkan rekod penerima bantuan...
                         </div>
 
                         <div class="data-toolbar">
@@ -296,11 +335,14 @@
     <script src="/js/upload-page.js"></script>
     <script src="/js/peserta-program.js?v=20261005-12"></script>
     <script src="/js/penerima-bantuan.js?v=20261005-13"></script>
-    <script src="/js/user.js?v=20261005-9"></script>
-    <script src="/js/dashboard.js"></script>
-    <script src="/js/header.js?v=20261005-8"></script>
+    <script src="/js/color-utils.js?v=20261006-1"></script>
+    <script src="/js/user.js?v=20261006-4"></script>
+    <script src="/js/account.js?v=20261006-2"></script>
+    <script src="/js/updates.js?v=20261006-2"></script>
+    <script src="/js/dashboard.js?v=20261006-10"></script>
+    <script src="/js/header.js?v=20261006-5"></script>
     <script src="/js/layout.js?v=20260929-2"></script>
-    <script src="/js/app.js?v=20261005-4"></script>
+    <script src="/js/app.js?v=20261006-7"></script>
 
 </body>
 

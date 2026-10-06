@@ -12,61 +12,15 @@ let isolatedLegendUser = null;
 let searchQuery = "";
 let selectedActivityUser = "";
 let selectedActivityAction = "";
+let selectedActivityColumn = "";
 let selectedActivityDataset = "";
 let selectedActivityDate = "";
 let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
 const rowsPerPage = 10;
 
-function getUserColor(displayName) {
-    const characters = Array.from(String(displayName || "").toLowerCase())
-        .filter(character => !/\s/u.test(character));
-    if (!characters.length) return "#808080";
-
-    let hueX = 0;
-    let hueY = 0;
-    let lightnessTotal = 0;
-    for (const character of characters) {
-        let hash = (0x811c9dc5 ^ character.codePointAt(0)) >>> 0;
-        hash = Math.imul(hash, 0x01000193);
-        hash ^= hash >>> 16;
-        hash = Math.imul(hash, 0x85ebca6b);
-        hash ^= hash >>> 13;
-        hash = Math.imul(hash, 0xc2b2ae35);
-        hash ^= hash >>> 16;
-
-        const hue = (hash >>> 0) / 0x100000000 * 2 * Math.PI;
-        const saturation = 70 + ((hash >>> 8) % 31);
-        const lightness = 55 + ((hash >>> 16) % 16);
-        hueX += saturation * Math.cos(hue);
-        hueY += saturation * Math.sin(hue);
-        lightnessTotal += lightness;
-    }
-
-    const saturation = Math.max(0.75, Math.min(0.98,
-        Math.hypot(hueX, hueY) / characters.length / 100));
-    const lightness = lightnessTotal / characters.length / 100;
-    const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
-    const hue = (Math.atan2(hueY, hueX) * 180 / Math.PI + 360) % 360;
-    const hueSection = hue / 60;
-    const secondary = chroma * (1 - Math.abs(hueSection % 2 - 1));
-    let red = 0, green = 0, blue = 0;
-    if (hueSection < 1) [red, green] = [chroma, secondary];
-    else if (hueSection < 2) [red, green] = [secondary, chroma];
-    else if (hueSection < 3) [green, blue] = [chroma, secondary];
-    else if (hueSection < 4) [green, blue] = [secondary, chroma];
-    else if (hueSection < 5) [red, blue] = [secondary, chroma];
-    else [red, blue] = [chroma, secondary];
-
-    const offset = lightness - chroma / 2;
-    return `#${[red, green, blue]
-        .map(channel => Math.round((channel + offset) * 255).toString(16).padStart(2, "0"))
-        .join("")
-        .toUpperCase()}`;
-}
-
 function getUserBadgeStyle(displayName) {
-    const color = getUserColor(displayName);
+    const color = window.getTextAverageColor(displayName);
     const background = `#${[1, 3, 5].map(offset => {
         const channel = parseInt(color.slice(offset, offset + 2), 16);
         return Math.round(channel + (255 - channel) * 0.85)
@@ -284,6 +238,11 @@ function normalizeActivity(activity) {
     return {
         id: activity.id ?? "",
         username: activity.username ?? "",
+        displayName:
+            activity.display_name ??
+            activity.displayName ??
+            activity.username ??
+            "",
         dataset:
             activity.dataset_name ??
             activity.dataset ??
@@ -442,23 +401,31 @@ function createChartData() {
 
     monthActivities.forEach(activity => {
         const username = String(activity.username || "").trim() || "Unknown";
+        const displayName = String(
+            activity.display_name ??
+            activity.displayName ??
+            username
+        ).trim() || username;
         const day = Number(activity.day);
         if (!Number.isInteger(day) || day < 1 || day > daysInMonth) return;
 
         if (!dailyByUser.has(username)) {
-            dailyByUser.set(username, Array(daysInMonth).fill(0));
+            dailyByUser.set(username, {
+                displayName,
+                values: Array(daysInMonth).fill(0)
+            });
         }
 
-        dailyByUser.get(username)[day - 1] += Number(
+        dailyByUser.get(username).values[day - 1] += Number(
             activity.progress_change ?? activity.progressChange ?? 0
         );
     });
 
     const datasets = [...dailyByUser.entries()]
         .sort(([first], [second]) => first.localeCompare(second))
-        .map(([username, dailyValues]) => {
+        .map(([username, { displayName, values: dailyValues }]) => {
             let cumulative = 0;
-            const color = getUserColor(username);
+            const color = window.getTextAverageColor(displayName);
 
             return {
                 label: username,
@@ -622,6 +589,7 @@ function renderTable() {
         return matchesSearch &&
             (!selectedActivityUser || activity.username === selectedActivityUser) &&
             (!selectedActivityAction || action === selectedActivityAction) &&
+            (!selectedActivityColumn || activity.column === selectedActivityColumn) &&
             (!selectedActivityDataset || activity.dataset === selectedActivityDataset) &&
             (!selectedActivityDate || getActivityDateKey(activity.createdAt) === selectedActivityDate);
     });
@@ -685,7 +653,7 @@ function renderTable() {
             }[activity.action] || actionText.toLowerCase().replaceAll(" ", "-");
             const action = escapeHTML(actionText);
             const user = escapeHTML(activity.username);
-            const userBadgeStyle = getUserBadgeStyle(activity.username);
+            const userBadgeStyle = getUserBadgeStyle(activity.displayName);
             const previousValue = escapeHTML(activity.oldValue || "—");
             const nextValue = escapeHTML(activity.newValue || "—");
 
@@ -719,7 +687,7 @@ function renderTable() {
                 </td>
 
                 <td>
-                    ${escapeHTML(activity.dataset || "—")}
+                    <span class="audit-dataset-cell" title="${escapeHTML(activity.dataset || "—")}">${escapeHTML(activity.dataset || "—")}</span>
                 </td>
 
                 <td>
@@ -743,7 +711,7 @@ function renderTable() {
     const filterButton = document.getElementById("auditFilterButton");
     filterButton?.classList.toggle(
         "active",
-        Boolean(selectedActivityUser || selectedActivityAction || selectedActivityDataset)
+        Boolean(selectedActivityUser || selectedActivityAction || selectedActivityColumn || selectedActivityDataset)
     );
     const dateButton = document.getElementById("auditDateFilterButton");
     const calendarMenu = document.getElementById("auditCalendarMenu");
@@ -770,16 +738,20 @@ function getActivityActionLabel(action) {
 function populateActivityFilters() {
     const userFilter = document.getElementById("auditUserFilter");
     const actionFilter = document.getElementById("auditActionFilter");
+    const columnFilter = document.getElementById("auditColumnFilter");
     const datasetFilter = document.getElementById("auditDatasetFilter");
-    if (!userFilter || !actionFilter || !datasetFilter) return;
+    if (!userFilter || !actionFilter || !columnFilter || !datasetFilter) return;
 
     const selectedUser = userFilter.value || selectedActivityUser;
     const selectedAction = actionFilter.value || selectedActivityAction;
+    const selectedColumn = columnFilter.value || selectedActivityColumn;
     const selectedDataset = datasetFilter.value || selectedActivityDataset;
     const normalized = activities.map(normalizeActivity);
     const users = [...new Set(normalized.map(activity => activity.username).filter(Boolean))]
         .sort((first, second) => first.localeCompare(second));
     const actions = [...new Set(normalized.map(activity => getActivityActionLabel(activity.action)).filter(Boolean))]
+        .sort((first, second) => first.localeCompare(second));
+    const columns = [...new Set(normalized.map(activity => activity.column).filter(Boolean))]
         .sort((first, second) => first.localeCompare(second));
     const datasets = [...new Set(normalized.map(activity => activity.dataset).filter(Boolean))]
         .sort((first, second) => first.localeCompare(second));
@@ -788,14 +760,18 @@ function populateActivityFilters() {
     users.forEach(user => userFilter.add(new Option(user, user)));
     actionFilter.replaceChildren(new Option("Semua tindakan", ""));
     actions.forEach(action => actionFilter.add(new Option(action, action)));
+    columnFilter.replaceChildren(new Option("Semua lajur", ""));
+    columns.forEach(column => columnFilter.add(new Option(column, column)));
     datasetFilter.replaceChildren(new Option("Semua set data", ""));
     datasets.forEach(dataset => datasetFilter.add(new Option(dataset, dataset)));
 
     userFilter.value = users.includes(selectedUser) ? selectedUser : "";
     actionFilter.value = actions.includes(selectedAction) ? selectedAction : "";
+    columnFilter.value = columns.includes(selectedColumn) ? selectedColumn : "";
     datasetFilter.value = datasets.includes(selectedDataset) ? selectedDataset : "";
     selectedActivityUser = userFilter.value;
     selectedActivityAction = actionFilter.value;
+    selectedActivityColumn = columnFilter.value;
     selectedActivityDataset = datasetFilter.value;
 }
 
@@ -954,13 +930,14 @@ function initializeUserPage() {
                 dateButton?.setAttribute("aria-expanded", "false");
             });
         }
-        [["auditUserFilter", "user"], ["auditActionFilter", "action"], ["auditDatasetFilter", "dataset"]].forEach(([id, field]) => {
+        [["auditUserFilter", "user"], ["auditActionFilter", "action"], ["auditColumnFilter", "column"], ["auditDatasetFilter", "dataset"]].forEach(([id, field]) => {
             const select = document.getElementById(id);
             if (!select || select.dataset.bound === "true") return;
             select.dataset.bound = "true";
             select.addEventListener("change", () => {
                 if (field === "user") selectedActivityUser = select.value;
                 else if (field === "action") selectedActivityAction = select.value;
+                else if (field === "column") selectedActivityColumn = select.value;
                 else selectedActivityDataset = select.value;
                 currentPage = 1;
                 renderTable();
@@ -1013,6 +990,7 @@ function getFilteredActivityCount() {
         return matchesSearch &&
             (!selectedActivityUser || activity.username === selectedActivityUser) &&
             (!selectedActivityAction || action === selectedActivityAction) &&
+            (!selectedActivityColumn || activity.column === selectedActivityColumn) &&
             (!selectedActivityDataset || activity.dataset === selectedActivityDataset) &&
             (!selectedActivityDate || getActivityDateKey(activity.createdAt) === selectedActivityDate);
     }).length;

@@ -55,12 +55,13 @@
                             <div class="toolbar-group toolbar-filter">
                                 <div class="filter-menu-wrapper">
                                     <button type="button" id="auditFilterButton" class="toolbar-button icon-button"
-                                        title="Tapis" aria-label="Tapis" aria-expanded="false">
+                                        title="Tapis" aria-label="Tapis" aria-controls="auditFilterMenu"
+                                        aria-expanded="false">
                                         <i class="bi bi-funnel" aria-hidden="true"></i>
                                     </button>
                                     <button type="button" id="auditDateFilterButton" class="toolbar-button icon-button"
                                         title="Tapis mengikut tarikh" aria-label="Tapis mengikut tarikh"
-                                        aria-haspopup="dialog" aria-expanded="false">
+                                        aria-haspopup="dialog" aria-controls="auditCalendarMenu" aria-expanded="false">
                                         <i class="bi bi-calendar3" aria-hidden="true"></i>
                                     </button>
                                     <div id="auditCalendarMenu" class="audit-calendar-menu" role="dialog"
@@ -101,6 +102,12 @@
                                             </select>
                                         </div>
                                         <div class="filter-field">
+                                            <label for="auditColumnFilter">Lajur (Pada)</label>
+                                            <select id="auditColumnFilter">
+                                                <option value="">Semua lajur</option>
+                                            </select>
+                                        </div>
+                                        <div class="filter-field">
                                             <label for="auditDatasetFilter">Set Data</label>
                                             <select id="auditDatasetFilter">
                                                 <option value="">Semua set data</option>
@@ -125,27 +132,27 @@
 
                                 <tr>
 
-                                    <th data-column-index="0" style="width:160px;min-width:160px;max-width:160px;">
+                                    <th data-column-index="0">
                                         <span>Pengguna</span>
                                     </th>
 
-                                    <th data-column-index="1" style="width:160px;min-width:160px;max-width:160px;">
+                                    <th data-column-index="1">
                                         <span>Tindakan</span>
                                     </th>
 
-                                    <th data-column-index="2" style="width:160px;min-width:160px;max-width:160px;">
+                                    <th data-column-index="2">
                                         <span>Pada</span>
                                     </th>
 
-                                    <th data-column-index="3" style="width:280px;min-width:280px;max-width:280px;">
+                                    <th data-column-index="3">
                                         <span>Perubahan</span>
                                     </th>
 
-                                    <th data-column-index="4" style="width:180px;min-width:180px;max-width:180px;">
+                                    <th data-column-index="4">
                                         <span>Set Data</span>
                                     </th>
 
-                                    <th data-column-index="5" style="width:180px;min-width:180px;max-width:180px;">
+                                    <th data-column-index="5">
                                         <span>Masa</span>
                                     </th>
 

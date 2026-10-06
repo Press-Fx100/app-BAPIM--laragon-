@@ -1,0 +1,52 @@
+<main class="main-content">
+    <div class="dashboard-content account-page">
+        <section class="content-card account-settings-card">
+            <div class="card-header-custom account-settings-header">
+                <div>
+                    <h5>Tetapan Akaun Pengguna</h5>
+                    <span>Kemas kini nama paparan atau kata laluan akaun anda.</span>
+                </div>
+            </div>
+
+            <div class="account-settings-body">
+                <form id="accountSettingsForm" data-csrf-token="__APP_CSRF_TOKEN__">
+                    <div class="form-field">
+                        <label for="accountUsername">Nama Pengguna</label>
+                        <input type="text" id="accountUsername" autocomplete="username" readonly>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="accountDisplayName">Nama Paparan</label>
+                        <input type="text" id="accountDisplayName" maxlength="160" autocomplete="name" required>
+                    </div>
+
+                    <div class="account-password-section">
+                        <h5>Tukar Kata Laluan</h5>
+                        <p>Biarkan ruangan kata laluan kosong jika anda tidak mahu menukarnya.</p>
+
+                        <div class="form-field">
+                            <label for="accountCurrentPassword">Kata Laluan Semasa</label>
+                            <input type="password" id="accountCurrentPassword" autocomplete="current-password">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="accountNewPassword">Kata Laluan Baharu</label>
+                            <input type="password" id="accountNewPassword" minlength="8" autocomplete="new-password">
+                        </div>
+
+                        <div class="form-field">
+                            <label for="accountConfirmPassword">Sahkan Kata Laluan Baharu</label>
+                            <input type="password" id="accountConfirmPassword" minlength="8" autocomplete="new-password">
+                        </div>
+                    </div>
+
+                    <div id="accountSettingsMessage" class="message" role="status" aria-live="polite" hidden></div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="accountSaveButton" class="btn btn-primary" disabled>Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>

@@ -17,6 +17,33 @@ let suppressTableHeaderClick = null;
 const customSelectPortalMenus = new WeakMap();
 const customSelectPortalPositions = new WeakMap();
 
+document.addEventListener("click", event => {
+    const trigger = event.target instanceof Element
+        ? event.target.closest(".search-toolbar-group button[aria-controls]")
+        : null;
+    if (!trigger) return;
+
+    const targetMenuId = trigger.getAttribute("aria-controls");
+    window.setTimeout(() => {
+        const targetMenu = document.getElementById(targetMenuId);
+        const targetIsOpen = targetMenu?.classList.contains("show") || false;
+        document.querySelectorAll(
+            ".search-toolbar-group .column-menu.show, " +
+            ".search-toolbar-group .filter-menu.show, " +
+            ".search-toolbar-group .audit-calendar-menu.show"
+        ).forEach(menu => {
+            if (!targetIsOpen || menu !== targetMenu) {
+                menu.classList.remove("show");
+            }
+        });
+        document.querySelectorAll(".search-toolbar-group button[aria-controls]")
+            .forEach(button => {
+                const menu = document.getElementById(button.getAttribute("aria-controls"));
+                button.setAttribute("aria-expanded", String(menu?.classList.contains("show") || false));
+            });
+    }, 0);
+}, true);
+
 document.addEventListener("pointerdown", event => {
     if (event.button !== 0 || !(event.target instanceof Element)) {
         return;
@@ -374,7 +401,9 @@ async function navigateTo(url, replace = false) {
         targetPathname === "/upload" ||
         targetPathname === "/peserta-program" ||
         targetPathname === "/penerima-bantuan" ||
-        targetPathname === "/user";
+        targetPathname === "/user" ||
+        targetPathname === "/account" ||
+        targetPathname === "/updates";
 
     if (
         target.origin !== window.location.origin ||

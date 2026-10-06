@@ -452,6 +452,44 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         jsonResponse(['success' => true, 'username' => $user['username'], 'displayName' => $user['display_name'], 'PICname' => $user['PICname']]);
     }
+    if ($path === '/api/auth/account' && $method === 'PUT') {
+        $account = requireApiUser($pdo);
+        $providedToken = (string)($payload['csrfToken'] ?? '');
+        if ($providedToken === '' || !hash_equals(appCsrfToken(), $providedToken)) {
+            jsonResponse(['success' => false, 'error' => 'Your session expired. Refresh the page and try again.'], 403);
+        }
+
+        $displayName = trim((string)($payload['displayName'] ?? ''));
+        $currentPassword = (string)($payload['currentPassword'] ?? '');
+        $newPassword = (string)($payload['newPassword'] ?? '');
+        $confirmPassword = (string)($payload['confirmPassword'] ?? '');
+        if ($displayName === '' || strlen($displayName) > 160) {
+            jsonResponse(['success' => false, 'error' => 'Display name is required and must be 160 characters or fewer.'], 400);
+        }
+        if ($newPassword !== '') {
+            if (strlen($newPassword) < 8) {
+                jsonResponse(['success' => false, 'error' => 'The new password must be at least 8 characters.'], 400);
+            }
+            if ($newPassword !== $confirmPassword) {
+                jsonResponse(['success' => false, 'error' => 'The new password confirmation does not match.'], 400);
+            }
+            $statement = $pdo->prepare('SELECT password_hash FROM users WHERE username = ? AND active = 1 LIMIT 1');
+            $statement->execute([$account['username']]);
+            $passwordHash = $statement->fetchColumn();
+            if (!is_string($passwordHash) || $currentPassword === '' || !password_verify($currentPassword, $passwordHash)) {
+                jsonResponse(['success' => false, 'error' => 'Your current password is incorrect.'], 403);
+            }
+        }
+
+        if ($newPassword !== '') {
+            $statement = $pdo->prepare('UPDATE users SET display_name = ?, password_hash = ? WHERE username = ? AND active = 1');
+            $statement->execute([$displayName, password_hash($newPassword, PASSWORD_DEFAULT), $account['username']]);
+        } else {
+            $statement = $pdo->prepare('UPDATE users SET display_name = ? WHERE username = ? AND active = 1');
+            $statement->execute([$displayName, $account['username']]);
+        }
+        jsonResponse(['success' => true, 'displayName' => $displayName]);
+    }
     if ($path === '/api/auth/login' && $method === 'POST') {
         $loginName = trim((string)($payload['username'] ?? ''));
         $password = (string)($payload['password'] ?? '');
@@ -667,7 +705,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         );
         $progressStatement->execute([$activityUsername, $account['username'], $account['PICname']]);
         $progressChange = (int)$progressStatement->fetchColumn();
-        $statement = $pdo->prepare("SELECT activity.id, activity.username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
+        $statement = $pdo->prepare("SELECT activity.id, activity.username, COALESCE((SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS display_name, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
         $statement->bindValue(1, $limit, PDO::PARAM_INT);
         $statement->execute();
         $activities = $statement->fetchAll();
@@ -684,7 +722,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Activity cannot be requested for a future month.'], 400);
         }
         $earliest = $pdo->query("SELECT MIN(DATE_FORMAT(created_at, '%Y-%m')) FROM user_activity WHERE action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')")->fetchColumn();
-        $statement = $pdo->prepare("SELECT username, DAY(created_at) AS day, SUM(CASE WHEN TRIM(COALESCE(old_value,'')) = '' AND TRIM(COALESCE(new_value,'')) <> '' THEN 1 WHEN TRIM(COALESCE(old_value,'')) <> '' AND TRIM(COALESCE(new_value,'')) = '' THEN -1 ELSE 0 END) AS progress_change FROM user_activity WHERE (action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')) AND DATE_FORMAT(created_at, '%Y-%m') = ? GROUP BY username, DAY(created_at) ORDER BY username, day");
+        $statement = $pdo->prepare("SELECT username, MAX(COALESCE((SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(user_activity.username)) LIMIT 1), (SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(user_activity.username)) LIMIT 1), user_activity.username)) AS display_name, DAY(created_at) AS day, SUM(CASE WHEN TRIM(COALESCE(old_value,'')) = '' AND TRIM(COALESCE(new_value,'')) <> '' THEN 1 WHEN TRIM(COALESCE(old_value,'')) <> '' AND TRIM(COALESCE(new_value,'')) = '' THEN -1 ELSE 0 END) AS progress_change FROM user_activity WHERE (action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')) AND DATE_FORMAT(created_at, '%Y-%m') = ? GROUP BY username, DAY(created_at) ORDER BY username, day");
         $statement->execute([$month]);
         $activities = $statement->fetchAll();
         jsonResponse([
@@ -882,6 +920,8 @@ $pages = [
     '/peserta-program' => 'peserta-program.html',
     '/penerima-bantuan' => 'penerima-bantuan.html',
     '/user' => 'user.html',
+    '/account' => 'account.html',
+    '/updates' => 'updates.html',
     '/sidebar' => 'components/sidebar.html',
     '/header' => 'components/header.html',
 ];
@@ -931,6 +971,10 @@ $rewriteHtmlUrls = static function (string $markup) use ($basePath): string {
 };
 $html = $rewriteHtmlUrls($html);
 
+if ($path === '/account') {
+    $html = str_replace('__APP_CSRF_TOKEN__', htmlspecialchars(appCsrfToken(), ENT_QUOTES, 'UTF-8'), $html);
+}
+
 if (isset($_SERVER['HTTP_X_APP_FRAGMENT']) || in_array($path, ['/sidebar', '/header'], true)) {
     header('Content-Type: text/html; charset=utf-8');
     if ($path === '/sidebar') {
@@ -940,7 +984,7 @@ if (isset($_SERVER['HTTP_X_APP_FRAGMENT']) || in_array($path, ['/sidebar', '/hea
     exit;
 }
 
-if ($path === '/upload' || $path === '/data-set' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/user') {
+if ($path === '/upload' || $path === '/data-set' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/user' || $path === '/account' || $path === '/updates') {
     $shellPath = __DIR__ . '/views/dashboard.html';
     $shell = file_get_contents($shellPath);
     $start = strpos($shell, '<main class="main-content" id="page-content">');

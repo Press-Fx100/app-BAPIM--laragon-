@@ -44,6 +44,53 @@ let pieLegend;
 let lineLegend;
 let barLegend;
 
+const barHoverLiftPlugin = {
+    id: "barHoverLift",
+    afterDatasetsDraw(chart) {
+        const active = chart.getActiveElements().find(
+            element => element.datasetIndex === 0
+        );
+        if (!active) {
+            return;
+        }
+
+        const bar = chart.getDatasetMeta(active.datasetIndex).data[active.index];
+        const { x, y, base, width } = bar.getProps(["x", "y", "base", "width"], true);
+        const left = x - width / 2;
+        const top = Math.max(chart.chartArea.top, y);
+        const right = x + width / 2;
+        const radius = Math.min(5, width / 2, Math.max(0, (base - top) / 2));
+        const ctx = chart.ctx;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(
+            chart.chartArea.left,
+            chart.chartArea.top,
+            chart.chartArea.right - chart.chartArea.left,
+            chart.chartArea.bottom - chart.chartArea.top
+        );
+        ctx.clip();
+        ctx.fillStyle = bar.options.backgroundColor;
+        ctx.shadowColor = "rgba(15, 23, 42, .28)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 3;
+        ctx.beginPath();
+        ctx.moveTo(left + radius, top);
+        ctx.lineTo(right - radius, top);
+        ctx.quadraticCurveTo(right, top, right, top + radius);
+        ctx.lineTo(right, base - radius);
+        ctx.quadraticCurveTo(right, base, right - radius, base);
+        ctx.lineTo(left + radius, base);
+        ctx.quadraticCurveTo(left, base, left, base - radius);
+        ctx.lineTo(left, top + radius);
+        ctx.quadraticCurveTo(left, top, left + radius, top);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+};
+
 async function initializeDashboard() {
     picSelect = document.getElementById("picSelect");
     totalRecords = document.getElementById("totalRecords");
@@ -837,6 +884,12 @@ async function loadCombinedRecipientData() {
         updateCharts();
     } catch (error) {
         console.error("Dashboard loading error:", error);
+        document.querySelectorAll(".dashboard-data-pending .dashboard-loading-state").forEach(
+            state => {
+                state.textContent = "Gagal memuatkan data. Sila muat semula halaman untuk mencuba lagi.";
+                state.classList.add("dashboard-loading-error");
+            }
+        );
         alert(error.message);
     }
 }
@@ -1261,20 +1314,8 @@ function getCategoryCounts(columnIndex) {
     );
 }
 
-function chartColors(count) {
-    const palette = [
-        "#344F61",
-        "#6E93AA",
-        "#9FBCCB",
-        "#B8CFDB",
-        "#7D9BA9",
-        "#CBDCE3"
-    ];
-
-    return Array.from(
-        { length: count },
-        (_, index) => palette[index % palette.length]
-    );
+function chartColors(labels) {
+    return labels.map(window.getTextAverageColor);
 }
 
 function createLegendItem(
@@ -1397,11 +1438,6 @@ function updateCharts() {
 }
 
 function updateBarChart() {
-    if (barChart) {
-        barChart.destroy();
-        barChart = null;
-    }
-
     barLegend.innerHTML =
         "";
 
@@ -1429,6 +1465,11 @@ function updateBarChart() {
     );
 
     if (!currentRows.length || barIndex < 0) {
+        if (barChart) {
+            barChart.destroy();
+            barChart = null;
+        }
+
         wrapper.style.display =
             "none";
 
@@ -1453,7 +1494,33 @@ function updateBarChart() {
         );
 
     if (!entries.length) {
+        if (barChart) {
+            barChart.destroy();
+            barChart = null;
+        }
         return;
+    }
+
+    const labels = entries.map(([label]) => label);
+    const values = entries.map(([, count]) => count);
+    const hasSameData = barChart &&
+        barChart.data.labels.length === labels.length &&
+        labels.every((label, index) => barChart.data.labels[index] === label) &&
+        barChart.data.datasets[0]?.data.length === values.length &&
+        values.every((value, index) => barChart.data.datasets[0].data[index] === value);
+
+    if (hasSameData) {
+        renderCategoryLegend(
+            barLegend,
+            entries,
+            false
+        );
+        return;
+    }
+
+    if (barChart) {
+        barChart.destroy();
+        barChart = null;
     }
 
     barChart = new Chart(
@@ -1461,11 +1528,11 @@ function updateBarChart() {
         {
             type: "bar",
             data: {
-                labels: entries.map(([label]) => label),
+                labels,
                 datasets: [{
                     label: "Kuantiti",
-                    data: entries.map(([, count]) => count),
-                    backgroundColor: chartColors(entries.length),
+                    data: values,
+                    backgroundColor: chartColors(labels),
                     borderWidth: 0
                 }]
             },
@@ -1492,8 +1559,17 @@ function updateBarChart() {
                     x: { grid: { display: false } },
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 },
-                animation: { duration: 250 }
-            }
+                animation: {
+                    duration: 700,
+                    easing: "easeOutCubic"
+                },
+                animations: {
+                    y: {
+                        from: context => context.chart.scales.y.getPixelForValue(0)
+                    }
+                }
+            },
+            plugins: [barHoverLiftPlugin]
         }
     );
 
@@ -1505,11 +1581,6 @@ function updateBarChart() {
 }
 
 function updatePieChart() {
-    if (pieChart) {
-        pieChart.destroy();
-        pieChart = null;
-    }
-
     pieLegend.innerHTML =
         "";
 
@@ -1540,6 +1611,11 @@ function updatePieChart() {
     );
 
     if (!currentRows.length || pieIndex < 0) {
+        if (pieChart) {
+            pieChart.destroy();
+            pieChart = null;
+        }
+
         wrapper.style.display =
             "none";
 
@@ -1564,6 +1640,10 @@ function updatePieChart() {
         );
 
     if (!entries.length) {
+        if (pieChart) {
+            pieChart.destroy();
+            pieChart = null;
+        }
         return;
     }
 
@@ -1574,6 +1654,29 @@ function updatePieChart() {
             0
         );
 
+    const labels = entries.map(([label]) => label);
+    const values = entries.map(([, count]) => count);
+    const hasSameData = pieChart &&
+        pieChart.data.labels.length === labels.length &&
+        labels.every((label, index) => pieChart.data.labels[index] === label) &&
+        pieChart.data.datasets[0]?.data.length === values.length &&
+        values.every((value, index) => pieChart.data.datasets[0].data[index] === value);
+
+    if (hasSameData) {
+        renderCategoryLegend(
+            pieLegend,
+            entries,
+            true
+        );
+        pieTotal.textContent = total.toLocaleString();
+        return;
+    }
+
+    if (pieChart) {
+        pieChart.destroy();
+        pieChart = null;
+    }
+
     pieTotal.textContent =
         total.toLocaleString();
 
@@ -1582,10 +1685,10 @@ function updatePieChart() {
         {
             type: "doughnut",
             data: {
-                labels: entries.map(([label]) => label),
+                labels,
                 datasets: [{
-                    data: entries.map(([, count]) => count),
-                    backgroundColor: chartColors(entries.length),
+                    data: values,
+                    backgroundColor: chartColors(labels),
                     borderWidth: 3,
                     hoverOffset: 12
                 }]
@@ -1594,6 +1697,11 @@ function updatePieChart() {
                 responsive: true,
                 maintainAspectRatio: false,
                 cutout: "64%",
+                animation: {
+                    duration: 650,
+                    animateRotate: true,
+                    animateScale: false
+                },
                 onClick: (event, elements) => {
                     const index = elements[0]?.index;
                     const value = entries[index]?.[0];

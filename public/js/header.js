@@ -98,6 +98,10 @@ function updatePageInfo() {
         title = "Paparan Set Data";
     } else if (path === "/user") {
         title = "Aktiviti Pengguna";
+    } else if (path === "/account") {
+        title = "Akaun Pengguna";
+    } else if (path === "/updates") {
+        title = "Log Perisian";
     } else if (path === "/peserta-program") {
         title = "Peserta Program";
     } else if (path === "/penerima-bantuan") {
@@ -112,7 +116,9 @@ function updatePageInfo() {
     const breadcrumbElement =
         document.getElementById("pageBreadcrumb");
 
-    typeHeaderTitle(titleElement, title.toUpperCase());
+    if (titleElement) {
+        titleElement.textContent = title.toUpperCase();
+    }
 
     if (breadcrumbElement) {
         breadcrumbElement.textContent = breadcrumb;
@@ -121,82 +127,6 @@ function updatePageInfo() {
     document.title = title;
 }
 
-function typeHeaderTitle(element, text) {
-    if (!element || element.textContent === text) {
-        return;
-    }
-
-    const run = Number(element.dataset.typingRun || "0") + 1;
-    element.dataset.typingRun = String(run);
-    element.classList.add("is-typing");
-    element.textContent = "";
-
-    let index = 0;
-    const typeNextCharacter = () => {
-        if (run !== Number(element.dataset.typingRun)) {
-            return;
-        }
-
-        element.textContent = text.slice(0, index + 1);
-        index += 1;
-
-        if (index < text.length) {
-            window.setTimeout(typeNextCharacter, 24);
-        } else {
-            element.classList.remove("is-typing");
-        }
-    };
-
-    typeNextCharacter();
-}
-
-
-function getUserColor(name) {
-    const characters = Array.from(String(name || "").toLowerCase())
-        .filter(character => !/\s/u.test(character));
-    if (!characters.length) return "#808080";
-
-    let hueX = 0;
-    let hueY = 0;
-    let lightnessTotal = 0;
-    for (const character of characters) {
-        let hash = (0x811c9dc5 ^ character.codePointAt(0)) >>> 0;
-        hash = Math.imul(hash, 0x01000193);
-        hash ^= hash >>> 16;
-        hash = Math.imul(hash, 0x85ebca6b);
-        hash ^= hash >>> 13;
-        hash = Math.imul(hash, 0xc2b2ae35);
-        hash ^= hash >>> 16;
-
-        const hue = (hash >>> 0) / 0x100000000 * 2 * Math.PI;
-        const saturation = 70 + ((hash >>> 8) % 31);
-        const lightness = 55 + ((hash >>> 16) % 16);
-        hueX += saturation * Math.cos(hue);
-        hueY += saturation * Math.sin(hue);
-        lightnessTotal += lightness;
-    }
-
-    const saturation = Math.max(0.75, Math.min(0.98,
-        Math.hypot(hueX, hueY) / characters.length / 100));
-    const lightness = lightnessTotal / characters.length / 100;
-    const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
-    const hue = (Math.atan2(hueY, hueX) * 180 / Math.PI + 360) % 360;
-    const hueSection = hue / 60;
-    const secondary = chroma * (1 - Math.abs(hueSection % 2 - 1));
-    let red = 0, green = 0, blue = 0;
-    if (hueSection < 1) [red, green] = [chroma, secondary];
-    else if (hueSection < 2) [red, green] = [secondary, chroma];
-    else if (hueSection < 3) [green, blue] = [chroma, secondary];
-    else if (hueSection < 4) [green, blue] = [secondary, chroma];
-    else if (hueSection < 5) [red, blue] = [secondary, chroma];
-    else [red, blue] = [chroma, secondary];
-
-    const offset = lightness - chroma / 2;
-    return `#${[red, green, blue]
-        .map(channel => Math.round((channel + offset) * 255).toString(16).padStart(2, "0"))
-        .join("")
-        .toUpperCase()}`;
-}
 
 function getUserColorBackground(color) {
     return `#${[1, 3, 5].map(offset => {
@@ -229,6 +159,9 @@ function setupUserDropdown() {
 
     const accountButton =
         document.getElementById("accountButton");
+
+    const updatesButton =
+        document.getElementById("updatesButton");
 
     const logoutButton =
         document.getElementById("logoutButton");
@@ -268,8 +201,24 @@ function setupUserDropdown() {
     if (accountButton) {
         accountButton.addEventListener("click", () => {
             dropdown.classList.remove("open");
+            const accountUrl = typeof window.appUrl === "function" ? window.appUrl("/account") : "/account";
+            if (typeof window.appUrl === "function") {
+                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: accountUrl } }));
+            } else {
+                window.location.assign(accountUrl);
+            }
+        });
+    }
 
-            console.log("Account clicked");
+    if (updatesButton) {
+        updatesButton.addEventListener("click", () => {
+            dropdown.classList.remove("open");
+            const updatesUrl = typeof window.appUrl === "function" ? window.appUrl("/updates") : "/updates";
+            if (typeof window.appUrl === "function") {
+                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: updatesUrl } }));
+            } else {
+                window.location.assign(updatesUrl);
+            }
         });
     }
 
@@ -357,7 +306,7 @@ async function loadCurrentUser() {
         }
 
         if (userIcon) {
-            const color = getUserColor(displayName);
+            const color = window.getTextAverageColor(displayName);
             userIcon.style.backgroundColor = getUserColorBackground(color);
             userIcon.style.color = getUserColorText(color);
         }
