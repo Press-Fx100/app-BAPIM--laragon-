@@ -4,7 +4,11 @@ window.getTextAverageColor = function getTextAverageColor(value) {
     if (!letters.length) return "#808080";
 
     const letterColors = letters.map(character => {
-        const hue = (character.charCodeAt(0) - 65) / 26 * 6;
+        const alphabetIndex = character.charCodeAt(0) - 65;
+        const colorIndex = alphabetIndex <= 12
+            ? alphabetIndex * 2
+            : (25 - alphabetIndex) * 2 + 1;
+        const hue = colorIndex / 26 * 6;
         const sector = Math.floor(hue);
         const fraction = hue - sector;
         const descending = Math.round(255 * (1 - fraction));
