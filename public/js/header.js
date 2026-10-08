@@ -234,7 +234,7 @@ function updatePageInfo() {
         document.getElementById("pageBreadcrumb");
 
     if (titleElement) {
-        titleElement.textContent = title.toUpperCase();
+        typeHeaderTitle(titleElement, title.toUpperCase());
     }
 
     if (breadcrumbElement) {
@@ -242,6 +242,35 @@ function updatePageInfo() {
     }
 
     document.title = title;
+}
+
+function typeHeaderTitle(element, text) {
+    if (!element || element.textContent === text) {
+        return;
+    }
+
+    const run = Number(element.dataset.typingRun || "0") + 1;
+    element.dataset.typingRun = String(run);
+    element.classList.add("is-typing");
+    element.textContent = "";
+
+    let index = 0;
+    const typeNextCharacter = () => {
+        if (run !== Number(element.dataset.typingRun)) {
+            return;
+        }
+
+        element.textContent = text.slice(0, index + 1);
+        index += 1;
+
+        if (index < text.length) {
+            window.setTimeout(typeNextCharacter, 24);
+        } else {
+            element.classList.remove("is-typing");
+        }
+    };
+
+    typeNextCharacter();
 }
 
 

@@ -6,12 +6,19 @@ function initializeAccountSettings() {
     form.dataset.initialized = "true";
 
     const usernameInput = document.getElementById("accountUsername");
+    const formAvatar = document.getElementById("accountSettingsAvatar");
     const displayNameInput = document.getElementById("accountDisplayName");
     const currentPasswordInput = document.getElementById("accountCurrentPassword");
     const newPasswordInput = document.getElementById("accountNewPassword");
     const confirmPasswordInput = document.getElementById("accountConfirmPassword");
     const saveButton = document.getElementById("accountSaveButton");
     const message = document.getElementById("accountSettingsMessage");
+
+    function updateFormAvatar(username) {
+        const color = window.getInverseTextAverageColor(username || "");
+        formAvatar.style.backgroundColor = window.getUserColorBackground(color);
+        formAvatar.style.color = window.getUserColorText(color);
+    }
 
     function showMessage(text, type) {
         message.textContent = text;
@@ -26,6 +33,7 @@ function initializeAccountSettings() {
             throw new Error(data.error || "Tidak dapat memuatkan maklumat akaun.");
         }
         usernameInput.value = data.username;
+        updateFormAvatar(data.username);
         displayNameInput.value = data.displayName.toLocaleUpperCase();
         saveButton.disabled = false;
     }

@@ -1,5 +1,13 @@
 const releaseNotes = [
     {
+        date: "2026-10-08",
+        items: [
+            "Tetapan Akaun Pengguna kini menggunakan susun atur yang sepadan dengan Pengurusan Pengguna.",
+            "Akses Papan Pemuka sentiasa dikekalkan, dan Admin boleh mengemas kini akaun sendiri tanpa mengurus akaun Admin lain.",
+            "Warna pengguna dan carta diperhalus, legenda carta bar dijajarkan ke kiri, dan animasi tajuk halaman dipulihkan."
+        ]
+    },
+    {
         date: "2026-10-06",
         items: [
             "Halaman Akaun Pengguna membolehkan nama paparan dan kata laluan dikemas kini.",
