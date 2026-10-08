@@ -4,7 +4,7 @@ const releaseNotes = [
         items: [
             "Tetapan Akaun Pengguna kini menggunakan susun atur yang sepadan dengan Pengurusan Pengguna.",
             "Akses Papan Pemuka sentiasa dikekalkan, dan Admin boleh mengemas kini akaun sendiri tanpa mengurus akaun Admin lain.",
-            "Warna pengguna dan carta diperhalus, legenda carta bar dijajarkan ke kiri, dan animasi tajuk halaman dipulihkan."
+            "Warna pengguna dan carta diperhalus, legenda carta bar dijajarkan dalam baris dan lajur, dan animasi tajuk halaman dipulihkan."
         ]
     },
     {
