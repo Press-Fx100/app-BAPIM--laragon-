@@ -14,6 +14,8 @@
     let filters = {}, widths = [45].concat(columns.map(() => 160));
     let deleteMode = false, active = null, anchor = null;
     let pendingChanges = new Map(), pendingDeleteRow = null;
+    let savingChanges = false;
+    let saveBadgeTimer = null;
     let dragging = false, shiftSelecting = false, editing = false, currentEdit = null, undoStack = [], redoStack = [], initializedBody = null, documentEventsBound = false;
     let addSuggestions = null, addSuggestionInputId = null, addSuggestionKey = null;
     let addSuggestionMatches = [], addSuggestionActiveIndex = -1, addSuggestionPositionHandler = null;
@@ -23,6 +25,24 @@
         { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
     ));
     const value = (row, key) => String(row[key] == null ? "" : row[key]);
+    function showSaveConfirmation() {
+        const topbar = document.querySelector(".topbar");
+        if (!topbar) return;
+        let badge = document.querySelector(".save-success-badge");
+        if (!badge) {
+            badge = document.createElement("div");
+            badge.className = "save-success-badge";
+            badge.setAttribute("role", "status");
+            badge.setAttribute("aria-live", "polite");
+            badge.textContent = "Disimpan";
+            document.body.appendChild(badge);
+        }
+        badge.style.top = `${topbar.getBoundingClientRect().bottom}px`;
+        clearTimeout(saveBadgeTimer);
+        badge.classList.remove("is-visible");
+        requestAnimationFrame(() => badge.classList.add("is-visible"));
+        saveBadgeTimer = setTimeout(() => badge.classList.remove("is-visible"), 1800);
+    }
     function cellSuggestions(key, currentValue = "") {
         const options = new Set(
             data.map(row => value(row, key).trim()).filter(Boolean)
@@ -190,7 +210,10 @@
                 filters[key] = filter;
             }
         });
-        window.hasUnsavedTableChanges = () => pendingChanges.size > 0;
+        window.hasUnsavedTableChanges = () =>
+            pendingChanges.size > 0 ||
+            Boolean(currentEdit && currentEdit.cell.querySelector(".inline-edit-input")?.value !== currentEdit.oldValue);
+        window.isSavingTableChanges = () => savingChanges;
         window.resetTableState = () => {
             pendingChanges.clear();
             active = null;
@@ -379,6 +402,8 @@
             save.disabled = !hasChanges;
             save.title = hasChanges ? "Simpan perubahan" : "Disimpan";
             save.setAttribute("aria-label", save.title);
+            save.innerHTML = '<i class="bi bi-floppy"></i>';
+            save.classList.remove("is-saving");
             save.classList.toggle("has-changes", hasChanges);
             save.classList.toggle("saved", !hasChanges);
         }
@@ -466,7 +491,7 @@
     function addResize(th, index) {
         const handle = document.createElement("span"); handle.className = "column-resize-handle";
         handle.addEventListener("mousedown", event => {
-            event.preventDefault(); event.stopPropagation(); const x = event.clientX, width = widths[index];
+            event.preventDefault(); event.stopPropagation(); const x = event.clientX, width = th.getBoundingClientRect().width;
             const move = e => { widths[index] = Math.max(70, width + e.clientX - x); document.querySelectorAll(`[data-resize-column="${index}"]`).forEach(n => applyWidth(n, index)); };
             const stop = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", stop); };
             document.addEventListener("mousemove", move); document.addEventListener("mouseup", stop);
@@ -480,7 +505,7 @@
             return;
         }
         const width = widths[index] || 160;
-        element.style.width = "auto";
+        element.style.width = `${width}px`;
         element.style.minWidth = `${width}px`;
         element.style.maxWidth = "none";
     }
@@ -623,9 +648,12 @@
         const input = document.createElement("input");
         input.className = "inline-edit-input";
         let suggestionPopup = null;
+        const tableWrapper = $("recipientTableWrapper");
+        const hideSuggestionsOnTableScroll = () => {
+            if (suggestionPopup) suggestionPopup.style.display = "none";
+        };
         let matchingSuggestions = [];
         let activeSuggestionIndex = -1;
-        let hasTypedQuery = false;
         input.value = initial === undefined ? old : initial;
         cell.textContent = "";
         cell.appendChild(input);
@@ -640,6 +668,7 @@
             suggestionPopup.style.lineHeight = cellStyle.lineHeight;
             suggestionPopup.style.letterSpacing = cellStyle.letterSpacing;
             document.body.appendChild(suggestionPopup);
+            tableWrapper?.addEventListener("scroll", hideSuggestionsOnTableScroll, { passive: true });
         }
         input.focus();
         if (initial === undefined && input instanceof HTMLInputElement) {
@@ -651,6 +680,7 @@
             if (finished) return;
             finished = true;
             if (currentEdit?.cell === cell) currentEdit = null;
+            tableWrapper?.removeEventListener("scroll", hideSuggestionsOnTableScroll);
             suggestionPopup?.remove();
             const next = input.value;
             const was = old;
@@ -677,7 +707,7 @@
             if (!suggestionPopup) return;
             const query = input.value.trim().toLocaleLowerCase();
             matchingSuggestions = [
-                ...(hasTypedQuery ? [] : [""]),
+                ...(query ? [] : [""]),
                 ...cellSuggestions(key, old).filter(option =>
                     option.toLocaleLowerCase().includes(query)
                 )
@@ -723,11 +753,16 @@
         if (hasSuggestions) {
             updateSuggestions();
             input.addEventListener("input", () => {
-                hasTypedQuery = true;
                 updateSuggestions();
             });
         }
         const handleEditKey = e => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+                e.preventDefault();
+                e.stopPropagation();
+                finish(true).then(saveChanges);
+                return;
+            }
             e.stopPropagation();
             if (e.key === "Escape") {
                 e.preventDefault(); e.stopPropagation();
@@ -854,6 +889,16 @@
     function updateHistory() { /* Undo/redo are intentionally keyboard-only. */ }
     function keyboard(event) {
         if (!$("recipientTableBody")) return;
+        const mod = event.ctrlKey || event.metaKey;
+        if (mod && event.key.toLowerCase() === "s") {
+            event.preventDefault();
+            if (editing && currentEdit) {
+                currentEdit.finish(true).then(saveChanges);
+            } else {
+                saveChanges();
+            }
+            return;
+        }
         if (event.key === "Escape" && $("recipientAddForm")?.classList.contains("show")) {
             event.preventDefault();
             closeAdd();
@@ -864,7 +909,7 @@
             currentEdit.finish(false);
             return;
         }
-        if (editing) return; const mod = event.ctrlKey || event.metaKey;
+        if (editing) return;
         if (event.key === "Escape" && deleteMode) {
             deleteMode = false;
             deleteActionStyles(false);
@@ -969,17 +1014,30 @@
     }
     async function saveChanges() {
         const save = $("recipientSaveButton");
+        const savedChangeCount = pendingChanges.size;
+        if (!savedChangeCount) return;
+        savingChanges = true;
         if (save) {
             save.disabled = true;
             save.title = "Menyimpan...";
             save.setAttribute("aria-label", save.title);
+            save.classList.add("is-saving");
+            save.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         }
         try {
             for (const { row, key, next } of pendingChanges.values()) {
                 await api("PUT", { record: { datasetId: row.datasetId, rowIndex: row.rowIndex }, changes: { [key]: next } });
             }
-            pendingChanges.clear(); render();
-        } catch (e) { error(e); render(); }
+            pendingChanges.clear();
+            render();
+            showSaveConfirmation();
+        } catch (e) {
+            render();
+            error(e);
+        } finally {
+            savingChanges = false;
+            render();
+        }
     }
     function paginate(name) {
         const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -1009,10 +1067,5 @@
         closeAdd();
         const addForm = $("recipientAddForm");
         if (addForm?.parentElement === document.body) addForm.remove();
-    });
-    window.addEventListener("beforeunload", event => {
-        if (!pendingChanges.size) return;
-        event.preventDefault();
-        event.returnValue = "";
     });
 })();

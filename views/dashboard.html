@@ -9,7 +9,7 @@
     <link rel="icon" href="/app.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/bootstrap-icons.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/css/style.css?v=20261006-9">
+    <link rel="stylesheet" href="/css/style.css?v=20261008-1">
     <style>
         #page-content {
             opacity: 0;
@@ -47,8 +47,8 @@
                     <div class="content-card mb-4 dashboard-filter-card">
                         <div class="card-header-custom">
                             <div>
-                                <h5>Penerima Bantuan</h5>
-                                <span>Data gabungan semua penerima bantuan</span>
+                                <h5 id="dashboardDataTitle">Penerima Bantuan</h5>
+                                <span id="dashboardDataDescription">Data gabungan semua penerima bantuan</span>
                             </div>
 
                             <div class="dashboard-controls">
@@ -72,10 +72,11 @@
                         </div>
 
                         <div class="col-xl-4 col-md-6">
-                            <div class="stat-card">
+                            <div class="stat-card" data-dashboard-mode="recipients" role="button" tabindex="0"
+                                aria-pressed="true" aria-label="Paparkan papan pemuka penerima bantuan">
                                 <div class="stat-card-header">
                                     <div>
-                                        <div class="stat-label">JUMLAH PENERIMA BANTUAN</div>
+                                        <div class="stat-label">PENERIMA BANTUAN</div>
                                         <div id="totalRecipients" class="stat-number">—</div>
                                     </div>
 
@@ -83,13 +84,15 @@
                                 </div>
 
                                 <div class="stat-footer">
-                                    <span>Pemohon Dihubungi: <strong id="contactedRecipients">—</strong></span>
+                                    <span>Dihubungi: <strong id="contactedRecipients">—</strong></span>
+                                    <span>Belum dihubungi: <strong id="uncontactedRecipients">—</strong></span>
                                 </div>
                             </div>
                         </div>
 
                         <div class="col-xl-4 col-md-6">
-                            <div class="stat-card">
+                            <div class="stat-card" data-dashboard-mode="participants" role="button" tabindex="0"
+                                aria-pressed="false" aria-label="Paparkan papan pemuka peserta program">
                                 <div class="stat-card-header">
                                     <div>
                                         <div class="stat-label">JUMLAH PESERTA PROGRAM</div>
@@ -107,7 +110,8 @@
                         </div>
 
                         <div class="col-xl-4 col-md-6">
-                            <div class="stat-card">
+                            <div class="stat-card" data-dashboard-mode="unchanged" role="button" tabindex="0"
+                                aria-label="Tarikh dan waktu semasa">
                                 <div class="stat-card-header">
                                     <div>
                                         <div class="stat-label">TARIKH DAN WAKTU</div>
@@ -131,15 +135,15 @@
                     <div id="recipientNoData" class="content-card empty-datasets mb-4" style="display:none;">
                         <div class="empty-datasets-icon"><i class="bi bi-database-exclamation" aria-hidden="true"></i>
                         </div>
-                        <h5>Tiada data dalam sistem</h5>
-                        <p>Tiada data Penerima Bantuan untuk dipaparkan.</p>
+                        <h5 id="dashboardNoDataTitle">Tiada data dalam sistem</h5>
+                        <p id="dashboardNoDataMessage">Tiada data Penerima Bantuan untuk dipaparkan.</p>
                     </div>
 
                     <div id="datasetAnalysisSection" class="content-card mb-4">
 
                         <div class="card-header-custom">
                             <div>
-                                <h5>Analisis Penerima Bantuan</h5>
+                                <h5 id="datasetAnalysisTitle">Analisis Penerima Bantuan</h5>
                                 <span id="analysisDescription">
                                     Analisis kualiti data penerima bantuan
                                 </span>
@@ -205,10 +209,10 @@
                                 <div class="card-header-custom">
 
                                     <div>
-                                        <h5>Carta Pai Status</h5>
+                                        <h5 id="pieChartTitle">Taburan Status Penerima Bantuan</h5>
 
-                                        <span>
-                                            Kumpulkan penerima mengikut status dan tunjukkan peratusan
+                                        <span id="pieChartDescription">
+                                            Peratus dan jumlah penerima bagi setiap status.
                                         </span>
 
                                     </div>
@@ -225,7 +229,7 @@
 
                                     <div class="pie-center">
                                         <div id="pieTotal" class="pie-center-number">0</div>
-                                        <div class="pie-center-label">Penerima Bantuan</div>
+                                        <div id="pieCenterLabel" class="pie-center-label">Penerima Bantuan</div>
                                     </div>
 
                                 </div>
@@ -243,10 +247,10 @@
                                 <div class="card-header-custom">
 
                                     <div>
-                                        <h5>Carta Bar Status</h5>
+                                        <h5 id="barChartTitle">Bilangan Penerima Mengikut Status</h5>
 
-                                        <span>
-                                            Kumpulkan penerima mengikut status dan tunjukkan kuantiti
+                                        <span id="barChartDescription">
+                                            Jumlah penerima bantuan dalam setiap kategori status.
                                         </span>
 
                                     </div>
@@ -273,21 +277,21 @@
 
                         <div class="card-header-custom">
                             <div>
-                                <h5>Rekod Penerima Bantuan</h5>
-                                <span>Lihat, cari dan susun rekod penerima bantuan</span>
+                                <h5 id="dashboardRecordsTitle">Rekod Penerima Bantuan</h5>
+                                <span id="dashboardRecordsDescription">Lihat, cari dan susun rekod penerima bantuan</span>
                             </div>
                         </div>
 
                         <div id="recordsLoading" class="dashboard-loading-state dashboard-records-loading"
                             role="status" aria-live="polite">
                             <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-                            Memuatkan rekod penerima bantuan...
+                            Memuatkan rekod...
                         </div>
 
                         <div class="data-toolbar">
 
                             <input type="search" id="tableSearch" class="form-control data-search"
-                                placeholder="Cari set data...">
+                                placeholder="Cari rekod...">
 
                             <select id="pageSize" class="form-select form-select-sm" style="width:150px;">
                                 <option value="50">50 setiap halaman</option>
@@ -330,19 +334,20 @@
     <script src="/js/bootstrap/bootstrap.bundle.min.js"></script>
     <script src="/js/chart.umd.min.js"></script>
     <script src="/js/xlsx.js"></script>
-    <script src="/js/dataset.js?v=20261005-8"></script>
+    <script src="/js/dataset.js?v=20261007-19"></script>
     <script src="/js/upload.js?v=20260930-2"></script>
     <script src="/js/upload-page.js"></script>
-    <script src="/js/peserta-program.js?v=20261005-12"></script>
-    <script src="/js/penerima-bantuan.js?v=20261005-13"></script>
-    <script src="/js/color-utils.js?v=20261006-1"></script>
-    <script src="/js/user.js?v=20261006-4"></script>
+    <script src="/js/peserta-program.js?v=20261007-20"></script>
+    <script src="/js/penerima-bantuan.js?v=20261007-24"></script>
+    <script src="/js/color-utils.js?v=20261007-1"></script>
+    <script src="/js/user.js?v=20261007-1"></script>
     <script src="/js/account.js?v=20261006-2"></script>
+    <script src="/js/manage-users.js?v=20261007-3"></script>
     <script src="/js/updates.js?v=20261006-2"></script>
-    <script src="/js/dashboard.js?v=20261006-11"></script>
-    <script src="/js/header.js?v=20261006-5"></script>
+    <script src="/js/dashboard.js?v=20261008-8"></script>
+    <script src="/js/header.js?v=20261007-3"></script>
     <script src="/js/layout.js?v=20260929-2"></script>
-    <script src="/js/app.js?v=20261006-7"></script>
+    <script src="/js/app.js?v=20261007-4"></script>
 
 </body>
 

@@ -371,8 +371,14 @@ async function confirmDelete() {
     confirmDeleteButton.textContent = "Memadam...";
 
     try {
+        const currentPath = typeof window.appPathname === "function"
+            ? window.appPathname(window.location.pathname)
+            : window.location.pathname;
+        const deleteEndpoint = currentPath === "/upload"
+            ? `/api/upload/datasets/${encodeURIComponent(id)}`
+            : `/api/datasets/${encodeURIComponent(id)}`;
         const response = await fetch(
-            `/api/datasets/${encodeURIComponent(id)}`,
+            deleteEndpoint,
             {
                 method: "DELETE"
             }
@@ -467,6 +473,8 @@ let dataset = null;
 let headers = [];
 let rows = [];
 let originalRows = [];
+let sourceHeaders = [];
+let sourceRows = [];
 let filteredRows = [];
 let visibleColumns = [];
 let columnWidths = [];
@@ -474,11 +482,15 @@ let currentPage = 1;
 const pageSize = 100;
 
 let hasUnsavedChanges = false;
+let schemaNeedsSave = false;
+let savingChanges = false;
+let saveBadgeTimer = null;
 let selectedRows = new Set();
 let selectedCell = null;
 let selectionAnchor = null;
 let selectionRange = null;
 let editingCell = null;
+let cellSuggestionState = null;
 
 let undoStack = [];
 let redoStack = [];
@@ -512,11 +524,14 @@ function getDatasetId() {
 }
 
 function findColumnIndex(column) {
-    const value = String(column ?? "").trim().toLowerCase();
+    const value = normalizeDatasetHeader(column);
+    const employmentAliases = ["statuspekerjaan", "pekerjaan"];
 
-    return headers.findIndex(header =>
-        String(header ?? "").trim().toLowerCase() === value
-    );
+    return headers.findIndex(header => {
+        const candidate = normalizeDatasetHeader(header);
+        return candidate === value ||
+            (employmentAliases.includes(candidate) && employmentAliases.includes(value));
+    });
 }
 
 function normalizeRows(data) {
@@ -538,12 +553,55 @@ function normalizeDatasetHeader(value) {
         .replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeDatasetHeaders() {
+    if (getDatasetType(dataset || {}) === "peserta") {
+        const categoryIndex = headers.findIndex(header =>
+            ["kategori", "ketegori"].includes(normalizeDatasetHeader(header))
+        );
+        if (categoryIndex === -1) return false;
+        const changed = headers[categoryIndex] !== "KATEGORI";
+        headers[categoryIndex] = "KATEGORI";
+        return changed;
+    }
+
+    let employmentIndex = headers.findIndex(header =>
+        ["statuspekerjaan", "pekerjaan"].includes(normalizeDatasetHeader(header))
+    );
+    const statusIndex = headers.findIndex(header =>
+        normalizeDatasetHeader(header) === "status"
+    );
+
+    if (employmentIndex === -1) return false;
+
+    let changed = headers[employmentIndex] !== "PEKERJAAN";
+    headers[employmentIndex] = "PEKERJAAN";
+
+    const targetEmploymentIndex = statusIndex === -1
+        ? employmentIndex
+        : employmentIndex > statusIndex
+            ? statusIndex
+            : statusIndex - 1;
+
+    if (employmentIndex !== targetEmploymentIndex) {
+        const [employmentHeader] = headers.splice(employmentIndex, 1);
+        headers.splice(targetEmploymentIndex, 0, employmentHeader);
+        rows.forEach(row => {
+            const [employmentValue] = row.splice(employmentIndex, 1);
+            row.splice(targetEmploymentIndex, 0, employmentValue);
+        });
+
+        changed = true;
+    }
+
+    return changed;
+}
+
 function addRecordFieldsForDataset() {
     if (getDatasetType(dataset || {}) === "peserta") {
         return [
             { id: "addNama", label: "Nama", headers: ["nama"] },
             { id: "addKP", label: "KP", headers: ["kp", "kadpengenalan"] },
-            { id: "addCategory", label: "Ketegori", headers: ["kategori", "ketegori"] },
+            { id: "addCategory", label: "Kategori", headers: ["kategori", "ketegori"] },
             { id: "addProgram", label: "Program", headers: ["program"], full: true }
         ];
     }
@@ -554,7 +612,7 @@ function addRecordFieldsForDataset() {
         { id: "addTelefon", label: "Telefon", headers: ["telefon"] },
         { id: "addEmail", label: "Email", headers: ["email"] },
         { id: "addStatus", label: "Status", headers: ["status"], status: true },
-        { id: "addStatusPekerjaan", label: "Status Pekerjaan", headers: ["statuspekerjaan"] },
+        { id: "addStatusPekerjaan", label: "Pekerjaan", headers: ["statuspekerjaan", "pekerjaan"] },
         { id: "addPIC", label: "PIC", headers: ["pic"] },
         { id: "addCatatan", label: "Catatan", headers: ["catatan"], textarea: true, full: true }
     ];
@@ -658,9 +716,79 @@ function createOriginalSnapshot() {
 
 function checkForChanges() {
     hasUnsavedChanges =
+        schemaNeedsSave ||
         createDataSnapshot() !== createOriginalSnapshot();
 
     updateSaveButton();
+}
+
+function showDatasetSaveConfirmation() {
+    const topbar = document.querySelector(".topbar");
+    if (!topbar) return;
+
+    let badge = document.querySelector(".save-success-badge");
+    if (!badge) {
+        badge = document.createElement("div");
+        badge.className = "save-success-badge";
+        badge.setAttribute("role", "status");
+        badge.setAttribute("aria-live", "polite");
+        badge.textContent = "Disimpan";
+        document.body.appendChild(badge);
+    }
+
+    badge.style.top = `${topbar.getBoundingClientRect().bottom}px`;
+    clearTimeout(saveBadgeTimer);
+    badge.classList.remove("is-visible");
+    requestAnimationFrame(() => badge.classList.add("is-visible"));
+    saveBadgeTimer = setTimeout(() => badge.classList.remove("is-visible"), 1800);
+}
+
+function discardDatasetTableChanges() {
+    closeDatasetCellSuggestions();
+    editingCell = null;
+
+    if (schemaNeedsSave) {
+        headers = [...sourceHeaders];
+        rows = sourceRows.map(row => [...row]);
+        originalRows = rows.map(row => [...row]);
+        schemaNeedsSave = false;
+        visibleColumns = headers.map(
+            header => String(header).trim().toLowerCase() !== "pic"
+        );
+        columnWidths = headers.map(() => 160);
+        const columnCount = document.getElementById("columnCount");
+        if (columnCount) {
+            columnCount.textContent = headers.length.toLocaleString();
+        }
+        initializeAddRecordForm();
+        createColumnChecklist();
+        createFilterOptions();
+    } else {
+        rows = originalRows.map(row => [...row]);
+    }
+
+    newRows.clear();
+    selectedRows.clear();
+    selectedCell = null;
+    selectionAnchor = null;
+    selectionRange = null;
+    undoStack = [];
+    redoStack = [];
+    hasUnsavedChanges = false;
+
+    applyFilters();
+    renderTable();
+    updateSaveButton();
+}
+
+function registerDatasetTableNavigationGuard() {
+    window.hasUnsavedTableChanges = () => {
+        finishEditingCell();
+        checkForChanges();
+        return hasUnsavedChanges;
+    };
+    window.isSavingTableChanges = () => savingChanges;
+    window.resetTableState = discardDatasetTableChanges;
 }
 
 async function loadDataset() {
@@ -709,11 +837,13 @@ function initializeDataset() {
     const parsed = parseCSV(dataset.csv || "");
 
     headers = parsed.length ? [...parsed[0]] : [];
-    rows = parsed.length
+    sourceHeaders = [...headers];
+    sourceRows = parsed.length
         ? parsed.slice(1).map(row => [...row])
         : [];
-
-    rows = normalizeRows(rows);
+    sourceRows = normalizeRows(sourceRows);
+    rows = sourceRows.map(row => [...row]);
+    schemaNeedsSave = normalizeDatasetHeaders();
     originalRows = rows.map(row => [...row]);
     filteredRows = [...rows];
     initializeAddRecordForm();
@@ -728,6 +858,7 @@ function initializeDataset() {
     selectedCell = null;
     selectionAnchor = null;
     selectionRange = null;
+    closeDatasetCellSuggestions();
     editingCell = null;
 
     undoStack = [];
@@ -739,7 +870,7 @@ function initializeDataset() {
     datasetColumnFilters = {};
     currentPage = 1;
     deleteMode = false;
-    hasUnsavedChanges = false;
+    hasUnsavedChanges = schemaNeedsSave;
 
     updateDatasetHeader();
 
@@ -1123,6 +1254,11 @@ function renderTable() {
 
     if (!tableHead || !tableBody || !emptyTable) return;
 
+    const table = document.getElementById("datasetTable");
+    table.style.width = "100%";
+    table.style.minWidth = "100%";
+    table.style.tableLayout = "fixed";
+
     tableHead.innerHTML = "";
     tableBody.innerHTML = "";
     emptyTable.style.display = "none";
@@ -1158,7 +1294,18 @@ function renderTable() {
             );
         }
 
+        th.classList.add("sortable");
+        th.setAttribute(
+            "aria-sort",
+            currentSortColumn === columnIndex
+                ? currentSortDirection
+                : "none"
+        );
+
+        const content = document.createElement("span");
+        content.className = "header-content";
         const title = document.createElement("span");
+        title.className = "header-label";
         title.textContent =
             header || `Lajur ${columnIndex + 1}`;
 
@@ -1169,9 +1316,10 @@ function renderTable() {
                 ? currentSortDirection === "asc"
                     ? "▲"
                     : "▼"
-                : "△";
+                : "";
 
-        th.append(title, sortIcon);
+        content.append(title, sortIcon);
+        th.appendChild(content);
 
         const resizeHandle = document.createElement("span");
         resizeHandle.className = "column-resize-handle";
@@ -1276,6 +1424,7 @@ function renderTable() {
             const td = document.createElement("td");
 
             td.className = "excel-cell";
+            td.tabIndex = 0;
 
             td.textContent = row[columnIndex] ?? "";
             td.title = row[columnIndex] ?? "";
@@ -1331,6 +1480,7 @@ function renderTable() {
 
     updatePaginationInfo();
     updateCellSelection();
+    updateSelectionInfo();
     updateDeleteButton();
 }
 
@@ -1414,6 +1564,8 @@ function handleCellMouseDown(event, td) {
     }
 
     updateCellSelection();
+    updateSelectionInfo();
+    td.focus();
 }
 
 function extendSelectionTo(rowIndex, columnIndex) {
@@ -1533,6 +1685,16 @@ function updateCellSelection() {
         });
 }
 
+function updateSelectionInfo() {
+    const info = document.getElementById("selectionInfo");
+    if (!info) return;
+
+    const selected = [...document.querySelectorAll("#tableBody td.excel-cell.selected-cell")];
+    const rowCount = new Set(selected.map(cell => cell.dataset.rowIndex)).size;
+    const columnCount = new Set(selected.map(cell => cell.dataset.columnIndex)).size;
+    info.textContent = `${rowCount} baris, ${columnCount} lajur, ${selected.length} sel dipilih`;
+}
+
 function getCellElement(rowIndex, columnIndex) {
     return document.querySelector(
         `td.excel-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
@@ -1592,12 +1754,110 @@ function startCellEditing(td, replaceValue = false) {
 
     selection.removeAllRanges();
     selection.addRange(range);
+    openDatasetCellSuggestions(td);
+}
+
+function openDatasetCellSuggestions(td) {
+    if (
+        !(
+            getDatasetType(dataset || {}) === "peserta" &&
+            normalizeDatasetHeader(headers[Number(td.dataset.columnIndex)]) === "kategori"
+        ) &&
+        !(
+            getDatasetType(dataset || {}) === "penerima" &&
+            ["pekerjaan", "statuspekerjaan", "status", "catatan"].includes(
+            normalizeDatasetHeader(headers[Number(td.dataset.columnIndex)])
+            )
+        )
+    ) return;
+
+    const popup = document.createElement("div");
+    popup.className = "recipient-cell-suggestions";
+    popup.setAttribute("role", "listbox");
+    const cellStyle = window.getComputedStyle(td);
+    popup.style.fontFamily = cellStyle.fontFamily;
+    popup.style.fontSize = cellStyle.fontSize;
+    popup.style.fontWeight = cellStyle.fontWeight;
+    popup.style.lineHeight = cellStyle.lineHeight;
+    popup.style.letterSpacing = cellStyle.letterSpacing;
+    document.body.appendChild(popup);
+
+    const tableWrapper = document.getElementById("tableWrapper");
+    const hideOnScroll = () => {
+        popup.style.display = "none";
+    };
+    tableWrapper?.addEventListener("scroll", hideOnScroll, { passive: true });
+    cellSuggestionState = {
+        td,
+        popup,
+        options: [],
+        activeIndex: -1,
+        hideOnScroll,
+        tableWrapper
+    };
+    td.addEventListener("input", updateDatasetCellSuggestions);
+    updateDatasetCellSuggestions();
+}
+
+function updateDatasetCellSuggestions() {
+    const state = cellSuggestionState;
+    if (!state || !state.td.isConnected) return;
+
+    const columnIndex = Number(state.td.dataset.columnIndex);
+    const currentValue = state.td.textContent.trim();
+    const query = currentValue.toLocaleLowerCase();
+    const values = new Set(
+        rows.map(row => String(row[columnIndex] ?? "").trim()).filter(Boolean)
+    );
+    if (currentValue) values.add(currentValue);
+
+    state.options = [
+        ...(query ? [] : [""]),
+        ...[...values]
+            .filter(value => value.toLocaleLowerCase().includes(query))
+            .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }))
+    ];
+    state.activeIndex = state.options.findIndex(value =>
+        value.toLocaleLowerCase() === currentValue.toLocaleLowerCase()
+    );
+    state.popup.replaceChildren();
+    state.options.forEach((value, index) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "recipient-cell-suggestion";
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", String(index === state.activeIndex));
+        if (index === state.activeIndex) option.classList.add("active");
+        option.textContent = value;
+        option.addEventListener("mousedown", event => event.preventDefault());
+        option.addEventListener("click", () => {
+            state.td.textContent = value;
+            finishEditingCell();
+        });
+        state.popup.appendChild(option);
+    });
+
+    const rect = state.td.getBoundingClientRect();
+    state.popup.style.display = state.options.length ? "block" : "none";
+    state.popup.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - rect.width))}px`;
+    state.popup.style.top = `${rect.bottom}px`;
+    state.popup.style.width = `${rect.width}px`;
+}
+
+function closeDatasetCellSuggestions() {
+    if (!cellSuggestionState) return;
+    const { td, popup, tableWrapper, hideOnScroll } = cellSuggestionState;
+    td.removeEventListener("input", updateDatasetCellSuggestions);
+    tableWrapper?.removeEventListener("scroll", hideOnScroll);
+    popup.remove();
+    cellSuggestionState = null;
 }
 
 function finishEditingCell() {
     if (!editingCell) return;
 
     const td = editingCell;
+    closeDatasetCellSuggestions();
 
     const rowIndex = Number(td.dataset.rowIndex);
     const columnIndex = Number(td.dataset.columnIndex);
@@ -1663,6 +1923,40 @@ function exportDatasetToExcel() {
 function handleCellKeydown(event, td) {
     if (!td.classList.contains("editing-cell")) return;
 
+    if (cellSuggestionState?.td === td) {
+        const state = cellSuggestionState;
+        if (["ArrowDown", "ArrowUp"].includes(event.key) && state.options.length) {
+            event.preventDefault();
+            event.stopPropagation();
+            const direction = event.key === "ArrowDown" ? 1 : -1;
+            state.activeIndex = state.activeIndex < 0
+                ? (direction > 0 ? 0 : state.options.length - 1)
+                : (state.activeIndex + direction + state.options.length) % state.options.length;
+            state.popup.querySelectorAll(".recipient-cell-suggestion").forEach((option, index) => {
+                const active = index === state.activeIndex;
+                option.classList.toggle("active", active);
+                option.setAttribute("aria-selected", String(active));
+                if (active) option.scrollIntoView({ block: "nearest" });
+            });
+            return;
+        }
+        if (event.key === "Enter" && state.activeIndex >= 0) {
+            event.preventDefault();
+            event.stopPropagation();
+            td.textContent = state.options[state.activeIndex];
+            finishEditingCell();
+            return;
+        }
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        event.stopPropagation();
+        finishEditingCell();
+        saveDataset();
+        return;
+    }
+
     const rowIndex = Number(td.dataset.rowIndex);
     const columnIndex = Number(td.dataset.columnIndex);
 
@@ -1681,6 +1975,7 @@ function handleCellKeydown(event, td) {
         td.contentEditable = "false";
         td.classList.remove("editing-cell");
 
+        closeDatasetCellSuggestions();
         editingCell = null;
 
         updateCellSelection();
@@ -1876,6 +2171,7 @@ function beginTypingEdit(character) {
     startCellEditing(td, true);
 
     td.textContent = character;
+    updateDatasetCellSuggestions();
 
     const selection = window.getSelection();
     const range = document.createRange();
@@ -2480,64 +2776,25 @@ function buildClipboardText() {
     return output.join("\r\n");
 }
 
-async function copySelectedCells(event) {
-    if (!selectedCell || deleteMode) return;
-
-    finishEditingCell();
-
-    const text = buildClipboardText();
-
-    if (!text) return;
-
-    event.preventDefault();
-
-    try {
-        await navigator.clipboard.writeText(text);
-    } catch {
-        copyUsingFallback(text);
-    }
-}
-
-function copyUsingFallback(text) {
-    const textarea = document.createElement("textarea");
-
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    textarea.style.top = "0";
-
-    document.body.appendChild(textarea);
-
-    textarea.focus();
-    textarea.select();
-
-    try {
-        document.execCommand("copy");
-    } catch (error) {
-        console.error(error);
-    }
-
-    textarea.remove();
-}
-
-async function cutSelectedCells(event) {
-    if (!selectedCell || deleteMode) return;
-
-    finishEditingCell();
+function handleTableCopy(event) {
+    if (
+        !isDatasetViewActive() ||
+        !selectedCell ||
+        editingCell ||
+        deleteMode ||
+        isFormField(event.target)
+    ) return;
 
     const text = buildClipboardText();
+    if (!text || !event.clipboardData) return;
 
-    if (!text) return;
-
+    event.clipboardData.setData("text/plain", text);
     event.preventDefault();
+}
 
-    try {
-        await navigator.clipboard.writeText(text);
-    } catch {
-        copyUsingFallback(text);
-    }
-
-    clearSelectedCells();
+function handleTableCut(event) {
+    handleTableCopy(event);
+    if (event.defaultPrevented) clearSelectedCells();
 }
 
 function parseClipboardText(text) {
@@ -2557,36 +2814,19 @@ function parseClipboardText(text) {
     return lines.map(line => line.split("\t"));
 }
 
-async function pasteClipboard(event) {
+function handleTablePaste(event) {
     if (
+        !isDatasetViewActive() ||
         !selectedCell ||
         editingCell ||
-        deleteMode
-    ) {
-        return;
-    }
+        deleteMode ||
+        isFormField(event.target)
+    ) return;
 
-    event.preventDefault();
-
-    let text = "";
-
-    if (
-        event.clipboardData &&
-        event.clipboardData.getData("text/plain")
-    ) {
-        text =
-            event.clipboardData.getData("text/plain");
-    } else {
-        try {
-            text =
-                await navigator.clipboard.readText();
-        } catch {
-            return;
-        }
-    }
-
+    const text = event.clipboardData?.getData("text/plain");
     if (!text) return;
 
+    event.preventDefault();
     pasteText(text);
 }
 
@@ -2853,7 +3093,7 @@ function setColumnWidth(columnIndex, width) {
 function applyColumnWidth(cell, width) {
     cell.style.width = `${width}px`;
     cell.style.minWidth = `${width}px`;
-    cell.style.maxWidth = `${width}px`;
+    cell.style.maxWidth = "none";
 }
 
 function beginColumnResize(event, columnIndex) {
@@ -3643,9 +3883,11 @@ async function saveDataset() {
     if (!button) return;
 
     button.disabled = true;
-    button.innerHTML = '<i class="bi bi-floppy"></i>';
+    button.classList.add("is-saving");
+    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
     button.title = "Menyimpan...";
     button.setAttribute("aria-label", "Menyimpan...");
+    savingChanges = true;
 
     try {
         const csv = createCSV();
@@ -3690,12 +3932,12 @@ async function saveDataset() {
 
         originalRows =
             rows.map(row => [...row]);
+        sourceHeaders = [...headers];
+        sourceRows = rows.map(row => [...row]);
 
         newRows.clear();
         hasUnsavedChanges = false;
-
-        button.textContent = "Disimpan";
-        button.disabled = true;
+        schemaNeedsSave = false;
 
         await refreshDatasetHeader();
 
@@ -3704,6 +3946,7 @@ async function saveDataset() {
         renderTable();
 
         updateSaveButton();
+        showDatasetSaveConfirmation();
     } catch (error) {
         console.error(error);
 
@@ -3713,10 +3956,9 @@ async function saveDataset() {
         );
 
         hasUnsavedChanges = true;
-
-        button.disabled = false;
-        button.textContent = "Simpan Perubahan";
-
+    } finally {
+        savingChanges = false;
+        button.classList.remove("is-saving");
         updateSaveButton();
     }
 }
@@ -3774,14 +4016,11 @@ function isFormField(target) {
     ].includes(target?.tagName);
 }
 
-document.addEventListener("keydown", event => {
-    if (
-        editingCell ||
-        isFormField(event.target)
-    ) {
-        return;
-    }
+function isDatasetViewActive() {
+    return document.getElementById("datasetDetailView")?.style.display === "block";
+}
 
+document.addEventListener("keydown", event => {
     const key = event.key.toLowerCase();
 
     const modifier =
@@ -3789,8 +4028,44 @@ document.addEventListener("keydown", event => {
         event.metaKey;
 
     if (modifier && key === "s") {
+        if (!isDatasetViewActive()) {
+            return;
+        }
         event.preventDefault();
+        if (editingCell) finishEditingCell();
         saveDataset();
+        return;
+    }
+
+    if (!isDatasetViewActive()) return;
+
+    if (
+        modifier &&
+        key === "z" &&
+        !event.shiftKey &&
+        !editingCell &&
+        !isFormField(event.target)
+    ) {
+        event.preventDefault();
+        undo();
+        return;
+    }
+
+    if (
+        modifier &&
+        (key === "y" || (event.shiftKey && key === "z")) &&
+        !editingCell &&
+        !isFormField(event.target)
+    ) {
+        event.preventDefault();
+        redo();
+        return;
+    }
+
+    if (
+        editingCell ||
+        isFormField(event.target)
+    ) {
         return;
     }
 
@@ -3808,21 +4083,6 @@ document.addEventListener("keydown", event => {
     }
 
     if (!selectedCell) return;
-
-    if (modifier && key === "c") {
-        copySelectedCells(event);
-        return;
-    }
-
-    if (modifier && key === "x") {
-        cutSelectedCells(event);
-        return;
-    }
-
-    if (modifier && key === "v") {
-        pasteClipboard(event);
-        return;
-    }
 
     if (
         !event.ctrlKey &&
@@ -3896,65 +4156,11 @@ document.addEventListener("keydown", event => {
         return;
     }
 
-    if (modifier && key === "z") {
-        event.preventDefault();
-        undo();
-        return;
-    }
-
-    if (
-        modifier &&
-        (
-            key === "y" ||
-            (event.shiftKey && key === "z")
-        )
-    ) {
-        event.preventDefault();
-        redo();
-    }
 });
 
-document.addEventListener("paste", event => {
-    if (
-        editingCell ||
-        isFormField(event.target) ||
-        deleteMode
-    ) {
-        return;
-    }
-
-    if (!selectedCell) return;
-
-    pasteClipboard(event);
-});
-
-document.addEventListener("copy", event => {
-    if (
-        editingCell ||
-        isFormField(event.target) ||
-        deleteMode
-    ) {
-        return;
-    }
-
-    if (!selectedCell) return;
-
-    copySelectedCells(event);
-});
-
-document.addEventListener("cut", event => {
-    if (
-        editingCell ||
-        isFormField(event.target) ||
-        deleteMode
-    ) {
-        return;
-    }
-
-    if (!selectedCell) return;
-
-    cutSelectedCells(event);
-});
+document.addEventListener("copy", handleTableCopy);
+document.addEventListener("cut", handleTableCut);
+document.addEventListener("paste", handleTablePaste);
 
 document.addEventListener("mousedown", event => {
     const td =
@@ -4150,16 +4356,6 @@ document
         }
     });
 
-window.addEventListener("beforeunload", event => {
-    finishEditingCell();
-    checkForChanges();
-
-    if (!hasUnsavedChanges) return;
-
-    event.preventDefault();
-    event.returnValue = "";
-});
-
 function getURLFilters() {
     const params =
         new URLSearchParams(window.location.search);
@@ -4193,6 +4389,7 @@ function initializeDatasetViewController() {
     detailView.style.display = hasId ? "block" : "none";
 
     if (hasId) {
+        registerDatasetTableNavigationGuard();
         bindDatasetViewEvents(detailView);
 
         if (detailView.dataset.loaded !== "true") {

@@ -14,8 +14,106 @@ let documentLoaded = document.readyState === "complete";
 let layoutReady = false;
 let tableHeaderDrag = null;
 let suppressTableHeaderClick = null;
+let leaveConfirmationResolver = null;
 const customSelectPortalMenus = new WeakMap();
 const customSelectPortalPositions = new WeakMap();
+
+function confirmLeavingWithUnsavedChanges() {
+    let overlay = document.getElementById("unsaved-navigation-overlay");
+    let dialog = document.getElementById("unsaved-navigation-confirmation");
+    if (!overlay || !dialog) {
+        overlay = document.createElement("div");
+        overlay.id = "unsaved-navigation-overlay";
+        overlay.className = "delete-confirmation-overlay";
+
+        dialog = document.createElement("div");
+        dialog.id = "unsaved-navigation-confirmation";
+        dialog.className = "delete-confirmation unsaved-navigation-confirmation";
+        dialog.setAttribute("role", "alertdialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.setAttribute("aria-labelledby", "unsaved-navigation-title");
+        dialog.setAttribute("aria-describedby", "unsaved-navigation-message");
+
+        const icon = document.createElement("div");
+        icon.className = "delete-confirmation-icon";
+        icon.textContent = "!";
+
+        const content = document.createElement("div");
+        content.className = "delete-confirmation-content";
+
+        const title = document.createElement("h6");
+        title.id = "unsaved-navigation-title";
+        title.textContent = "Perubahan belum disimpan";
+
+        const message = document.createElement("p");
+        message.id = "unsaved-navigation-message";
+
+        const actions = document.createElement("div");
+        actions.className = "delete-confirmation-actions";
+
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "cancel-delete";
+        cancel.textContent = "Batal";
+
+        const leave = document.createElement("button");
+        leave.type = "button";
+        leave.className = "confirm-delete";
+        leave.textContent = "Teruskan";
+
+        actions.append(cancel, leave);
+        content.append(title, message, actions);
+        dialog.append(icon, content);
+        document.body.append(overlay, dialog);
+
+        const close = proceed => {
+            overlay.classList.remove("show");
+            dialog.classList.remove("show");
+            dialog.setAttribute("aria-hidden", "true");
+            const resolve = leaveConfirmationResolver;
+            leaveConfirmationResolver = null;
+            resolve?.(proceed);
+        };
+
+        cancel.addEventListener("click", () => close(false));
+        leave.addEventListener("click", () => close(true));
+        overlay.addEventListener("click", () => close(false));
+        dialog.addEventListener("keydown", event => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                close(false);
+            }
+        });
+    }
+
+    const message = document.getElementById("unsaved-navigation-message");
+    const isSaving = typeof window.isSavingTableChanges === "function" &&
+        window.isSavingTableChanges();
+    message.textContent = isSaving
+        ? "Penyimpanan sedang berlangsung. Meninggalkan halaman sekarang mungkin menyebabkan perubahan tidak tersimpan. Teruskan?"
+        : "Terdapat perubahan yang belum disimpan. Jika meneruskan, perubahan ini akan hilang. Teruskan?";
+
+    overlay.classList.add("show");
+    dialog.classList.add("show");
+    dialog.setAttribute("aria-hidden", "false");
+    dialog.querySelector(".cancel-delete").focus();
+
+    return new Promise(resolve => {
+        leaveConfirmationResolver = resolve;
+    });
+}
+
+window.addEventListener("beforeunload", event => {
+    const hasUnsavedChanges = typeof window.hasUnsavedTableChanges === "function" &&
+        window.hasUnsavedTableChanges();
+    const isSaving = typeof window.isSavingTableChanges === "function" &&
+        window.isSavingTableChanges();
+
+    if (!hasUnsavedChanges && !isSaving) return;
+
+    event.preventDefault();
+    event.returnValue = "";
+});
 
 document.addEventListener("click", event => {
     const trigger = event.target instanceof Element
@@ -403,6 +501,7 @@ async function navigateTo(url, replace = false) {
         targetPathname === "/penerima-bantuan" ||
         targetPathname === "/user" ||
         targetPathname === "/account" ||
+        targetPathname === "/manage-users" ||
         targetPathname === "/updates";
 
     if (
@@ -413,8 +512,14 @@ async function navigateTo(url, replace = false) {
         return;
     }
 
-    if (typeof window.hasUnsavedTableChanges === "function" && window.hasUnsavedTableChanges()) {
-        if (!window.confirm("Terdapat perubahan yang belum disimpan. Teruskan ke halaman lain?")) return;
+    if (leaveConfirmationResolver) return;
+
+    const hasUnsavedChanges = typeof window.hasUnsavedTableChanges === "function" &&
+        window.hasUnsavedTableChanges();
+    const isSaving = typeof window.isSavingTableChanges === "function" &&
+        window.isSavingTableChanges();
+    if (hasUnsavedChanges || isSaving) {
+        if (!await confirmLeavingWithUnsavedChanges()) return;
         if (typeof window.resetTableState === "function") window.resetTableState();
     }
 

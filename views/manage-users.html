@@ -1,0 +1,93 @@
+<main class="main-content">
+    <div class="dashboard-content account-page manage-users-page">
+        <section class="content-card account-settings-card manage-users-card">
+            <div class="card-header-custom account-settings-header">
+                <div>
+                    <h5>Pengurusan Pengguna</h5>
+                    <span>Cipta dan kemas kini akaun pengguna sistem.</span>
+                </div>
+                <button type="button" class="btn btn-primary" id="newManagedUserButton">Tambah Pengguna</button>
+            </div>
+
+            <div class="account-settings-body">
+                <form id="managedUserForm" data-csrf-token="__APP_CSRF_TOKEN__" novalidate>
+                    <h6 id="managedUserFormTitle">Tambah Pengguna</h6>
+                    <div class="manage-user-fields">
+                        <div class="form-field">
+                            <label for="managedUsername">Nama Pengguna</label>
+                            <input type="text" id="managedUsername" maxlength="100" autocomplete="off" required>
+                        </div>
+                        <div class="form-field">
+                            <label for="managedDisplayName">Nama Paparan</label>
+                            <input type="text" id="managedDisplayName" maxlength="160" autocomplete="name" required>
+                        </div>
+                        <div class="form-field">
+                            <label for="managedAccessLevel">Tahap Akses</label>
+                            <select id="managedAccessLevel" required>
+                                <option value="0">0 - Dev (akses penuh)</option>
+                                <option value="1">1 - Admin (urus pengguna)</option>
+                                <option value="2" selected>2 - Pengguna (sunting dan muat naik)</option>
+                                <option value="3">3 - Viewer (paparan sahaja)</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="managedPassword">Kata Laluan <span id="managedPasswordHint"></span></label>
+                            <input type="password" id="managedPassword" minlength="8" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div id="managedUserMessage" class="message" role="status" aria-live="polite" hidden></div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline-primary" id="configureManagedAccessButton">Tetapan Akses Halaman</button>
+                        <button type="button" class="btn btn-outline-secondary" id="cancelManagedUserButton" hidden>Batal</button>
+                        <button type="submit" class="btn btn-primary" id="saveManagedUserButton">Tambah Pengguna</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="content-card managed-users-list-card">
+            <div class="card-header-custom">
+                <div>
+                    <h5>Senarai Pengguna</h5>
+                    <span>Akaun dinyahaktifkan dikekalkan untuk rekod aktiviti.</span>
+                </div>
+            </div>
+            <div class="table-wrapper managed-users-table-wrapper">
+                <table class="table managed-users-table">
+                    <thead>
+                        <tr>
+                            <th>Nama Pengguna</th>
+                            <th>Nama Paparan</th>
+                            <th>Tahap Akses</th>
+                            <th>Status</th>
+                            <th>Tindakan</th>
+                        </tr>
+                    </thead>
+                    <tbody id="managedUsersBody">
+                        <tr><td colspan="5" class="managed-users-empty">Memuatkan pengguna...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div class="managed-user-access-overlay" id="managedUserAccessOverlay" hidden>
+        <section class="managed-user-access-modal" id="managedUserAccessModal" role="dialog" aria-modal="true"
+            aria-labelledby="managedUserAccessTitle">
+            <header class="managed-user-access-header">
+                <div>
+                    <h5 id="managedUserAccessTitle">Akses Halaman</h5>
+                    <p>Pilih halaman yang boleh dibuka dan sama ada pengguna boleh membuat perubahan.</p>
+                </div>
+                <button type="button" class="managed-user-access-close" id="closeManagedUserAccess" aria-label="Tutup">×</button>
+            </header>
+            <p class="managed-user-access-note" id="managedUserAccessNote"></p>
+            <div class="managed-user-access-list" id="managedUserAccessList"></div>
+            <div class="managed-user-access-error" id="managedUserAccessError" role="alert" hidden></div>
+            <div class="managed-user-access-actions">
+                <button type="button" class="btn btn-outline-secondary" id="cancelManagedUserAccess">Batal</button>
+                <button type="button" class="btn btn-primary" id="saveManagedUserAccess">Simpan Akses</button>
+            </div>
+        </section>
+    </div>
+</main>

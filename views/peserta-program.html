@@ -32,6 +32,7 @@
                         </div>
                     </div>
                     <button type="button" id="participantSaveButton"
+                        data-permission-edit="participants"
                         class="toolbar-button icon-button dataset-save-button" disabled
                         title="Disimpan" aria-label="Disimpan">
                         <i class="bi bi-floppy"></i>
@@ -40,10 +41,10 @@
                         title="Muat turun Excel" aria-label="Muat turun Excel">
                         <i class="bi bi-download" aria-hidden="true"></i>
                     </button>
-                    <button type="button" id="participantAddButton" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
+                    <button type="button" id="participantAddButton" data-permission-edit="participants" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
                         <i class="bi bi-plus-lg"></i>
                     </button>
-                    <button type="button" id="participantDeleteButton" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
+                    <button type="button" id="participantDeleteButton" data-permission-edit="participants" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
                         <i class="bi bi-trash3"></i>
                     </button>
                 </div>
@@ -55,7 +56,7 @@
                         <p id="participantDeleteMessage"></p>
                         <div class="delete-confirmation-actions">
                             <button type="button" id="participantCancelDelete" class="cancel-delete">Batal</button>
-                            <button type="button" id="participantConfirmDelete" class="confirm-delete">Padam</button>
+                            <button type="button" id="participantConfirmDelete" data-permission-edit="participants" class="confirm-delete">Padam</button>
                         </div>
                     </div>
                 </div>
@@ -80,14 +81,14 @@
                             <div class="form-field full"><label for="participantAddDataset">Fail sumber</label><select id="participantAddDataset"></select></div>
                             <div class="form-field"><label for="participantAddNama">Nama</label><input id="participantAddNama" autocomplete="off"></div>
                             <div class="form-field"><label for="participantAddKP">KP</label><input id="participantAddKP" autocomplete="off"></div>
-                            <div class="form-field"><label for="participantAddCategory">Ketegori</label><input id="participantAddCategory" autocomplete="off"></div>
+                            <div class="form-field"><label for="participantAddCategory">Kategori</label><input id="participantAddCategory" autocomplete="off"></div>
                             <div class="form-field full"><label for="participantAddProgram">Program</label><input id="participantAddProgram" autocomplete="off"></div>
                         </div>
                     </div>
 
                     <div class="dataset-upload-footer">
                         <button type="button" id="participantCancelAdd" class="btn btn-light">Batal</button>
-                        <button type="button" id="participantConfirmAdd" class="btn btn-primary">Tambah</button>
+                        <button type="button" id="participantConfirmAdd" data-permission-edit="participants" class="btn btn-primary">Tambah</button>
                     </div>
                 </div>
             </div>

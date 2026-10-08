@@ -148,6 +148,7 @@
                         <div class="toolbar-group toolbar-actions">
 
                             <button type="button" id="saveChangesButton"
+                                data-permission-edit="dataset"
                                 class="toolbar-button icon-button dataset-save-button" disabled
                                 title="Simpan perubahan" aria-label="Simpan perubahan">
                                 <i class="bi bi-floppy"></i>
@@ -159,6 +160,7 @@
                             </button>
 
                             <button type="button" id="addRowButton" class="toolbar-button icon-button"
+                                data-permission-edit="dataset"
                                 title="Tambah Rekod" aria-label="Tambah Rekod">
 
                                 <i class="bi bi-plus-lg"></i>
@@ -166,6 +168,7 @@
                             </button>
 
                             <button type="button" id="deleteRowButton" class="toolbar-button icon-button delete-button"
+                                data-permission-edit="dataset"
                                 title="Pilih Rekod" aria-label="Pilih Rekod">
 
                                 <i class="bi bi-trash3"></i>
@@ -208,8 +211,13 @@
 
                         <div class="pagination-bar">
 
-                            <div id="paginationInfo" class="pagination-info">
-                                0 baris
+                            <div class="pagination-info-group">
+                                <div id="paginationInfo" class="pagination-info">
+                                    0 baris
+                                </div>
+                                <div id="selectionInfo" class="selection-info">
+                                    0 baris, 0 lajur, 0 sel dipilih
+                                </div>
                             </div>
 
                             <div class="pagination-controls">
@@ -284,7 +292,7 @@
                     Batal
                 </button>
 
-                <button type="button" id="datasetListConfirmDeleteButton" class="confirm-delete">
+                <button type="button" id="datasetListConfirmDeleteButton" data-permission-edit="dataset" class="confirm-delete">
                     Padam
                 </button>
 
@@ -294,7 +302,7 @@
 
     </div>
 
-    <button type="button" id="bulkDeleteButton" class="floating-delete-button" aria-hidden="true">
+    <button type="button" id="bulkDeleteButton" data-permission-edit="dataset" class="floating-delete-button" aria-hidden="true">
 
         <div class="floating-delete-icon">
             <i class="bi bi-trash3"></i>
@@ -348,7 +356,7 @@
                     Batal
                 </button>
 
-                <button type="button" id="confirmAddButton" class="btn btn-primary">
+                <button type="button" id="confirmAddButton" data-permission-edit="dataset" class="btn btn-primary">
 
                     <i class="bi bi-plus-lg me-1"></i>
                     Tambah
@@ -379,7 +387,7 @@
                     Batal
                 </button>
 
-                <button type="button" id="confirmDeleteButton" class="btn btn-danger">
+                <button type="button" id="confirmDeleteButton" data-permission-edit="dataset" class="btn btn-danger">
 
                     <i class="bi bi-trash3 me-1"></i>
                     Buang

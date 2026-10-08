@@ -36,6 +36,20 @@ try {
     exit;
 }
 
+function ensureUserAccessSchema(PDO $pdo): void
+{
+    $columns = $pdo->query("SHOW COLUMNS FROM users LIKE 'access_level'")->fetch();
+    if (!$columns) {
+        $pdo->exec('ALTER TABLE users ADD COLUMN access_level TINYINT UNSIGNED NOT NULL DEFAULT 2');
+        $pdo->exec("UPDATE users SET access_level = CASE WHEN LOWER(username) = 'tester' THEN 0 WHEN LOWER(username) = 'faiz' THEN 1 ELSE 2 END");
+    }
+    if (!$pdo->query("SHOW COLUMNS FROM users LIKE 'page_permissions'")->fetch()) {
+        $pdo->exec('ALTER TABLE users ADD COLUMN page_permissions LONGTEXT NULL');
+    }
+}
+
+ensureUserAccessSchema($pdo);
+
 function jsonResponse(array $data, int $status = 200): never
 {
     http_response_code($status);
@@ -52,7 +66,7 @@ function currentUser(PDO $pdo): ?array
     }
 
     $statement = $pdo->prepare(
-        'SELECT id, username, display_name, active, PICname FROM users WHERE username = ? AND active = 1'
+        'SELECT id, username, display_name, active, PICname, access_level, page_permissions FROM users WHERE username = ? AND active = 1'
     );
     $statement->execute([$_SESSION['username']]);
     return $statement->fetch() ?: null;
@@ -65,6 +79,126 @@ function requireApiUser(PDO $pdo): array
         jsonResponse(['success' => false, 'error' => 'Not authenticated.'], 401);
     }
     return $user;
+}
+
+function requireUserManagementAccess(PDO $pdo): array
+{
+    $user = requireApiUser($pdo);
+    if ((int)$user['access_level'] > 1) {
+        jsonResponse(['success' => false, 'error' => 'You are not authorized to manage users.'], 403);
+    }
+    return $user;
+}
+
+function defaultPagePermissions(int $accessLevel): array
+{
+    $editable = $accessLevel <= 2;
+    return [
+        'dashboard' => ['access' => true, 'edit' => false],
+        'recipients' => ['access' => true, 'edit' => $editable],
+        'participants' => ['access' => true, 'edit' => $editable],
+        'upload' => ['access' => true, 'edit' => $editable],
+        'dataset' => ['access' => true, 'edit' => $editable],
+        'activity' => ['access' => true, 'edit' => false],
+        'account' => ['access' => true, 'edit' => $editable],
+        'updates' => ['access' => true, 'edit' => false],
+        'manageUsers' => ['access' => $accessLevel <= 1, 'edit' => $accessLevel <= 1],
+    ];
+}
+
+function userPagePermissions(array $user): array
+{
+    $accessLevel = (int)($user['access_level'] ?? 2);
+    if ($accessLevel === 0) {
+        return defaultPagePermissions(0);
+    }
+    $permissions = defaultPagePermissions($accessLevel);
+    $stored = json_decode((string)($user['page_permissions'] ?? ''), true);
+    if (is_array($stored)) {
+        foreach ($permissions as $page => $defaults) {
+            if (!is_array($stored[$page] ?? null)) {
+                continue;
+            }
+            $permissions[$page]['access'] = filter_var($stored[$page]['access'] ?? $defaults['access'], FILTER_VALIDATE_BOOLEAN);
+            $permissions[$page]['edit'] = filter_var($stored[$page]['edit'] ?? $defaults['edit'], FILTER_VALIDATE_BOOLEAN);
+        }
+    }
+    if ($accessLevel >= 3) {
+        foreach ($permissions as &$permission) {
+            $permission['edit'] = false;
+        }
+        unset($permission);
+    }
+    $permissions['manageUsers']['access'] = $accessLevel <= 1 && $permissions['manageUsers']['access'];
+    if ($accessLevel <= 1) {
+        $permissions['manageUsers']['edit'] = true;
+    }
+    return $permissions;
+}
+
+function normalizeSubmittedPagePermissions(mixed $submitted, int $accessLevel, array $fallback = []): array
+{
+    $defaults = defaultPagePermissions($accessLevel);
+    $normalized = [];
+    foreach ($defaults as $page => $default) {
+        $provided = is_array($submitted) && is_array($submitted[$page] ?? null)
+            ? $submitted[$page]
+            : ($fallback[$page] ?? []);
+        $normalized[$page] = [
+            'access' => filter_var($provided['access'] ?? $default['access'], FILTER_VALIDATE_BOOLEAN),
+            'edit' => filter_var($provided['edit'] ?? $default['edit'], FILTER_VALIDATE_BOOLEAN),
+        ];
+    }
+    if ($accessLevel >= 3) {
+        foreach ($normalized as &$permission) {
+            $permission['edit'] = false;
+        }
+        unset($permission);
+    }
+    if ($accessLevel >= 2) {
+        $normalized['manageUsers']['access'] = false;
+    }
+    if ($accessLevel <= 1) {
+        $normalized['manageUsers']['edit'] = true;
+    }
+    return $normalized;
+}
+
+function canAccessUserPage(array $user, string $page): bool
+{
+    $permissions = userPagePermissions($user);
+    return (bool)($permissions[$page]['access'] ?? false);
+}
+
+function requirePageCapability(PDO $pdo, string $page, bool $edit = false): array
+{
+    $user = requireApiUser($pdo);
+    if (!canAccessUserPage($user, $page) || ($edit && empty(userPagePermissions($user)[$page]['edit']))) {
+        jsonResponse(['success' => false, 'error' => 'You do not have permission to perform this action.'], 403);
+    }
+    return $user;
+}
+
+function requiredPageForPath(string $path): ?string
+{
+    if ($path === '/') return 'dashboard';
+    if ($path === '/penerima-bantuan') return 'recipients';
+    if ($path === '/peserta-program') return 'participants';
+    if ($path === '/upload') return 'upload';
+    if ($path === '/data-set' || preg_match('#^/data-set/\\d+$#', $path)) return 'dataset';
+    if ($path === '/user') return 'activity';
+    if ($path === '/account') return 'account';
+    if ($path === '/updates') return 'updates';
+    if ($path === '/manage-users') return 'manageUsers';
+    return null;
+}
+
+function requireCsrfToken(array $payload): void
+{
+    $providedToken = (string)($payload['csrfToken'] ?? '');
+    if ($providedToken === '' || !hash_equals(appCsrfToken(), $providedToken)) {
+        jsonResponse(['success' => false, 'error' => 'Your session expired. Refresh the page and try again.'], 403);
+    }
 }
 
 function requestData(): array
@@ -139,16 +273,16 @@ function ensureRecipientEmploymentStatusColumn(array $rows): array
         static fn($value): string => strtoupper(trim((string)$value)),
         $rows[0]
     );
-    if (in_array('STATUS PEKERJAAN', $headers, true)) {
+    if (in_array('PEKERJAAN', $headers, true) || in_array('STATUS PEKERJAAN', $headers, true)) {
         return normalizeRows($rows);
     }
 
     $statusIndex = array_search('STATUS', $headers, true);
-    $insertIndex = $statusIndex === false ? count($headers) : $statusIndex + 1;
+    $insertIndex = $statusIndex === false ? count($headers) : $statusIndex;
     $width = max(array_map('count', $rows));
-    foreach ($rows as &$row) {
+    foreach ($rows as $rowIndex => &$row) {
         $row = array_pad($row, $width, '');
-        array_splice($row, $insertIndex, 0, ['']);
+        array_splice($row, $insertIndex, 0, [$rowIndex === 0 ? 'PEKERJAAN' : '']);
     }
     unset($row);
     return normalizeRows($rows);
@@ -383,10 +517,16 @@ function editMappedRecord(PDO $pdo, array $payload, string $username, bool $part
         array_splice($rows, $rowIndex, 1);
     } else {
         foreach (($payload['changes'] ?? []) as $key => $value) {
-            $normalizedKey = strtoupper(str_replace('_', ' ', (string)$key));
+            $normalizedKey = preg_replace('/[^A-Z0-9]/', '', strtoupper((string)$key));
             $columnIndex = false;
             foreach ($headers as $headerIndex => $header) {
-                if (preg_replace('/[^A-Z0-9]/', '', $header) === preg_replace('/[^A-Z0-9]/', '', $normalizedKey)) {
+                $normalizedHeader = preg_replace('/[^A-Z0-9]/', '', $header);
+                $employmentHeader = in_array($normalizedHeader, ['PEKERJAAN', 'STATUSPEKERJAAN'], true);
+                $employmentKey = in_array($normalizedKey, ['PEKERJAAN', 'STATUSPEKERJAAN'], true);
+                if (
+                    $normalizedHeader === $normalizedKey ||
+                    ($employmentHeader && $employmentKey)
+                ) {
                     $columnIndex = $headerIndex;
                     break;
                 }
@@ -408,7 +548,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
     $user = currentUser($pdo);
 
     if ($path === '/api/app-update/check' && $method === 'GET') {
-        requireApiUser($pdo);
+        requirePageCapability($pdo, 'updates');
         try {
             $latest = bapimLatestGitHubCommit();
             $installed = bapimInstalledCommit(dirname($storageDirectory));
@@ -424,7 +564,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         ]);
     }
     if ($path === '/api/app-update/install' && $method === 'POST') {
-        requireApiUser($pdo);
+        $updater = requireApiUser($pdo);
+        if ((int)$updater['access_level'] !== 0) {
+            jsonResponse(['success' => false, 'error' => 'Only a dev can install application updates.'], 403);
+        }
         $providedToken = (string)($payload['csrfToken'] ?? '');
         if ($providedToken === '' || !hash_equals(appCsrfToken(), $providedToken)) {
             jsonResponse(['success' => false, 'error' => 'Your session expired. Refresh the page and try again.'], 403);
@@ -450,10 +593,16 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if (!$user) {
             jsonResponse(['success' => false, 'error' => 'Not authenticated.'], 401);
         }
-        jsonResponse(['success' => true, 'username' => $user['username'], 'displayName' => $user['display_name'], 'PICname' => $user['PICname']]);
+        jsonResponse([
+            'success' => true,
+            'username' => $user['username'],
+            'displayName' => $user['display_name'],
+            'accessLevel' => (int)$user['access_level'],
+            'permissions' => userPagePermissions($user),
+        ]);
     }
     if ($path === '/api/auth/account' && $method === 'PUT') {
-        $account = requireApiUser($pdo);
+        $account = requirePageCapability($pdo, 'account', true);
         $providedToken = (string)($payload['csrfToken'] ?? '');
         if ($providedToken === '' || !hash_equals(appCsrfToken(), $providedToken)) {
             jsonResponse(['success' => false, 'error' => 'Your session expired. Refresh the page and try again.'], 403);
@@ -528,7 +677,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Use a username of up to 100 characters, a display name of up to 160 characters, and a password of at least 8 characters.'], 400);
         }
         try {
-            $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash) VALUES (?, ?, ?)');
+            $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash, access_level) VALUES (?, ?, ?, 2)');
             $statement->execute([$name, $displayName, password_hash($password, PASSWORD_DEFAULT)]);
         } catch (PDOException $error) {
             if ($error->getCode() === '23000') {
@@ -558,6 +707,12 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ($targetUsername !== $account['username']) {
             jsonResponse(['success' => false, 'error' => 'You can only remove your own local account.'], 403);
         }
+        if ((int)$account['access_level'] === 0) {
+            $activeDevs = (int)$pdo->query('SELECT COUNT(*) FROM users WHERE active = 1 AND access_level = 0')->fetchColumn();
+            if ($activeDevs <= 1) {
+                jsonResponse(['success' => false, 'error' => 'At least one active dev account must remain.'], 400);
+            }
+        }
         $statement = $pdo->prepare('UPDATE users SET active = 0 WHERE username = ?');
         $statement->execute([$targetUsername]);
         jsonResponse(['success' => true]);
@@ -567,13 +722,143 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         $users = $pdo->query('SELECT username, display_name AS displayName, PICname FROM users WHERE active = 1 ORDER BY display_name')->fetchAll();
         jsonResponse(['success' => true, 'users' => $users]);
     }
+    if ($path === '/api/admin/users' && $method === 'GET') {
+        requirePageCapability($pdo, 'manageUsers');
+        $users = $pdo->query('SELECT id, username, display_name AS displayName, active, access_level AS accessLevel, page_permissions AS pagePermissions, created_at AS createdAt FROM users ORDER BY active DESC, display_name, username')->fetchAll();
+        foreach ($users as &$managedUser) {
+            $managedUser['accessLevel'] = (int)$managedUser['accessLevel'];
+            $managedUser['permissions'] = userPagePermissions([
+                'access_level' => $managedUser['accessLevel'],
+                'page_permissions' => $managedUser['pagePermissions'],
+            ]);
+            unset($managedUser['pagePermissions']);
+        }
+        unset($managedUser);
+        jsonResponse(['success' => true, 'users' => $users]);
+    }
+    if ($path === '/api/admin/users' && $method === 'POST') {
+        $manager = requirePageCapability($pdo, 'manageUsers', true);
+        requireCsrfToken($payload);
+        $newUsername = trim((string)($payload['username'] ?? ''));
+        $displayName = trim((string)($payload['displayName'] ?? ''));
+        $password = (string)($payload['password'] ?? '');
+        $accessLevel = filter_var($payload['accessLevel'] ?? 2, FILTER_VALIDATE_INT);
+        if ($newUsername === '' || strlen($newUsername) > 100 || $displayName === '' || strlen($displayName) > 160) {
+            jsonResponse(['success' => false, 'error' => 'Enter a username (up to 100 characters) and display name (up to 160 characters).'], 400);
+        }
+        if ($accessLevel === false || $accessLevel < 0 || $accessLevel > 3 || ($accessLevel === 0 && (int)$manager['access_level'] !== 0)) {
+            jsonResponse(['success' => false, 'error' => 'You are not allowed to assign that access level.'], 403);
+        }
+        if (strlen($password) < 8) {
+            jsonResponse(['success' => false, 'error' => 'Password must be at least 8 characters.'], 400);
+        }
+        $permissions = normalizeSubmittedPagePermissions($payload['permissions'] ?? null, $accessLevel);
+        try {
+            $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash, access_level, page_permissions) VALUES (?, ?, ?, ?, ?)');
+            $statement->execute([$newUsername, $displayName, password_hash($password, PASSWORD_DEFAULT), $accessLevel, json_encode($permissions, JSON_THROW_ON_ERROR)]);
+        } catch (PDOException $error) {
+            if ($error->getCode() === '23000') {
+                jsonResponse(['success' => false, 'error' => 'That username already exists.'], 409);
+            }
+            throw $error;
+        }
+        jsonResponse(['success' => true, 'id' => (int)$pdo->lastInsertId()], 201);
+    }
+    if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) && $method === 'PUT') {
+        $manager = requirePageCapability($pdo, 'manageUsers', true);
+        requireCsrfToken($payload);
+        $targetId = (int)$matches[1];
+        $statement = $pdo->prepare('SELECT id, username, active, access_level, page_permissions FROM users WHERE id = ? LIMIT 1');
+        $statement->execute([$targetId]);
+        $target = $statement->fetch();
+        if (!$target) {
+            jsonResponse(['success' => false, 'error' => 'User not found.'], 404);
+        }
+        $displayName = trim((string)($payload['displayName'] ?? ''));
+        $password = (string)($payload['password'] ?? '');
+        $accessLevel = filter_var($payload['accessLevel'] ?? $target['access_level'], FILTER_VALIDATE_INT);
+        if ($displayName === '' || strlen($displayName) > 160) {
+            jsonResponse(['success' => false, 'error' => 'Display name is required and must be 160 characters or fewer.'], 400);
+        }
+        if ($password !== '' && strlen($password) < 8) {
+            jsonResponse(['success' => false, 'error' => 'Password must be at least 8 characters.'], 400);
+        }
+        if ($accessLevel === false || $accessLevel < 0 || $accessLevel > 3 || ($accessLevel === 0 && (int)$manager['access_level'] !== 0)) {
+            jsonResponse(['success' => false, 'error' => 'You are not allowed to assign that access level.'], 403);
+        }
+        if ((int)$target['access_level'] <= 1 && (int)$manager['access_level'] !== 0) {
+            jsonResponse(['success' => false, 'error' => 'Only a dev can change an admin or dev account.'], 403);
+        }
+        if ((int)$manager['access_level'] === 1 && (int)$target['id'] === (int)$manager['id'] && $accessLevel !== 1) {
+            jsonResponse(['success' => false, 'error' => 'An admin cannot remove their own admin access.'], 400);
+        }
+        $active = isset($payload['active']) ? filter_var($payload['active'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) : (bool)$target['active'];
+        if ($active === null) {
+            jsonResponse(['success' => false, 'error' => 'User status is invalid.'], 400);
+        }
+        if (!$active && (int)$target['id'] === (int)$manager['id']) {
+            jsonResponse(['success' => false, 'error' => 'You cannot deactivate your own account.'], 400);
+        }
+        if (!$active && (int)$target['access_level'] <= 1 && (int)$manager['access_level'] !== 0) {
+            jsonResponse(['success' => false, 'error' => 'Only a dev can deactivate an admin or dev account.'], 403);
+        }
+        if ((int)$target['access_level'] === 0 && (!$active || $accessLevel !== 0)) {
+            $activeDevs = (int)$pdo->query('SELECT COUNT(*) FROM users WHERE active = 1 AND access_level = 0')->fetchColumn();
+            if ($activeDevs <= 1) {
+                jsonResponse(['success' => false, 'error' => 'At least one active dev account must remain.'], 400);
+            }
+        }
+        $permissions = normalizeSubmittedPagePermissions(
+            $payload['permissions'] ?? null,
+            $accessLevel,
+            userPagePermissions($target)
+        );
+        $encodedPermissions = json_encode($permissions, JSON_THROW_ON_ERROR);
+        if ($password !== '') {
+            $statement = $pdo->prepare('UPDATE users SET display_name = ?, password_hash = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+            $statement->execute([$displayName, password_hash($password, PASSWORD_DEFAULT), (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+        } else {
+            $statement = $pdo->prepare('UPDATE users SET display_name = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+            $statement->execute([$displayName, (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+        }
+        jsonResponse(['success' => true]);
+    }
+    if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) && $method === 'DELETE') {
+        $manager = requirePageCapability($pdo, 'manageUsers', true);
+        requireCsrfToken($payload);
+        $targetId = (int)$matches[1];
+        $statement = $pdo->prepare('SELECT username, active, access_level FROM users WHERE id = ? LIMIT 1');
+        $statement->execute([$targetId]);
+        $target = $statement->fetch();
+        if (!$target) {
+            jsonResponse(['success' => false, 'error' => 'User not found.'], 404);
+        }
+        if ((int)$targetId === (int)$manager['id']) {
+            jsonResponse(['success' => false, 'error' => 'You cannot deactivate your own account.'], 400);
+        }
+        if ((int)$target['access_level'] <= 1 && (int)$manager['access_level'] !== 0) {
+            jsonResponse(['success' => false, 'error' => 'Only a dev can deactivate an admin or dev account.'], 403);
+        }
+        if ((int)$target['access_level'] === 0) {
+            $activeDevs = (int)$pdo->query('SELECT COUNT(*) FROM users WHERE active = 1 AND access_level = 0')->fetchColumn();
+            if ($activeDevs <= 1) {
+                jsonResponse(['success' => false, 'error' => 'At least one active dev account must remain.'], 400);
+            }
+        }
+        $statement = $pdo->prepare('UPDATE users SET active = 0 WHERE id = ?');
+        $statement->execute([$targetId]);
+        jsonResponse(['success' => true]);
+    }
 
     if ($path === '/api/datasets' && $method === 'GET') {
-        requireApiUser($pdo);
+        $user = requireApiUser($pdo);
+        if (!canAccessUserPage($user, 'upload') && !canAccessUserPage($user, 'dashboard')) {
+            jsonResponse(['success' => false, 'error' => 'You do not have permission to view datasets.'], 403);
+        }
         jsonResponse($pdo->query('SELECT id, name, filename, row_count, column_count, file_size, version, created_at, updated_at, remote_version, last_synced_at, sync_status, dataset_type FROM datasets ORDER BY updated_at DESC')->fetchAll());
     }
     if (preg_match('#^/api/datasets/(\d+)(?:/columns)?$#', $path, $matches) && $method === 'GET') {
-        requireApiUser($pdo);
+        requirePageCapability($pdo, 'dataset');
         $dataset = datasetById($pdo, (int)$matches[1]);
         if (!$dataset || !is_file($dataset['filepath'])) {
             jsonResponse(['success' => false, 'error' => 'Dataset not found.'], 404);
@@ -587,7 +872,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse(['success' => true, ...$dataset, 'csv' => $csv]);
     }
     if ($path === '/api/dashboard/summary' && $method === 'GET') {
-        requireApiUser($pdo);
+        requirePageCapability($pdo, 'dashboard');
         $summary = $pdo->query('SELECT COUNT(*) AS totalDatasets, COALESCE(SUM(row_count), 0) AS totalRecords, COALESCE(SUM(file_size), 0) AS uploadSize FROM datasets')->fetch();
         $summary['success'] = true;
         $summary['totalColumns'] = 0;
@@ -596,7 +881,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse($summary);
     }
     if ($path === '/api/peserta-program' && $method === 'GET') {
-        requireApiUser($pdo);
+        $user = requireApiUser($pdo);
+        if (!canAccessUserPage($user, 'participants') && !canAccessUserPage($user, 'dashboard')) {
+            jsonResponse(['success' => false, 'error' => 'You do not have permission to view participant records.'], 403);
+        }
         $participants = [];
         foreach ($pdo->query('SELECT * FROM datasets ORDER BY updated_at DESC')->fetchAll() as $dataset) {
             if (!is_file($dataset['filepath'])) {
@@ -649,7 +937,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse(['success' => true, 'participants' => $output]);
     }
     if ($path === '/api/penerima-bantuan' && $method === 'GET') {
-        requireApiUser($pdo);
+        $user = requireApiUser($pdo);
+        if (!canAccessUserPage($user, 'recipients') && !canAccessUserPage($user, 'dashboard')) {
+            jsonResponse(['success' => false, 'error' => 'You do not have permission to view recipient records.'], 403);
+        }
         $recipients = [];
         foreach ($pdo->query('SELECT * FROM datasets ORDER BY updated_at DESC')->fetchAll() as $dataset) {
             if (!is_file($dataset['filepath'])) {
@@ -665,17 +956,21 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
                 continue;
             }
             $indices = [];
-            foreach (['NAMA', 'KAD PENGENALAN', 'TELEFON', 'EMAIL', 'STATUS', 'STATUS PEKERJAAN', 'CATATAN', 'PIC'] as $field) {
+            foreach (['NAMA', 'KAD PENGENALAN', 'TELEFON', 'EMAIL', 'STATUS', 'CATATAN', 'PIC'] as $field) {
                 $indices[$field] = array_search($field, $headers, true);
             }
+            $employmentIndex = array_search('PEKERJAAN', $headers, true);
+            if ($employmentIndex === false) {
+                $employmentIndex = array_search('STATUS PEKERJAAN', $headers, true);
+            }
             foreach (array_slice($rows, 1, null, true) as $rowIndex => $row) {
-                $recipients[] = ['nama' => $indices['NAMA'] !== false ? trim($row[$indices['NAMA']] ?? '') : '', 'kadPengenalan' => $indices['KAD PENGENALAN'] !== false ? trim($row[$indices['KAD PENGENALAN']] ?? '') : '', 'telefon' => $indices['TELEFON'] !== false ? trim($row[$indices['TELEFON']] ?? '') : '', 'email' => $indices['EMAIL'] !== false ? trim($row[$indices['EMAIL']] ?? '') : '', 'status' => $indices['STATUS'] !== false ? trim($row[$indices['STATUS']] ?? '') : '', 'statusPekerjaan' => $indices['STATUS PEKERJAAN'] !== false ? trim($row[$indices['STATUS PEKERJAAN']] ?? '') : '', 'catatan' => $indices['CATATAN'] !== false ? trim($row[$indices['CATATAN']] ?? '') : '', 'pic' => $indices['PIC'] !== false ? trim($row[$indices['PIC']] ?? '') : '', 'sourceFile' => $dataset['filename'], 'datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceRecords' => [['datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceFile' => $dataset['filename']]]];
+                $recipients[] = ['nama' => $indices['NAMA'] !== false ? trim($row[$indices['NAMA']] ?? '') : '', 'kadPengenalan' => $indices['KAD PENGENALAN'] !== false ? trim($row[$indices['KAD PENGENALAN']] ?? '') : '', 'telefon' => $indices['TELEFON'] !== false ? trim($row[$indices['TELEFON']] ?? '') : '', 'email' => $indices['EMAIL'] !== false ? trim($row[$indices['EMAIL']] ?? '') : '', 'status' => $indices['STATUS'] !== false ? trim($row[$indices['STATUS']] ?? '') : '', 'statusPekerjaan' => $employmentIndex !== false ? trim($row[$employmentIndex] ?? '') : '', 'catatan' => $indices['CATATAN'] !== false ? trim($row[$indices['CATATAN']] ?? '') : '', 'pic' => $indices['PIC'] !== false ? trim($row[$indices['PIC']] ?? '') : '', 'sourceFile' => $dataset['filename'], 'datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceRecords' => [['datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex, 'sourceFile' => $dataset['filename']]]];
             }
         }
         jsonResponse(['success' => true, 'recipients' => $recipients]);
     }
     if ($path === '/api/user/activity' && $method === 'GET') {
-        $account = requireApiUser($pdo);
+        $account = requirePageCapability($pdo, 'activity');
         $limit = min(max((int)($query['limit'] ?? 1000), 1), 1000);
         $activityUsername = trim((string)$account['display_name']);
         $picUsername = trim((string)($account['PICname'] ?: $activityUsername ?: $account['username']));
@@ -713,7 +1008,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse(['success' => true, 'user' => ['username' => $account['username'], 'displayName' => $account['display_name'], 'PICname' => $account['PICname']], 'activityUsername' => $activityUsername, 'statusCount' => $statusCount, 'progressChange' => $progressChange, 'totalActivity' => $statusCount + $progressChange, 'activities' => $activities, 'earliestActivityMonth' => $earliest ?: '']);
     }
     if ($path === '/api/user/activity/month' && $method === 'GET') {
-        requireApiUser($pdo);
+        requirePageCapability($pdo, 'activity');
         $month = (string)($query['month'] ?? '');
         if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
             jsonResponse(['success' => false, 'error' => 'A valid month in YYYY-MM format is required.'], 400);
@@ -733,13 +1028,13 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         ]);
     }
     if ($path === '/api/audit' && $method === 'GET') {
-        requireApiUser($pdo);
+        requirePageCapability($pdo, 'activity');
         $activities = $pdo->query("SELECT activity.id, activity.username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id WHERE activity.created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ORDER BY activity.created_at DESC, activity.id DESC")->fetchAll();
         jsonResponse($activities);
     }
 
     if ($path === '/api/preview' && $method === 'POST') {
-        requireApiUser($pdo);
+        requirePageCapability($pdo, 'upload');
         if (empty($_FILES['file']['tmp_name'])) {
             jsonResponse(['success' => false, 'error' => 'No file uploaded.'], 400);
         }
@@ -751,7 +1046,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse(['type' => 'csv', 'name' => pathinfo($_FILES['file']['name'], PATHINFO_FILENAME), 'rows' => array_slice($rows, 0, 101)]);
     }
     if ($path === '/api/datasets' && $method === 'POST') {
-        $account = requireApiUser($pdo);
+        $account = requirePageCapability($pdo, 'upload', true);
         $file = $_FILES['file'] ?? null;
         if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
             jsonResponse(['success' => false, 'error' => 'No file uploaded or the upload failed.'], 400);
@@ -799,8 +1094,8 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
     }
 
     if (preg_match('#^/api/(peserta-program|penerima-bantuan)/records$#', $path, $matches) && in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
-        $account = requireApiUser($pdo);
         $participant = $matches[1] === 'peserta-program';
+        $account = requirePageCapability($pdo, $participant ? 'participants' : 'recipients', true);
         if ($method === 'POST') {
             $datasetId = filter_var($payload['datasetId'] ?? null, FILTER_VALIDATE_INT);
             $dataset = $datasetId ? datasetById($pdo, (int)$datasetId) : null;
@@ -824,6 +1119,9 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
                 if ($header === 'PROGRAM') {
                     $alternates = ['program', 'programs'];
                 }
+                if ($header === 'PEKERJAAN' || $header === 'STATUS PEKERJAAN') {
+                    $alternates = ['pekerjaan', 'statuspekerjaan'];
+                }
                 foreach ($alternates as $alternate) {
                     if (array_key_exists($alternate, $changes)) {
                         $row[$index] = (string)$changes[$alternate];
@@ -838,7 +1136,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         editMappedRecord($pdo, $payload, $account['display_name'], $participant, $method === 'DELETE');
     }
     if (preg_match('#^/api/datasets/(\d+)$#', $path, $matches) && $method === 'PUT') {
-        $account = requireApiUser($pdo);
+        $account = requirePageCapability($pdo, 'dataset', true);
         $dataset = datasetById($pdo, (int)$matches[1]);
         if (!$dataset) {
             jsonResponse(['success' => false, 'error' => 'Dataset not found.'], 404);
@@ -853,8 +1151,9 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         $updated = updateCsvDataset($pdo, $dataset, $rows, $account['display_name']);
         jsonResponse(['success' => true, 'id' => (int)$updated['id'], 'row_count' => (int)$updated['row_count'], 'column_count' => (int)$updated['column_count'], 'file_size' => (int)$updated['file_size'], 'version' => (int)$updated['version'], 'sync_status' => 'modified']);
     }
-    if (($path === '/api/datasets' || preg_match('#^/api/datasets/\d+$#', $path)) && $method === 'DELETE') {
-        $account = requireApiUser($pdo);
+    $isUploadDelete = preg_match('#^/api/upload/datasets/\d+$#', $path) === 1;
+    if (($path === '/api/datasets' || preg_match('#^/api/datasets/\d+$#', $path) || $isUploadDelete) && $method === 'DELETE') {
+        $account = requirePageCapability($pdo, $isUploadDelete ? 'upload' : 'dataset', true);
         $ids = $path === '/api/datasets' ? ($payload['ids'] ?? []) : [(int)basename($path)];
         if (!is_array($ids) || $ids === []) {
             jsonResponse(['success' => false, 'error' => 'No datasets selected.'], 400);
@@ -920,6 +1219,7 @@ $pages = [
     '/peserta-program' => 'peserta-program.html',
     '/penerima-bantuan' => 'penerima-bantuan.html',
     '/user' => 'user.html',
+    '/manage-users' => 'manage-users.html',
     '/account' => 'account.html',
     '/updates' => 'updates.html',
     '/sidebar' => 'components/sidebar.html',
@@ -939,6 +1239,11 @@ if ($page === null) {
 $user = currentUser($pdo);
 if ($path !== '/login' && $path !== '/create-account' && $path !== '/sidebar' && $path !== '/header' && !$user) {
     header('Location: ' . $basePath . '/login');
+    exit;
+}
+if ($user && ($requiredPage = requiredPageForPath($path)) !== null && !canAccessUserPage($user, $requiredPage)) {
+    http_response_code(403);
+    echo 'You do not have permission to access this page.';
     exit;
 }
 
@@ -974,6 +1279,9 @@ $html = $rewriteHtmlUrls($html);
 if ($path === '/account') {
     $html = str_replace('__APP_CSRF_TOKEN__', htmlspecialchars(appCsrfToken(), ENT_QUOTES, 'UTF-8'), $html);
 }
+if ($path === '/manage-users') {
+    $html = str_replace('__APP_CSRF_TOKEN__', htmlspecialchars(appCsrfToken(), ENT_QUOTES, 'UTF-8'), $html);
+}
 
 if (isset($_SERVER['HTTP_X_APP_FRAGMENT']) || in_array($path, ['/sidebar', '/header'], true)) {
     header('Content-Type: text/html; charset=utf-8');
@@ -984,7 +1292,7 @@ if (isset($_SERVER['HTTP_X_APP_FRAGMENT']) || in_array($path, ['/sidebar', '/hea
     exit;
 }
 
-if ($path === '/upload' || $path === '/data-set' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/user' || $path === '/account' || $path === '/updates') {
+if ($path === '/upload' || $path === '/data-set' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/user' || $path === '/manage-users' || $path === '/account' || $path === '/updates') {
     $shellPath = __DIR__ . '/views/dashboard.html';
     $shell = file_get_contents($shellPath);
     $start = strpos($shell, '<main class="main-content" id="page-content">');

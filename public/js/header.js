@@ -6,6 +6,100 @@ async function initHeader() {
     await loadCurrentUser();
 }
 
+window.appCurrentUser = window.appCurrentUser || null;
+
+function canAccessAppPage(page) {
+    const user = window.appCurrentUser;
+    if (!user) return false;
+    if (Number(user.accessLevel) === 0) return true;
+    return user.permissions?.[page]?.access === true;
+}
+
+function canEditAppPage(page) {
+    const user = window.appCurrentUser;
+    if (!user) return false;
+    if (Number(user.accessLevel) === 0) {
+        return ["recipients", "participants", "upload", "dataset", "account", "manageUsers"].includes(page);
+    }
+    if (Number(user.accessLevel) >= 3) return false;
+    return canAccessAppPage(page) && user.permissions?.[page]?.edit === true;
+}
+
+function pagePermissionForPath(path) {
+    if (path === "/") return "dashboard";
+    if (path === "/penerima-bantuan") return "recipients";
+    if (path === "/peserta-program") return "participants";
+    if (path === "/upload") return "upload";
+    if (path === "/data-set" || path.startsWith("/data-set/")) return "dataset";
+    if (path === "/user") return "activity";
+    if (path === "/account") return "account";
+    if (path === "/updates") return "updates";
+    if (path === "/manage-users") return "manageUsers";
+    return null;
+}
+
+function applyAppPermissions() {
+    if (!window.appCurrentUser) return;
+    document.querySelectorAll("[data-access-page]").forEach(element => {
+        element.hidden = !canAccessAppPage(element.dataset.accessPage);
+    });
+    document.querySelectorAll("[data-permission-edit]").forEach(element => {
+        element.hidden = !canEditAppPage(element.dataset.permissionEdit);
+    });
+    document.querySelectorAll("[data-permission-upload]").forEach(element => {
+        element.hidden = !canEditAppPage(element.dataset.permissionUpload);
+    });
+    const updateButton = document.querySelector("#sidebar .update-check-button");
+    if (updateButton) {
+        updateButton.hidden = Number(window.appCurrentUser.accessLevel) !== 0;
+    }
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    document.body.classList.toggle("permission-read-only", page !== null && !canEditAppPage(page));
+}
+
+window.canAccessAppPage = canAccessAppPage;
+window.canEditAppPage = canEditAppPage;
+window.applyAppPermissions = applyAppPermissions;
+document.addEventListener("app:page-loaded", applyAppPermissions);
+document.addEventListener("dblclick", event => {
+    const cell = event.target instanceof Element ? event.target.closest(".excel-cell") : null;
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (!cell || !page || canEditAppPage(page)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}, true);
+document.addEventListener("keydown", event => {
+    const cell = event.target instanceof Element ? event.target.closest(".excel-cell") : null;
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (!cell || !page || canEditAppPage(page)) return;
+    const editKey = event.key === "Enter" || event.key === "F2" ||
+        event.key === "Backspace" || event.key === "Delete" ||
+        (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) ||
+        ((event.ctrlKey || event.metaKey) && ["v", "x"].includes(event.key.toLocaleLowerCase()));
+    if (!editKey) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}, true);
+document.addEventListener("paste", event => {
+    const cell = event.target instanceof Element ? event.target.closest(".excel-cell") : null;
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (!cell || !page || canEditAppPage(page)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}, true);
+
 function setupSidebarToggle() {
     const button = document.getElementById("sidebarToggle");
 
@@ -100,6 +194,8 @@ function updatePageInfo() {
         title = "Aktiviti Pengguna";
     } else if (path === "/account") {
         title = "Akaun Pengguna";
+    } else if (path === "/manage-users") {
+        title = "Pengguna Lain";
     } else if (path === "/updates") {
         title = "Log Perisian";
     } else if (path === "/peserta-program") {
@@ -160,6 +256,9 @@ function setupUserDropdown() {
     const accountButton =
         document.getElementById("accountButton");
 
+    const manageUsersButton =
+        document.getElementById("manageUsersButton");
+
     const updatesButton =
         document.getElementById("updatesButton");
 
@@ -206,6 +305,18 @@ function setupUserDropdown() {
                 window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: accountUrl } }));
             } else {
                 window.location.assign(accountUrl);
+            }
+        });
+    }
+
+    if (manageUsersButton) {
+        manageUsersButton.addEventListener("click", () => {
+            dropdown.classList.remove("open");
+            const usersUrl = typeof window.appUrl === "function" ? window.appUrl("/manage-users") : "/manage-users";
+            if (typeof window.appUrl === "function") {
+                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: usersUrl } }));
+            } else {
+                window.location.assign(usersUrl);
             }
         });
     }
@@ -305,8 +416,16 @@ async function loadCurrentUser() {
                 data.username;
         }
 
+        window.appCurrentUser = {
+            username: data.username,
+            displayName,
+            accessLevel: Number(data.accessLevel ?? 2),
+            permissions: data.permissions || {}
+        };
+        applyAppPermissions();
+
         if (userIcon) {
-            const color = window.getTextAverageColor(displayName);
+            const color = window.getInverseTextAverageColor(displayName);
             userIcon.style.backgroundColor = getUserColorBackground(color);
             userIcon.style.color = getUserColorText(color);
         }

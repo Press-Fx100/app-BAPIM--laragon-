@@ -20,7 +20,7 @@ let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(
 const rowsPerPage = 10;
 
 function getUserBadgeStyle(displayName) {
-    const color = window.getTextAverageColor(displayName);
+    const color = window.getInverseTextAverageColor(displayName);
     const background = `#${[1, 3, 5].map(offset => {
         const channel = parseInt(color.slice(offset, offset + 2), 16);
         return Math.round(channel + (255 - channel) * 0.85)
@@ -425,7 +425,7 @@ function createChartData() {
         .sort(([first], [second]) => first.localeCompare(second))
         .map(([username, { displayName, values: dailyValues }]) => {
             let cumulative = 0;
-            const color = window.getTextAverageColor(displayName);
+            const color = window.getInverseTextAverageColor(displayName);
 
             return {
                 label: username,

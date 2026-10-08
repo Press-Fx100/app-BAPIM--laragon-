@@ -14,6 +14,7 @@
                     </div>
                     <div class="toolbar-group toolbar-filter">
                         <button type="button" id="openUploadButton" class="toolbar-button icon-button"
+                            data-permission-upload="upload"
                             title="Muat naik set data" aria-label="Muat naik set data">
                             <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
                         </button>
@@ -33,6 +34,7 @@
                         </div>
                     </div>
                     <button type="button" id="toggleDatasetDeleteButton"
+                        data-permission-upload="upload"
                         class="toolbar-button icon-button toolbar-button-danger"
                         title="Padam set data" aria-label="Padam set data">
                         <i class="bi bi-trash3" aria-hidden="true"></i>
@@ -42,7 +44,7 @@
         </div>
 
         <div id="uploadOverlay" class="dataset-upload-overlay" aria-hidden="true">
-        <div id="uploadFloatingCard" class="dataset-upload-card" aria-hidden="true">
+        <div id="uploadFloatingCard" class="dataset-upload-card" data-permission-upload="upload" aria-hidden="true">
 
             <div class="dataset-upload-header">
                 <div>
@@ -60,7 +62,7 @@
                     <div class="dataset-upload-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></div>
                     <h6>Lepaskan fail di sini</h6>
                     <p>atau pilih fail daripada komputer anda</p>
-                    <button type="button" id="browseUploadButton" class="btn btn-primary">
+                    <button type="button" id="browseUploadButton" data-permission-upload="upload" class="btn btn-primary">
                         Pilih Fail
                     </button>
                     <span class="dataset-upload-supported">CSV, XLSX atau XLS</span>
@@ -190,7 +192,7 @@
                 <button type="button" id="cancelUploadButton" class="btn btn-light">
                     Batal
                 </button>
-                <button type="button" id="importUploadButton" class="btn btn-primary">
+                <button type="button" id="importUploadButton" data-permission-upload="upload" class="btn btn-primary">
                     Import Data
                 </button>
             </div>
@@ -237,7 +239,7 @@
                     <button type="button" id="datasetListCancelDeleteButton" class="cancel-delete">
                         Batal
                     </button>
-                    <button type="button" id="datasetListConfirmDeleteButton" class="confirm-delete">
+                    <button type="button" id="datasetListConfirmDeleteButton" data-permission-upload="upload" class="confirm-delete">
                         Padam
                     </button>
                 </div>

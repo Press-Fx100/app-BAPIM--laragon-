@@ -29,3 +29,16 @@ window.getTextAverageColor = function getTextAverageColor(value) {
         .join("")
         .toUpperCase()}`;
 };
+
+window.getInverseTextAverageColor = function getInverseTextAverageColor(value) {
+    const color = window.getTextAverageColor(value);
+
+    return `#${color.slice(1).match(/.{2}/g)
+        .map(channel =>
+            (255 - Number.parseInt(channel, 16))
+                .toString(16)
+                .padStart(2, "0")
+        )
+        .join("")
+        .toUpperCase()}`;
+};
