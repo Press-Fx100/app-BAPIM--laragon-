@@ -26,7 +26,7 @@ function initializeAccountSettings() {
             throw new Error(data.error || "Tidak dapat memuatkan maklumat akaun.");
         }
         usernameInput.value = data.username;
-        displayNameInput.value = data.displayName;
+        displayNameInput.value = data.displayName.toLocaleUpperCase();
         saveButton.disabled = false;
     }
 
@@ -49,12 +49,6 @@ function initializeAccountSettings() {
             currentPasswordInput.focus();
             return;
         }
-        if (newPassword && newPassword.length < 8) {
-            showMessage("Kata laluan baharu mestilah sekurang-kurangnya 8 aksara.", "error");
-            newPasswordInput.focus();
-            return;
-        }
-
         saveButton.disabled = true;
         try {
             const response = await fetch("/api/auth/account", {
@@ -62,7 +56,7 @@ function initializeAccountSettings() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     csrfToken: form.dataset.csrfToken,
-                    displayName: displayNameInput.value,
+                    displayName: displayNameInput.value.trim().toLocaleUpperCase(),
                     currentPassword: currentPasswordInput.value,
                     newPassword,
                     confirmPassword: confirmPasswordInput.value
@@ -74,7 +68,7 @@ function initializeAccountSettings() {
                 return;
             }
 
-            displayNameInput.value = data.displayName;
+            displayNameInput.value = data.displayName.toLocaleUpperCase();
             currentPasswordInput.value = "";
             newPasswordInput.value = "";
             confirmPasswordInput.value = "";
@@ -82,15 +76,16 @@ function initializeAccountSettings() {
             const headerDisplayName = document.getElementById("userDisplayName");
             const headerIcon = document.getElementById("userIcon");
             if (headerDisplayName) {
-                headerDisplayName.textContent = data.displayName;
+                headerDisplayName.textContent = data.displayName.toLocaleUpperCase();
             }
             if (
                 headerIcon &&
-                typeof window.getTextAverageColor === "function" &&
+                typeof window.getInverseTextAverageColor === "function" &&
                 typeof window.getUserColorBackground === "function" &&
                 typeof window.getUserColorText === "function"
             ) {
-                const color = window.getTextAverageColor(data.displayName);
+                const username = window.appCurrentUser?.username || data.username;
+                const color = window.getInverseTextAverageColor(username || data.displayName);
                 headerIcon.style.backgroundColor = window.getUserColorBackground(color);
                 headerIcon.style.color = window.getUserColorText(color);
             }

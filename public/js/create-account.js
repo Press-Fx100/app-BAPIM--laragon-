@@ -5,6 +5,26 @@ const passwordInput = document.getElementById("password");
 const confirmPasswordInput = document.getElementById("confirmPassword");
 const createAccountButton = document.getElementById("createAccountButton");
 const message = document.getElementById("message");
+const usernameHelp = document.querySelector(".username-help");
+
+if (usernameHelp) {
+    usernameInput.addEventListener("input", () => {
+        const caret = usernameInput.selectionStart;
+        const value = usernameInput.value.toLowerCase();
+        const username = value.replace(/[^a-z0-9.]/g, "");
+        if (username !== usernameInput.value) {
+            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9.]/g, "").length;
+            usernameInput.value = username;
+            usernameInput.setSelectionRange(cleanCaret, cleanCaret);
+        }
+    });
+    usernameInput.addEventListener("input", () => {
+        usernameHelp.hidden = false;
+    }, { once: true });
+    usernameInput.addEventListener("invalid", () => {
+        usernameHelp.hidden = false;
+    });
+}
 
 function showMessage(text, type) {
     message.textContent = text;
@@ -22,22 +42,22 @@ form.addEventListener("submit", async event => {
 
     hideMessage();
 
-    const username = usernameInput.value.trim();
-    const displayName = displayNameInput.value.trim();
+    const username = usernameInput.value;
+    const displayName = displayNameInput.value.trim().toLocaleUpperCase();
     const password = passwordInput.value;
     const confirmPassword = confirmPasswordInput.value;
 
     if (!username || !displayName || !password) {
         showMessage(
-            "Please fill in all fields.",
+            "Sila lengkapkan semua ruangan.",
             "error"
         );
         return;
     }
 
-    if (password.length < 8) {
+    if (!/^[a-z0-9.]{1,100}$/.test(username)) {
         showMessage(
-            "Password must be at least 8 characters.",
+            "Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).",
             "error"
         );
         return;
@@ -45,14 +65,14 @@ form.addEventListener("submit", async event => {
 
     if (password !== confirmPassword) {
         showMessage(
-            "Passwords do not match.",
+            "Pengesahan kata laluan tidak sepadan.",
             "error"
         );
         return;
     }
 
     createAccountButton.disabled = true;
-    createAccountButton.textContent = "Creating...";
+    createAccountButton.textContent = "Mencipta akaun...";
 
     try {
         const response = await fetch(
@@ -74,7 +94,7 @@ form.addEventListener("submit", async event => {
 
         if (!response.ok || !data.success) {
             showMessage(
-                data.error || "Failed to create account.",
+                data.error || "Gagal mencipta akaun.",
                 "error"
             );
 
@@ -82,7 +102,7 @@ form.addEventListener("submit", async event => {
         }
 
         showMessage(
-            "Account created successfully. Signing you in...",
+            "Akaun berjaya dicipta. Sedang log masuk...",
             "success"
         );
 
@@ -94,11 +114,11 @@ form.addEventListener("submit", async event => {
         console.error(error);
 
         showMessage(
-            "Unable to connect to the server.",
+            "Tidak dapat menyambung ke pelayan.",
             "error"
         );
     } finally {
         createAccountButton.disabled = false;
-        createAccountButton.textContent = "Create Account";
+        createAccountButton.textContent = "Cipta Akaun";
     }
 });

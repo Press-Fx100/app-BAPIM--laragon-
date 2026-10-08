@@ -10,43 +10,47 @@
                     <div class="search-box">
                         <input type="text" id="participantSearch" placeholder="Cari peserta..." autocomplete="off">
                     </div>
-                    <div class="toolbar-group toolbar-filter">
-                    <div class="column-menu-wrapper">
-                        <button type="button" id="participantColumnButton" class="toolbar-button icon-button" title="Lajur"
-                            aria-controls="participantColumnMenu" aria-expanded="false">
-                            <i class="bi bi-layout-three-columns"></i>
-                        </button>
-                        <div id="participantColumnMenu" class="column-menu">
-                            <div class="column-menu-header">
-                                <button type="button" id="participantSelectAllColumns">Pilih Semua</button>
+                    <div class="toolbar-group toolbar-control-cluster">
+                        <div class="toolbar-filter">
+                            <div class="column-menu-wrapper">
+                                <button type="button" id="participantColumnButton" class="toolbar-button icon-button" title="Lajur"
+                                    aria-controls="participantColumnMenu" aria-expanded="false">
+                                    <i class="bi bi-layout-three-columns"></i>
+                                </button>
+                                <div id="participantColumnMenu" class="column-menu">
+                                    <div class="column-menu-header">
+                                        <button type="button" id="participantSelectAllColumns">Pilih Semua</button>
+                                    </div>
+                                    <div id="participantColumnChecklist"></div>
+                                </div>
                             </div>
-                            <div id="participantColumnChecklist"></div>
+                            <div class="filter-menu-wrapper">
+                                <button type="button" id="participantFilterButton" class="toolbar-button icon-button" title="Tapis"
+                                    aria-controls="participantFilterMenu" aria-expanded="false">
+                                    <i class="bi bi-funnel"></i>
+                                </button>
+                                <div id="participantFilterMenu" class="filter-menu"></div>
+                            </div>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button type="button" id="participantSaveButton"
+                                data-permission-edit="participants"
+                                class="toolbar-button icon-button dataset-save-button" disabled
+                                title="Disimpan" aria-label="Disimpan">
+                                <i class="bi bi-floppy"></i>
+                            </button>
+                            <button type="button" id="participantExportButton" class="toolbar-button icon-button"
+                                title="Muat turun Excel" aria-label="Muat turun Excel">
+                                <i class="bi bi-download" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="participantAddButton" data-permission-edit="participants" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                            <button type="button" id="participantDeleteButton" data-permission-edit="participants" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
+                                <i class="bi bi-trash3"></i>
+                            </button>
                         </div>
                     </div>
-                        <div class="filter-menu-wrapper">
-                        <button type="button" id="participantFilterButton" class="toolbar-button icon-button" title="Tapis"
-                            aria-controls="participantFilterMenu" aria-expanded="false">
-                            <i class="bi bi-funnel"></i>
-                        </button>
-                        <div id="participantFilterMenu" class="filter-menu"></div>
-                        </div>
-                    </div>
-                    <button type="button" id="participantSaveButton"
-                        data-permission-edit="participants"
-                        class="toolbar-button icon-button dataset-save-button" disabled
-                        title="Disimpan" aria-label="Disimpan">
-                        <i class="bi bi-floppy"></i>
-                    </button>
-                    <button type="button" id="participantExportButton" class="toolbar-button icon-button"
-                        title="Muat turun Excel" aria-label="Muat turun Excel">
-                        <i class="bi bi-download" aria-hidden="true"></i>
-                    </button>
-                    <button type="button" id="participantAddButton" data-permission-edit="participants" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
-                    <button type="button" id="participantDeleteButton" data-permission-edit="participants" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
-                        <i class="bi bi-trash3"></i>
-                    </button>
                 </div>
                 <div id="participantDeleteOverlay" class="delete-confirmation-overlay"></div>
                 <div id="participantDeleteConfirmation" class="delete-confirmation" role="dialog" aria-modal="true" aria-hidden="true">

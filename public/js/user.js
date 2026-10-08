@@ -415,6 +415,10 @@ function createChartData() {
         .map(([username, { values: dailyValues }]) => {
             let cumulative = 0;
             const color = window.getInverseTextAverageColor(username);
+            const [red, green, blue] = color.match(/[A-F0-9]{2}/gi).map(channel =>
+                Number.parseInt(channel, 16)
+            );
+            const lineColor = `rgba(${red}, ${green}, ${blue}, 0.65)`;
 
             return {
                 label: username,
@@ -422,8 +426,8 @@ function createChartData() {
                     cumulative += value;
                     return cumulative;
                 }),
-                borderColor: color,
-                backgroundColor: color,
+                borderColor: lineColor,
+                backgroundColor: lineColor,
                 borderWidth: 2,
                 tension: 0.3,
                 fill: false,

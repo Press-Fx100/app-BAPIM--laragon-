@@ -3,7 +3,7 @@ window.getTextAverageColor = function getTextAverageColor(value) {
         .filter(character => character >= "A" && character <= "Z");
     if (!letters.length) return "#808080";
 
-    const channels = letters.reduce((totals, character) => {
+    const letterColors = letters.map(character => {
         const hue = (character.charCodeAt(0) - 65) / 26 * 6;
         const sector = Math.floor(hue);
         const fraction = hue - sector;
@@ -17,15 +17,18 @@ window.getTextAverageColor = function getTextAverageColor(value) {
             [ascending, 0, 255],
             [255, 0, descending]
         ][sector];
-
-        totals[0] += rgb[0];
-        totals[1] += rgb[1];
-        totals[2] += rgb[2];
-        return totals;
-    }, [0, 0, 0]);
+        return rgb;
+    });
+    const baseColor = letterColors[0];
+    const hintColors = letterColors.slice(1);
+    const channels = baseColor.map((channel, index) => {
+        if (!hintColors.length) return channel;
+        const hintAverage = hintColors.reduce((total, color) => total + color[index], 0) / hintColors.length;
+        return Math.round(channel * 0.8 + hintAverage * 0.2);
+    });
 
     return `#${channels
-        .map(channel => Math.round(channel / letters.length).toString(16).padStart(2, "0"))
+        .map(channel => channel.toString(16).padStart(2, "0"))
         .join("")
         .toUpperCase()}`;
 };

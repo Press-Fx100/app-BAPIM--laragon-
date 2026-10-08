@@ -28,7 +28,29 @@ const backToAccountsButton =
 const message =
     document.getElementById("message");
 
+const usernameHelp =
+    document.querySelector(".username-help");
+
 let cachedUsers = [];
+
+if (usernameInput && usernameHelp) {
+    usernameInput.addEventListener("input", () => {
+        const caret = usernameInput.selectionStart;
+        const value = usernameInput.value.toLowerCase();
+        const username = value.replace(/[^a-z0-9.]/g, "");
+        if (username !== usernameInput.value) {
+            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9.]/g, "").length;
+            usernameInput.value = username;
+            usernameInput.setSelectionRange(cleanCaret, cleanCaret);
+        }
+    });
+    usernameInput.addEventListener("input", () => {
+        usernameHelp.hidden = false;
+    }, { once: true });
+    usernameInput.addEventListener("invalid", () => {
+        usernameHelp.hidden = false;
+    });
+}
 
 
 // ============================================================
@@ -481,7 +503,7 @@ async function handleLogin(event) {
 
     const username =
         usernameInput
-            ? usernameInput.value.trim()
+            ? usernameInput.value
             : "";
 
     const password =
@@ -495,6 +517,14 @@ async function handleLogin(event) {
             "error"
         );
 
+        return;
+    }
+
+    if (!/^[a-z0-9.]{1,100}$/.test(username)) {
+        showMessage(
+            "Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).",
+            "error"
+        );
         return;
     }
 

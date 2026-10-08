@@ -59,6 +59,16 @@ function jsonResponse(array $data, int $status = 200): never
     exit;
 }
 
+function isValidUsername(string $username): bool
+{
+    return preg_match('/\A[a-z0-9.]{1,100}\z/', $username) === 1;
+}
+
+function normalizeDisplayName(string $displayName): string
+{
+    return mb_strtoupper(trim($displayName), 'UTF-8');
+}
+
 function currentUser(PDO $pdo): ?array
 {
     if (empty($_SESSION['username'])) {
@@ -123,45 +133,61 @@ function userPagePermissions(array $user): array
             $permissions[$page]['edit'] = filter_var($stored[$page]['edit'] ?? $defaults['edit'], FILTER_VALIDATE_BOOLEAN);
         }
     }
-    if ($accessLevel >= 3) {
-        foreach ($permissions as &$permission) {
-            $permission['edit'] = false;
-        }
-        unset($permission);
-    }
-    $permissions['manageUsers']['access'] = $accessLevel <= 1 && $permissions['manageUsers']['access'];
-    if ($accessLevel <= 1) {
-        $permissions['manageUsers']['edit'] = true;
-    }
+    $permissions['dashboard']['access'] = true;
+    $permissions['manageUsers']['edit'] = $permissions['manageUsers']['access'];
     return $permissions;
 }
 
 function normalizeSubmittedPagePermissions(mixed $submitted, int $accessLevel, array $fallback = []): array
 {
     $defaults = defaultPagePermissions($accessLevel);
+    if ($accessLevel === 0) {
+        return $defaults;
+    }
+    $editablePages = array_keys(array_filter(
+        defaultPagePermissions(2),
+        static fn(array $permission, string $page): bool => $page !== 'manageUsers' && $permission['edit'],
+        ARRAY_FILTER_USE_BOTH
+    ));
     $normalized = [];
     foreach ($defaults as $page => $default) {
         $provided = is_array($submitted) && is_array($submitted[$page] ?? null)
             ? $submitted[$page]
             : ($fallback[$page] ?? []);
+        $access = filter_var($provided['access'] ?? $default['access'], FILTER_VALIDATE_BOOLEAN);
+        if ($page === 'dashboard') {
+            $access = true;
+        }
         $normalized[$page] = [
-            'access' => filter_var($provided['access'] ?? $default['access'], FILTER_VALIDATE_BOOLEAN),
-            'edit' => filter_var($provided['edit'] ?? $default['edit'], FILTER_VALIDATE_BOOLEAN),
+            'access' => $access,
+            'edit' => $page === 'manageUsers'
+                ? $access
+                : (in_array($page, $editablePages, true)
+                    && $access
+                    && filter_var($provided['edit'] ?? $default['edit'], FILTER_VALIDATE_BOOLEAN)),
         ];
     }
-    if ($accessLevel >= 3) {
-        foreach ($normalized as &$permission) {
-            $permission['edit'] = false;
-        }
-        unset($permission);
-    }
-    if ($accessLevel >= 2) {
-        $normalized['manageUsers']['access'] = false;
-    }
-    if ($accessLevel <= 1) {
-        $normalized['manageUsers']['edit'] = true;
-    }
+    $normalized['manageUsers']['edit'] = $normalized['manageUsers']['access'];
     return $normalized;
+}
+
+function deriveAccessLevelFromPermissions(array $permissions, int $requestedLevel): int
+{
+    if ($requestedLevel === 0) {
+        return 0;
+    }
+    if (!empty($permissions['manageUsers']['access'])) {
+        return 1;
+    }
+    foreach (defaultPagePermissions(2) as $page => $default) {
+        if ($page !== 'manageUsers'
+            && $default['edit']
+            && !empty($permissions[$page]['access'])
+            && !empty($permissions[$page]['edit'])) {
+            return 2;
+        }
+    }
+    return 3;
 }
 
 function canAccessUserPage(array $user, string $page): bool
@@ -608,7 +634,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Your session expired. Refresh the page and try again.'], 403);
         }
 
-        $displayName = trim((string)($payload['displayName'] ?? ''));
+        $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
         $currentPassword = (string)($payload['currentPassword'] ?? '');
         $newPassword = (string)($payload['newPassword'] ?? '');
         $confirmPassword = (string)($payload['confirmPassword'] ?? '');
@@ -616,9 +642,6 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Display name is required and must be 160 characters or fewer.'], 400);
         }
         if ($newPassword !== '') {
-            if (strlen($newPassword) < 8) {
-                jsonResponse(['success' => false, 'error' => 'The new password must be at least 8 characters.'], 400);
-            }
             if ($newPassword !== $confirmPassword) {
                 jsonResponse(['success' => false, 'error' => 'The new password confirmation does not match.'], 400);
             }
@@ -640,8 +663,11 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse(['success' => true, 'displayName' => $displayName]);
     }
     if ($path === '/api/auth/login' && $method === 'POST') {
-        $loginName = trim((string)($payload['username'] ?? ''));
+        $loginName = (string)($payload['username'] ?? '');
         $password = (string)($payload['password'] ?? '');
+        if (!isValidUsername($loginName)) {
+            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+        }
         $statement = $pdo->prepare('SELECT username, display_name, password_hash, active, PICname FROM users WHERE username = ? LIMIT 1');
         $statement->execute([$loginName]);
         $account = $statement->fetch();
@@ -667,17 +693,20 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse(['success' => true, 'username' => $user['username'], 'displayName' => $user['display_name'], 'PICname' => $user['PICname']]);
     }
     if ($path === '/api/auth/create-account' && $method === 'POST') {
-        $name = trim((string)($payload['username'] ?? ''));
-        $displayName = trim((string)($payload['displayName'] ?? ''));
+        $name = (string)($payload['username'] ?? '');
+        $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
         $password = (string)($payload['password'] ?? '');
         if ($name === '' || $displayName === '' || $password === '') {
             jsonResponse(['success' => false, 'error' => 'All fields are required.'], 400);
         }
-        if (strlen($name) > 100 || strlen($displayName) > 160 || strlen($password) < 8) {
-            jsonResponse(['success' => false, 'error' => 'Use a username of up to 100 characters, a display name of up to 160 characters, and a password of at least 8 characters.'], 400);
+        if (!isValidUsername($name)) {
+            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+        }
+        if (strlen($displayName) > 160) {
+            jsonResponse(['success' => false, 'error' => 'Display name must be 160 characters or fewer.'], 400);
         }
         try {
-            $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash, access_level) VALUES (?, ?, ?, 2)');
+            $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash, access_level) VALUES (?, ?, ?, 3)');
             $statement->execute([$name, $displayName, password_hash($password, PASSWORD_DEFAULT)]);
         } catch (PDOException $error) {
             if ($error->getCode() === '23000') {
@@ -739,20 +768,27 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
     if ($path === '/api/admin/users' && $method === 'POST') {
         $manager = requirePageCapability($pdo, 'manageUsers', true);
         requireCsrfToken($payload);
-        $newUsername = trim((string)($payload['username'] ?? ''));
-        $displayName = trim((string)($payload['displayName'] ?? ''));
+        $newUsername = (string)($payload['username'] ?? '');
+        $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
         $password = (string)($payload['password'] ?? '');
         $accessLevel = filter_var($payload['accessLevel'] ?? 2, FILTER_VALIDATE_INT);
-        if ($newUsername === '' || strlen($newUsername) > 100 || $displayName === '' || strlen($displayName) > 160) {
-            jsonResponse(['success' => false, 'error' => 'Enter a username (up to 100 characters) and display name (up to 160 characters).'], 400);
+        if (!isValidUsername($newUsername)) {
+            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+        }
+        if ($displayName === '' || strlen($displayName) > 160) {
+            jsonResponse(['success' => false, 'error' => 'Nama paparan diperlukan dan tidak boleh melebihi 160 aksara.'], 400);
+        }
+        if ($password === '') {
+            jsonResponse(['success' => false, 'error' => 'Password is required.'], 400);
         }
         if ($accessLevel === false || $accessLevel < 0 || $accessLevel > 3 || ($accessLevel === 0 && (int)$manager['access_level'] !== 0)) {
             jsonResponse(['success' => false, 'error' => 'You are not allowed to assign that access level.'], 403);
         }
-        if (strlen($password) < 8) {
-            jsonResponse(['success' => false, 'error' => 'Password must be at least 8 characters.'], 400);
-        }
         $permissions = normalizeSubmittedPagePermissions($payload['permissions'] ?? null, $accessLevel);
+        if ($accessLevel !== 0) {
+            $accessLevel = deriveAccessLevelFromPermissions($permissions, $accessLevel);
+            $permissions = normalizeSubmittedPagePermissions($permissions, $accessLevel);
+        }
         try {
             $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash, access_level, page_permissions) VALUES (?, ?, ?, ?, ?)');
             $statement->execute([$newUsername, $displayName, password_hash($password, PASSWORD_DEFAULT), $accessLevel, json_encode($permissions, JSON_THROW_ON_ERROR)]);
@@ -774,19 +810,37 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if (!$target) {
             jsonResponse(['success' => false, 'error' => 'User not found.'], 404);
         }
-        $displayName = trim((string)($payload['displayName'] ?? ''));
+        $newUsername = array_key_exists('username', $payload)
+            ? (string)$payload['username']
+            : (string)$target['username'];
+        $usernameChanged = $newUsername !== (string)$target['username'];
+        if ($usernameChanged && (int)$manager['access_level'] !== 0) {
+            jsonResponse(['success' => false, 'error' => 'Only a dev can change a username.'], 403);
+        }
+        if ($usernameChanged && !isValidUsername($newUsername)) {
+            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+        }
+        $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
         $password = (string)($payload['password'] ?? '');
         $accessLevel = filter_var($payload['accessLevel'] ?? $target['access_level'], FILTER_VALIDATE_INT);
         if ($displayName === '' || strlen($displayName) > 160) {
             jsonResponse(['success' => false, 'error' => 'Display name is required and must be 160 characters or fewer.'], 400);
         }
-        if ($password !== '' && strlen($password) < 8) {
-            jsonResponse(['success' => false, 'error' => 'Password must be at least 8 characters.'], 400);
-        }
         if ($accessLevel === false || $accessLevel < 0 || $accessLevel > 3 || ($accessLevel === 0 && (int)$manager['access_level'] !== 0)) {
             jsonResponse(['success' => false, 'error' => 'You are not allowed to assign that access level.'], 403);
         }
-        if ((int)$target['access_level'] <= 1 && (int)$manager['access_level'] !== 0) {
+        $permissions = normalizeSubmittedPagePermissions(
+            $payload['permissions'] ?? null,
+            $accessLevel,
+            userPagePermissions($target)
+        );
+        if ($accessLevel !== 0) {
+            $accessLevel = deriveAccessLevelFromPermissions($permissions, $accessLevel);
+            $permissions = normalizeSubmittedPagePermissions($permissions, $accessLevel);
+        }
+        if ((int)$target['access_level'] <= 1
+            && (int)$manager['access_level'] !== 0
+            && (int)$target['id'] !== (int)$manager['id']) {
             jsonResponse(['success' => false, 'error' => 'Only a dev can change an admin or dev account.'], 403);
         }
         if ((int)$manager['access_level'] === 1 && (int)$target['id'] === (int)$manager['id'] && $accessLevel !== 1) {
@@ -808,20 +862,41 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
                 jsonResponse(['success' => false, 'error' => 'At least one active dev account must remain.'], 400);
             }
         }
-        $permissions = normalizeSubmittedPagePermissions(
-            $payload['permissions'] ?? null,
-            $accessLevel,
-            userPagePermissions($target)
-        );
         $encodedPermissions = json_encode($permissions, JSON_THROW_ON_ERROR);
-        if ($password !== '') {
-            $statement = $pdo->prepare('UPDATE users SET display_name = ?, password_hash = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
-            $statement->execute([$displayName, password_hash($password, PASSWORD_DEFAULT), (int)$active, $accessLevel, $encodedPermissions, $targetId]);
-        } else {
-            $statement = $pdo->prepare('UPDATE users SET display_name = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
-            $statement->execute([$displayName, (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+        try {
+            $pdo->beginTransaction();
+            if ($password !== '') {
+                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, password_hash = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+                $statement->execute([$newUsername, $displayName, password_hash($password, PASSWORD_DEFAULT), (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+            } else {
+                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+                $statement->execute([$newUsername, $displayName, (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+            }
+            if ($usernameChanged) {
+                $statement = $pdo->prepare('UPDATE login_history SET username = ? WHERE username = ?');
+                $statement->execute([$newUsername, $target['username']]);
+                $statement = $pdo->prepare('UPDATE user_activity SET username = ? WHERE username = ?');
+                $statement->execute([$newUsername, $target['username']]);
+            }
+            $pdo->commit();
+        } catch (PDOException $error) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if ($usernameChanged && $error->getCode() === '23000') {
+                jsonResponse(['success' => false, 'error' => 'Nama pengguna itu sudah digunakan.'], 409);
+            }
+            throw $error;
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $error;
         }
-        jsonResponse(['success' => true]);
+        if ((int)$target['id'] === (int)$manager['id'] && $usernameChanged) {
+            $_SESSION['username'] = $newUsername;
+        }
+        jsonResponse(['success' => true, 'username' => $newUsername]);
     }
     if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) && $method === 'DELETE') {
         $manager = requirePageCapability($pdo, 'manageUsers', true);

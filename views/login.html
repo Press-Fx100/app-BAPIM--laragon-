@@ -9,7 +9,7 @@
 
     <link rel="icon" href="/app.ico" type="image/x-icon">
     <link rel="stylesheet" href="/css/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style.css?v=20261008-28">
 </head>
 
 <body>
@@ -49,10 +49,12 @@
 
                         <label for="username">
                             Nama Pengguna
+                            <small class="username-help" hidden>Huruf kecil, nombor dan titik (.) sahaja.</small>
                         </label>
 
                         <input type="text" id="username" name="username" placeholder="Masukkan nama pengguna"
-                            autocomplete="username" required>
+                            autocomplete="username" autocapitalize="none" spellcheck="false"
+                            pattern="[a-z0-9.]+" title="Gunakan huruf kecil, nombor dan titik (.) sahaja." required>
 
                     </div>
 
@@ -87,7 +89,7 @@
 
     </main>
 
-    <script src="/js/login.js"></script>
+    <script src="/js/login.js?v=20261008-3"></script>
 
 </body>
 

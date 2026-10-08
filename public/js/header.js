@@ -38,6 +38,13 @@ function pagePermissionForPath(path) {
     return null;
 }
 
+function getPermissionTableCell(target) {
+    if (!(target instanceof Element)) return null;
+    return target.closest(
+        ".dataset-table .excel-cell, .recipient-table td[data-row][data-col]"
+    );
+}
+
 function applyAppPermissions() {
     if (!window.appCurrentUser) return;
     document.querySelectorAll("[data-access-page]").forEach(element => {
@@ -57,7 +64,13 @@ function applyAppPermissions() {
         ? window.appPathname(window.location.pathname)
         : window.location.pathname;
     const page = pagePermissionForPath(path);
-    document.body.classList.toggle("permission-read-only", page !== null && !canEditAppPage(page));
+    const readOnly = page !== null && !canEditAppPage(page);
+    document.body.classList.toggle("permission-read-only", readOnly);
+    if (readOnly) {
+        document.querySelectorAll(
+            ".dataset-table td.selected-cell, .dataset-table td.active-cell"
+        ).forEach(cell => cell.classList.remove("selected-cell", "active-cell"));
+    }
 }
 
 window.canAccessAppPage = canAccessAppPage;
@@ -65,32 +78,40 @@ window.canEditAppPage = canEditAppPage;
 window.applyAppPermissions = applyAppPermissions;
 document.addEventListener("app:page-loaded", applyAppPermissions);
 document.addEventListener("dblclick", event => {
-    const cell = event.target instanceof Element ? event.target.closest(".excel-cell") : null;
+    const cell = getPermissionTableCell(event.target);
     const path = typeof window.appPathname === "function"
         ? window.appPathname(window.location.pathname)
         : window.location.pathname;
     const page = pagePermissionForPath(path);
     if (!cell || !page || canEditAppPage(page)) return;
     event.preventDefault();
+    event.stopImmediatePropagation();
+}, true);
+document.addEventListener("mousedown", event => {
+    const cell = getPermissionTableCell(event.target);
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (
+        !cell ||
+        !page ||
+        canEditAppPage(page) ||
+        event.target.closest("button, a, input, select, textarea")
+    ) return;
     event.stopImmediatePropagation();
 }, true);
 document.addEventListener("keydown", event => {
-    const cell = event.target instanceof Element ? event.target.closest(".excel-cell") : null;
+    const cell = getPermissionTableCell(event.target);
     const path = typeof window.appPathname === "function"
         ? window.appPathname(window.location.pathname)
         : window.location.pathname;
     const page = pagePermissionForPath(path);
     if (!cell || !page || canEditAppPage(page)) return;
-    const editKey = event.key === "Enter" || event.key === "F2" ||
-        event.key === "Backspace" || event.key === "Delete" ||
-        (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) ||
-        ((event.ctrlKey || event.metaKey) && ["v", "x"].includes(event.key.toLocaleLowerCase()));
-    if (!editKey) return;
-    event.preventDefault();
     event.stopImmediatePropagation();
 }, true);
 document.addEventListener("paste", event => {
-    const cell = event.target instanceof Element ? event.target.closest(".excel-cell") : null;
+    const cell = getPermissionTableCell(event.target);
     const path = typeof window.appPathname === "function"
         ? window.appPathname(window.location.pathname)
         : window.location.pathname;
@@ -195,7 +216,7 @@ function updatePageInfo() {
     } else if (path === "/account") {
         title = "Akaun Pengguna";
     } else if (path === "/manage-users") {
-        title = "Pengguna Lain";
+        title = "Pengurusan Pengguna";
     } else if (path === "/updates") {
         title = "Log Perisian";
     } else if (path === "/peserta-program") {
@@ -408,7 +429,7 @@ async function loadCurrentUser() {
 
         if (userDisplayName) {
             userDisplayName.textContent =
-                displayName;
+                displayName.toLocaleUpperCase();
         }
 
         if (userName) {
@@ -418,7 +439,7 @@ async function loadCurrentUser() {
 
         window.appCurrentUser = {
             username: data.username,
-            displayName,
+            displayName: displayName.toLocaleUpperCase(),
             accessLevel: Number(data.accessLevel ?? 2),
             permissions: data.permissions || {}
         };

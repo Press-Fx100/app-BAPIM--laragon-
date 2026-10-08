@@ -722,7 +722,7 @@ function checkForChanges() {
     updateSaveButton();
 }
 
-function showDatasetSaveConfirmation() {
+function showDatasetSaveConfirmation(message = "Disimpan", type = "success") {
     const topbar = document.querySelector(".topbar");
     if (!topbar) return;
 
@@ -730,18 +730,21 @@ function showDatasetSaveConfirmation() {
     if (!badge) {
         badge = document.createElement("div");
         badge.className = "save-success-badge";
-        badge.setAttribute("role", "status");
-        badge.setAttribute("aria-live", "polite");
-        badge.textContent = "Disimpan";
         document.body.appendChild(badge);
     }
 
+    badge.textContent = message;
+    badge.classList.toggle("is-error", type === "error");
+    badge.setAttribute("role", type === "error" ? "alert" : "status");
+    badge.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
     badge.style.top = `${topbar.getBoundingClientRect().bottom}px`;
     clearTimeout(saveBadgeTimer);
     badge.classList.remove("is-visible");
     requestAnimationFrame(() => badge.classList.add("is-visible"));
     saveBadgeTimer = setTimeout(() => badge.classList.remove("is-visible"), 1800);
 }
+
+window.showDatasetSaveConfirmation = showDatasetSaveConfirmation;
 
 function discardDatasetTableChanges() {
     closeDatasetCellSuggestions();

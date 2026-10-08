@@ -4,16 +4,24 @@ function initializeUserManagement() {
     form.dataset.initialized = "true";
 
     const usernameInput = document.getElementById("managedUsername");
+    const formAvatar = document.getElementById("managedUserFormAvatar");
+    const usernameHelp = usernameInput.parentElement.querySelector(".username-help");
     const displayNameInput = document.getElementById("managedDisplayName");
     const accessLevelInput = document.getElementById("managedAccessLevel");
     const passwordInput = document.getElementById("managedPassword");
     const passwordHint = document.getElementById("managedPasswordHint");
-    const formTitle = document.getElementById("managedUserFormTitle");
     const saveButton = document.getElementById("saveManagedUserButton");
-    const cancelButton = document.getElementById("cancelManagedUserButton");
     const accessButton = document.getElementById("configureManagedAccessButton");
+    const statusButton = document.getElementById("managedUserStatusButton");
     const message = document.getElementById("managedUserMessage");
     const usersBody = document.getElementById("managedUsersBody");
+    const searchInput = document.getElementById("managedUserSearch");
+    const accessFilterOptions = document.querySelectorAll('input[name="managedUserAccessFilter"]');
+    const filterButton = document.getElementById("managedUserFilterButton");
+    const filterMenu = document.getElementById("managedUserFilterMenu");
+    const manageUsersPage = form.closest(".manage-users-page");
+    const manageUsersLayout = form.closest(".manage-users-layout");
+    const manageUsersCard = form.closest(".manage-users-card");
     const accessOverlay = document.getElementById("managedUserAccessOverlay");
     const accessList = document.getElementById("managedUserAccessList");
     const pageDefinitions = [
@@ -25,7 +33,7 @@ function initializeUserManagement() {
         { key: "activity", label: "Aktiviti Pengguna", editable: false },
         { key: "account", label: "Akaun Pengguna", editable: true, action: "Boleh kemas kini akaun" },
         { key: "updates", label: "Log Perisian", editable: false },
-        { key: "manageUsers", label: "Pengguna Lain", editable: false }
+        { key: "manageUsers", label: "Pengurusan Pengguna", editable: false }
     ];
     const pageKeys = new Set(pageDefinitions.map(page => page.key));
     let users = [];
@@ -34,9 +42,70 @@ function initializeUserManagement() {
     let modalAccessLevel = Number(accessLevelInput.value);
     let draftPermissions = defaultPermissions(Number(accessLevelInput.value));
     let originalModalPermissions = null;
+    let isSyncingDerivedAccessLevel = false;
+
+    function syncManagedUsersListHeight() {
+        if (!manageUsersLayout || !manageUsersCard) return;
+        if (window.matchMedia("(max-width: 900px)").matches) {
+            manageUsersLayout.style.removeProperty("--managed-users-list-height");
+            return;
+        }
+        manageUsersLayout.style.setProperty(
+            "--managed-users-list-height",
+            `${manageUsersCard.getBoundingClientRect().height}px`
+        );
+    }
+
+    syncManagedUsersListHeight();
+    new ResizeObserver(syncManagedUsersListHeight).observe(manageUsersCard);
+
+    usernameInput.addEventListener("input", () => {
+        const caret = usernameInput.selectionStart;
+        const value = usernameInput.value.toLowerCase();
+        const username = value.replace(/[^a-z0-9.]/g, "");
+        if (username !== usernameInput.value) {
+            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9.]/g, "").length;
+            usernameInput.value = username;
+            usernameInput.setSelectionRange(cleanCaret, cleanCaret);
+        }
+    });
+    usernameInput.addEventListener("input", () => {
+        usernameHelp.hidden = false;
+    }, { once: true });
+    usernameInput.addEventListener("input", () => updateFormAvatar(usernameInput.value));
+    usernameInput.addEventListener("invalid", () => {
+        usernameHelp.hidden = false;
+    });
 
     function currentManagerLevel() {
         return Number(window.appCurrentUser?.accessLevel ?? 2);
+    }
+
+    function updateFormAvatar(username) {
+        const color = window.getInverseTextAverageColor(username || "");
+        formAvatar.style.backgroundColor = window.getUserColorBackground(color);
+        formAvatar.style.color = window.getUserColorText(color);
+    }
+
+    function updateCurrentUserHeader(user) {
+        window.appCurrentUser = {
+            ...window.appCurrentUser,
+            username: user.username,
+            displayName: user.displayName,
+            accessLevel: Number(user.accessLevel),
+            permissions: user.permissions
+        };
+        const headerDisplayName = document.getElementById("userDisplayName");
+        const headerUsername = document.getElementById("userName");
+        const headerIcon = document.getElementById("userIcon");
+        if (headerDisplayName) headerDisplayName.textContent = user.displayName.toLocaleUpperCase();
+        if (headerUsername) headerUsername.textContent = user.username;
+        if (headerIcon) {
+            const color = window.getInverseTextAverageColor(user.username);
+            headerIcon.style.backgroundColor = window.getUserColorBackground(color);
+            headerIcon.style.color = window.getUserColorText(color);
+        }
+        if (typeof window.applyAppPermissions === "function") window.applyAppPermissions();
     }
 
     function defaultPermissions(level) {
@@ -51,24 +120,46 @@ function initializeUserManagement() {
     }
 
     function safePermissions(permissions, level) {
+        if (level === 0) return defaultPermissions(0);
         const defaults = defaultPermissions(level);
         const result = {};
         pageDefinitions.forEach(page => {
             const provided = permissions?.[page.key];
+            const access = page.key === "dashboard"
+                ? true
+                : typeof provided?.access === "boolean" ? provided.access : defaults[page.key].access;
             result[page.key] = {
-                access: typeof provided?.access === "boolean" ? provided.access : defaults[page.key].access,
-                edit: typeof provided?.edit === "boolean" ? provided.edit : defaults[page.key].edit
+                access,
+                edit: page.key === "manageUsers"
+                    ? access
+                    : page.editable && access && (typeof provided?.edit === "boolean" ? provided.edit : defaults[page.key].edit)
             };
         });
-        if (level >= 2) result.manageUsers.access = false;
-        if (level >= 3) pageDefinitions.forEach(page => { result[page.key].edit = false; });
         return result;
     }
 
+    function deriveAccessLevel(permissions, requestedLevel) {
+        if (requestedLevel === 0) return 0;
+        if (permissions.manageUsers.access) return 1;
+        if (pageDefinitions.some(page => page.editable && permissions[page.key].access && permissions[page.key].edit)) {
+            return 2;
+        }
+        return 3;
+    }
+
+    function setDerivedAccessLevel(level) {
+        isSyncingDerivedAccessLevel = true;
+        try {
+            accessLevelInput.value = String(level);
+            accessLevelInput.dispatchEvent(new Event("change", { bubbles: true }));
+        } finally {
+            isSyncingDerivedAccessLevel = false;
+        }
+    }
+
     function showMessage(text, type = "error") {
-        message.textContent = text;
-        message.className = `message ${type}`;
-        message.hidden = false;
+        showDatasetSaveConfirmation(text, type);
+        clearMessage();
     }
 
     function clearMessage() {
@@ -76,15 +167,26 @@ function initializeUserManagement() {
         message.textContent = "";
     }
 
+    function updateStatusButton(isActive) {
+        statusButton.textContent = isActive ? "Nyahaktifkan Akaun" : "Aktifkan Akaun";
+        statusButton.className = `btn ${isActive
+            ? "btn-outline-danger managed-user-deactivate-button"
+            : "btn-outline-primary"}`;
+    }
+
     function resetForm() {
         editingUser = null;
         form.reset();
+        usernameHelp.hidden = true;
+        usernameInput.addEventListener("input", () => {
+            usernameHelp.hidden = false;
+        }, { once: true });
         usernameInput.readOnly = false;
+        updateFormAvatar("");
         passwordInput.required = true;
-        passwordHint.textContent = "(minimum 8 aksara)";
-        formTitle.textContent = "Tambah Pengguna";
+        passwordHint.textContent = "";
         saveButton.textContent = "Tambah Pengguna";
-        cancelButton.hidden = true;
+        statusButton.hidden = true;
         accessLevelInput.disabled = false;
         accessButton.disabled = false;
         accessLevelInput.value = "2";
@@ -94,69 +196,88 @@ function initializeUserManagement() {
         clearMessage();
     }
 
-    function appendCell(row, text) {
-        const cell = document.createElement("td");
-        cell.textContent = text;
-        row.appendChild(cell);
-        return cell;
-    }
-
-    function levelLabel(level) {
-        return ["Dev", "Admin", "Pengguna", "Viewer"][Number(level)] || "Pengguna";
-    }
-
     function canManageTarget(user) {
-        return currentManagerLevel() === 0 || Number(user.accessLevel) > 1;
+        return currentManagerLevel() === 0
+            || user.username === window.appCurrentUser?.username
+            || Number(user.accessLevel) > 1;
+    }
+
+    function setFilterMenuOpen(isOpen) {
+        filterMenu.classList.toggle("show", isOpen);
+        filterButton.setAttribute("aria-expanded", String(isOpen));
+        filterButton.closest(".managed-users-list-card").classList.toggle("filter-menu-open", isOpen);
     }
 
     function renderUsers() {
         usersBody.replaceChildren();
-        if (!users.length) {
-            const row = document.createElement("tr");
-            const cell = appendCell(row, "Tiada pengguna.");
-            cell.colSpan = 5;
-            cell.className = "managed-users-empty";
-            usersBody.appendChild(row);
+        const query = searchInput.value.trim().toLocaleLowerCase();
+        const accessLevel = document.querySelector('input[name="managedUserAccessFilter"]:checked').value;
+        const filteredUsers = users.filter(user =>
+            `${user.displayName} ${user.username}`.toLocaleLowerCase().includes(query) &&
+            (!accessLevel || Number(user.accessLevel) === Number(accessLevel))
+        );
+        if (!filteredUsers.length) {
+            const empty = document.createElement("div");
+            empty.className = "managed-user-list-empty";
+            empty.textContent = users.length ? "Tiada pengguna sepadan." : "Tiada pengguna.";
+            usersBody.appendChild(empty);
             return;
         }
 
-        users.forEach(user => {
-            const row = document.createElement("tr");
-            appendCell(row, user.username);
-            appendCell(row, user.displayName);
-            appendCell(row, `${user.accessLevel} - ${levelLabel(user.accessLevel)}`);
-            const status = appendCell(row, Number(user.active) === 1 ? "Aktif" : "Tidak aktif");
-            status.className = `managed-user-status ${Number(user.active) === 1 ? "is-active" : "is-inactive"}`;
+        filteredUsers.forEach(user => {
+            const level = Number(user.accessLevel);
+            const accessDetails = {
+                0: { label: "Dev", icon: "bi-code-slash" },
+                1: { label: "Admin", icon: "bi-shield-lock" },
+                2: { label: "Editor", icon: "bi-pencil-square" },
+                3: { label: "Viewer", icon: "bi-eye" }
+            }[level] || { label: "Tahap akses " + level, icon: "bi-person" };
+            const row = document.createElement("div");
+            row.className = "managed-user-list-row";
+            row.setAttribute("role", "listitem");
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "managed-user-list-item";
+            item.disabled = !canManageTarget(user);
+            item.setAttribute(
+                "aria-label",
+                `Kemaskini ${user.displayName}, ${user.username}, akses ${accessDetails.label}${Number(user.active) === 1 ? "" : ", akaun dinyahaktifkan"}`
+            );
 
-            const actions = document.createElement("td");
-            actions.className = "managed-user-actions";
-            if (canManageTarget(user)) {
-                const editButton = document.createElement("button");
-                editButton.type = "button";
-                editButton.className = "btn btn-sm btn-outline-primary";
-                editButton.textContent = "Kemaskini";
-                editButton.addEventListener("click", () => beginEdit(user));
-                actions.appendChild(editButton);
-
-                const permissionButton = document.createElement("button");
-                permissionButton.type = "button";
-                permissionButton.className = "btn btn-sm btn-outline-secondary";
-                permissionButton.textContent = "Akses";
-                permissionButton.addEventListener("click", () => openAccessModal(user));
-                actions.appendChild(permissionButton);
-
-                if (Number(user.accessLevel) > 1) {
-                    const statusButton = document.createElement("button");
-                    statusButton.type = "button";
-                    statusButton.className = `btn btn-sm ${Number(user.active) === 1 ? "btn-outline-danger" : "btn-outline-success"}`;
-                    statusButton.textContent = Number(user.active) === 1 ? "Nyahaktifkan" : "Aktifkan";
-                    statusButton.addEventListener("click", () => toggleUserStatus(user));
-                    actions.appendChild(statusButton);
-                }
+            const userDetails = document.createElement("span");
+            userDetails.className = "managed-user-list-details";
+            const displayName = document.createElement("span");
+            displayName.className = `managed-user-list-name${Number(user.active) === 1 ? "" : " is-inactive"}`;
+            displayName.textContent = user.displayName.toLocaleUpperCase();
+            const username = document.createElement("span");
+            username.className = "managed-user-list-username";
+            username.textContent = user.username;
+            userDetails.append(displayName, username);
+            const accessIcon = document.createElement("i");
+            accessIcon.className = `bi ${accessDetails.icon} managed-user-access-icon`;
+            accessIcon.dataset.accessLevel = String(level);
+            accessIcon.title = accessDetails.label;
+            accessIcon.setAttribute("aria-hidden", "true");
+            const statusIcons = document.createElement("span");
+            statusIcons.className = "managed-user-list-status-icons";
+            if (Number(user.active) === 1) {
+                statusIcons.appendChild(accessIcon);
             } else {
-                actions.textContent = "Akses terhad";
+                const inactiveIcon = document.createElement("i");
+                inactiveIcon.className = "bi bi-person-x-fill managed-user-inactive-icon";
+                inactiveIcon.title = "Akaun dinyahaktifkan";
+                inactiveIcon.setAttribute("aria-hidden", "true");
+                statusIcons.appendChild(inactiveIcon);
             }
-            row.appendChild(actions);
+            const profileIcon = document.createElement("i");
+            profileIcon.className = "bi bi-person-fill managed-user-profile-icon";
+            const usernameColor = window.getInverseTextAverageColor(user.username);
+            profileIcon.style.backgroundColor = window.getUserColorBackground(usernameColor);
+            profileIcon.style.color = window.getUserColorText(usernameColor);
+            profileIcon.setAttribute("aria-hidden", "true");
+            item.append(profileIcon, userDetails, statusIcons);
+            item.addEventListener("click", () => beginEdit(user));
+            row.appendChild(item);
             usersBody.appendChild(row);
         });
     }
@@ -164,8 +285,9 @@ function initializeUserManagement() {
     function beginEdit(user) {
         editingUser = user;
         usernameInput.value = user.username;
-        usernameInput.readOnly = true;
-        displayNameInput.value = user.displayName;
+        updateFormAvatar(user.username);
+        usernameInput.readOnly = currentManagerLevel() !== 0;
+        displayNameInput.value = user.displayName.toLocaleUpperCase();
         accessLevelInput.value = String(user.accessLevel);
         accessLevelInput.disabled = currentManagerLevel() !== 0 && Number(user.accessLevel) <= 1;
         accessLevelInput.querySelector('option[value="0"]').disabled = currentManagerLevel() !== 0;
@@ -173,14 +295,15 @@ function initializeUserManagement() {
         passwordInput.value = "";
         passwordInput.required = false;
         passwordHint.textContent = "(biarkan kosong untuk kekalkan)";
-        formTitle.textContent = `Kemaskini Pengguna: ${user.username}`;
         saveButton.textContent = "Simpan Perubahan";
-        cancelButton.hidden = false;
         accessButton.disabled = !canManageTarget(user);
+        statusButton.hidden = user.username === window.appCurrentUser?.username
+            || (Number(user.accessLevel) <= 1 && currentManagerLevel() !== 0);
+        updateStatusButton(Number(user.active) === 1);
         draftPermissions = safePermissions(user.permissions, Number(user.accessLevel));
         clearMessage();
         form.scrollIntoView({ behavior: "smooth", block: "start" });
-        displayNameInput.focus();
+        (usernameInput.readOnly ? displayNameInput : usernameInput).focus();
     }
 
     async function request(url, options = {}) {
@@ -199,7 +322,7 @@ function initializeUserManagement() {
     }
 
     async function loadUsers() {
-        usersBody.innerHTML = '<tr><td colspan="5" class="managed-users-empty">Memuatkan pengguna...</td></tr>';
+        usersBody.innerHTML = '<div class="managed-user-list-empty">Memuatkan pengguna...</div>';
         try {
             const data = await request("/api/admin/users");
             users = data.users;
@@ -207,11 +330,10 @@ function initializeUserManagement() {
         } catch (error) {
             console.error("User list loading error:", error);
             usersBody.replaceChildren();
-            const row = document.createElement("tr");
-            const cell = appendCell(row, error.message);
-            cell.colSpan = 5;
-            cell.className = "managed-users-empty is-error";
-            usersBody.appendChild(row);
+            const empty = document.createElement("div");
+            empty.className = "managed-user-list-empty is-error";
+            empty.textContent = error.message;
+            usersBody.appendChild(empty);
         }
     }
 
@@ -227,12 +349,12 @@ function initializeUserManagement() {
             pageLabel.className = "managed-user-page-access";
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
-            checkbox.checked = permission.access;
-            checkbox.disabled = (level === 0) || (level >= 2 && page.key === "manageUsers");
+            checkbox.checked = page.key === "dashboard" || permission.access;
+            checkbox.disabled = page.key === "dashboard" || level === 0;
             checkbox.addEventListener("change", () => {
                 permission.access = checkbox.checked;
                 row.classList.toggle("is-disabled", !permission.access);
-                actionSwitch.disabled = !page.editable || !permission.access || level >= 3;
+                if (actionSwitch) actionSwitch.disabled = !page.editable || !permission.access || level === 0;
             });
             const checkboxText = document.createElement("span");
             checkboxText.textContent = page.label;
@@ -247,7 +369,7 @@ function initializeUserManagement() {
                 switchInput.type = "checkbox";
                 switchInput.setAttribute("role", "switch");
                 switchInput.checked = permission.edit;
-                switchInput.disabled = !permission.access || level >= 3 || level === 0;
+                switchInput.disabled = !permission.access || level === 0;
                 switchInput.setAttribute("aria-label", page.action);
                 switchInput.addEventListener("change", () => {
                     permission.edit = switchInput.checked;
@@ -258,7 +380,7 @@ function initializeUserManagement() {
                 row.appendChild(actionLabel);
                 actionSwitch = switchInput;
                 checkbox.addEventListener("change", () => {
-                    actionSwitch.disabled = !page.editable || !permission.access || level >= 3;
+                    actionSwitch.disabled = !page.editable || !permission.access || level === 0;
                 });
             } else {
                 const readOnly = document.createElement("span");
@@ -269,16 +391,6 @@ function initializeUserManagement() {
             row.classList.toggle("is-disabled", !permission.access);
             accessList.appendChild(row);
         });
-        const message = document.getElementById("managedUserAccessNote");
-        if (message) {
-            message.textContent = level === 0
-                ? "Dev sentiasa mempunyai akses penuh. Tetapan halaman tidak boleh dihadkan."
-                : level === 3
-                    ? "Viewer hanya boleh melihat halaman. Suis suntingan tidak tersedia."
-                    : level === 1
-                        ? "Admin boleh mengurus pengguna dan mempunyai keupayaan pengguna."
-                        : "Pengguna boleh menyunting jadual dan memuat naik set data, tetapi tidak boleh mengurus pengguna.";
-        }
     }
 
     function openAccessModal(user = null) {
@@ -310,31 +422,45 @@ function initializeUserManagement() {
     }
 
     async function saveAccessModal() {
-        const accessLevel = modalAccessLevel;
-        const permissions = safePermissions(draftPermissions, accessLevel);
+        const permissions = safePermissions(draftPermissions, modalAccessLevel);
+        const accessLevel = deriveAccessLevel(permissions, modalAccessLevel);
         if (!accessTarget) {
             draftPermissions = permissions;
+            setDerivedAccessLevel(accessLevel);
+            modalAccessLevel = accessLevel;
             closeAccessModal();
-            showMessage("Tetapan akses akan disimpan bersama akaun.", "success");
+            showMessage("Kebenaran akan disimpan bersama akaun.", "success");
             return;
         }
 
         const saveButton = document.getElementById("saveManagedUserAccess");
         saveButton.disabled = true;
         try {
-            const targetUsername = accessTarget.username;
-            await request(`/api/admin/users/${encodeURIComponent(accessTarget.id)}`, {
+            const target = accessTarget;
+            const targetUsername = target.username;
+            await request(`/api/admin/users/${encodeURIComponent(target.id)}`, {
                 method: "PUT",
                 body: JSON.stringify({
                     csrfToken: form.dataset.csrfToken,
-                    displayName: accessTarget.displayName,
+                    displayName: target.displayName,
                     accessLevel,
                     permissions,
-                    active: Boolean(Number(accessTarget.active))
+                    active: Boolean(Number(target.active))
                 })
             });
+            if (editingUser?.id === target.id) {
+                editingUser = { ...editingUser, accessLevel, permissions };
+                setDerivedAccessLevel(accessLevel);
+                accessLevelInput.disabled = currentManagerLevel() !== 0 && accessLevel <= 1;
+                accessButton.disabled = !canManageTarget(editingUser);
+                statusButton.hidden = editingUser.username === window.appCurrentUser?.username
+                    || (accessLevel <= 1 && currentManagerLevel() !== 0);
+                draftPermissions = permissions;
+                modalAccessLevel = accessLevel;
+                updateStatusButton(Number(editingUser.active) === 1);
+            }
             closeAccessModal();
-            showMessage(`Tetapan akses ${targetUsername} berjaya disimpan.`, "success");
+            showMessage(`Kebenaran ${targetUsername} berjaya disimpan.`, "success");
             await loadUsers();
         } catch (error) {
             console.error("User access update error:", error);
@@ -360,6 +486,10 @@ function initializeUserManagement() {
                     active: !isActive
                 })
             });
+            user.active = isActive ? 0 : 1;
+            if (editingUser?.id === user.id) {
+                updateStatusButton(!isActive);
+            }
             showMessage(`Akaun ${user.username} berjaya ${isActive ? "dinyahaktifkan" : "diaktifkan"}.`, "success");
             await loadUsers();
         } catch (error) {
@@ -373,8 +503,30 @@ function initializeUserManagement() {
         usernameInput.focus();
         form.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-    cancelButton.addEventListener("click", resetForm);
+    searchInput.addEventListener("input", renderUsers);
+    filterButton.addEventListener("click", () => {
+        setFilterMenuOpen(!filterMenu.classList.contains("show"));
+    });
+    accessFilterOptions.forEach(option => {
+        option.addEventListener("change", () => {
+            renderUsers();
+            setFilterMenuOpen(false);
+        });
+    });
+    manageUsersPage.addEventListener("click", event => {
+        if (filterMenu.contains(event.target) || filterButton.contains(event.target)) return;
+        setFilterMenuOpen(false);
+    });
+    manageUsersPage.addEventListener("keydown", event => {
+        if (event.key !== "Escape" || !filterMenu.classList.contains("show")) return;
+        setFilterMenuOpen(false);
+        filterButton.focus();
+    });
+    statusButton.addEventListener("click", () => {
+        if (editingUser) toggleUserStatus(editingUser);
+    });
     accessLevelInput.addEventListener("change", () => {
+        if (isSyncingDerivedAccessLevel) return;
         const nextLevel = Number(accessLevelInput.value);
         if (nextLevel === 0 && currentManagerLevel() !== 0) {
             accessLevelInput.value = "2";
@@ -400,39 +552,76 @@ function initializeUserManagement() {
         event.preventDefault();
         clearMessage();
         saveButton.disabled = true;
-        const accessLevel = Number(accessLevelInput.value);
-        const permissions = safePermissions(draftPermissions, accessLevel);
+        const selectedAccessLevel = Number(accessLevelInput.value);
+        const permissions = safePermissions(draftPermissions, selectedAccessLevel);
+        const accessLevel = deriveAccessLevel(permissions, selectedAccessLevel);
+        setDerivedAccessLevel(accessLevel);
+        modalAccessLevel = accessLevel;
+        draftPermissions = permissions;
         const payload = {
             csrfToken: form.dataset.csrfToken,
-            username: usernameInput.value.trim(),
-            displayName: displayNameInput.value.trim(),
+            username: usernameInput.value,
+            displayName: displayNameInput.value.trim().toLocaleUpperCase(),
             accessLevel,
             permissions,
             password: passwordInput.value
         };
+        if (!editingUser || payload.username !== editingUser.username) {
+            if (!/^[a-z0-9.]{1,100}$/.test(payload.username)) {
+                showMessage("Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).");
+                saveButton.disabled = false;
+                return;
+            }
+        }
         try {
             let successMessage;
             if (editingUser) {
-                await request(`/api/admin/users/${encodeURIComponent(editingUser.id)}`, {
+                const editedUser = editingUser;
+                const isCurrentUser = editedUser.username === window.appCurrentUser?.username;
+                const result = await request(`/api/admin/users/${encodeURIComponent(editedUser.id)}`, {
                     method: "PUT",
                     body: JSON.stringify({
                         csrfToken: payload.csrfToken,
+                        username: payload.username,
                         displayName: payload.displayName,
                         accessLevel: payload.accessLevel,
                         permissions: payload.permissions,
                         password: payload.password,
-                        active: Boolean(Number(editingUser.active))
+                        active: Boolean(Number(editedUser.active))
                     })
                 });
-                successMessage = `Akaun ${editingUser.username} berjaya dikemaskini.`;
+                successMessage = `Akaun ${payload.username} berjaya dikemaskini.`;
+                editingUser = {
+                    ...editedUser,
+                    username: result.username || payload.username,
+                    displayName: payload.displayName,
+                    accessLevel: payload.accessLevel,
+                    permissions: payload.permissions
+                };
+                if (isCurrentUser) updateCurrentUserHeader(editingUser);
+                passwordInput.value = "";
+                passwordInput.required = false;
+                passwordHint.textContent = "(biarkan kosong untuk kekalkan)";
+                usernameInput.value = editingUser.username;
+                usernameInput.readOnly = currentManagerLevel() !== 0;
+                updateFormAvatar(editingUser.username);
+                displayNameInput.value = editingUser.displayName;
+                accessLevelInput.value = String(editingUser.accessLevel);
+                accessLevelInput.disabled = currentManagerLevel() !== 0 && Number(editingUser.accessLevel) <= 1;
+                accessLevelInput.dispatchEvent(new Event("change", { bubbles: true }));
+                accessButton.disabled = !canManageTarget(editingUser);
+                statusButton.hidden = editingUser.username === window.appCurrentUser?.username
+                    || (Number(editingUser.accessLevel) <= 1 && currentManagerLevel() !== 0);
+                updateStatusButton(Number(editingUser.active) === 1);
+                draftPermissions = safePermissions(editingUser.permissions, Number(editingUser.accessLevel));
             } else {
                 await request("/api/admin/users", {
                     method: "POST",
                     body: JSON.stringify(payload)
                 });
                 successMessage = `Akaun ${payload.username} berjaya ditambah.`;
+                resetForm();
             }
-            resetForm();
             await loadUsers();
             showMessage(successMessage, "success");
         } catch (error) {
