@@ -425,7 +425,7 @@ async function loadCurrentUser() {
         applyAppPermissions();
 
         if (userIcon) {
-            const color = window.getInverseTextAverageColor(displayName);
+            const color = window.getInverseTextAverageColor(data.username);
             userIcon.style.backgroundColor = getUserColorBackground(color);
             userIcon.style.color = getUserColorText(color);
         }

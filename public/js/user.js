@@ -19,8 +19,8 @@ let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(
 
 const rowsPerPage = 10;
 
-function getUserBadgeStyle(displayName) {
-    const color = window.getInverseTextAverageColor(displayName);
+function getUserBadgeStyle(username) {
+    const color = window.getInverseTextAverageColor(username);
     const background = `#${[1, 3, 5].map(offset => {
         const channel = parseInt(color.slice(offset, offset + 2), 16);
         return Math.round(channel + (255 - channel) * 0.85)
@@ -238,11 +238,6 @@ function normalizeActivity(activity) {
     return {
         id: activity.id ?? "",
         username: activity.username ?? "",
-        displayName:
-            activity.display_name ??
-            activity.displayName ??
-            activity.username ??
-            "",
         dataset:
             activity.dataset_name ??
             activity.dataset ??
@@ -401,17 +396,11 @@ function createChartData() {
 
     monthActivities.forEach(activity => {
         const username = String(activity.username || "").trim() || "Unknown";
-        const displayName = String(
-            activity.display_name ??
-            activity.displayName ??
-            username
-        ).trim() || username;
         const day = Number(activity.day);
         if (!Number.isInteger(day) || day < 1 || day > daysInMonth) return;
 
         if (!dailyByUser.has(username)) {
             dailyByUser.set(username, {
-                displayName,
                 values: Array(daysInMonth).fill(0)
             });
         }
@@ -423,9 +412,9 @@ function createChartData() {
 
     const datasets = [...dailyByUser.entries()]
         .sort(([first], [second]) => first.localeCompare(second))
-        .map(([username, { displayName, values: dailyValues }]) => {
+        .map(([username, { values: dailyValues }]) => {
             let cumulative = 0;
-            const color = window.getInverseTextAverageColor(displayName);
+            const color = window.getInverseTextAverageColor(username);
 
             return {
                 label: username,
@@ -653,7 +642,7 @@ function renderTable() {
             }[activity.action] || actionText.toLowerCase().replaceAll(" ", "-");
             const action = escapeHTML(actionText);
             const user = escapeHTML(activity.username);
-            const userBadgeStyle = getUserBadgeStyle(activity.displayName);
+            const userBadgeStyle = getUserBadgeStyle(activity.username);
             const previousValue = escapeHTML(activity.oldValue || "—");
             const nextValue = escapeHTML(activity.newValue || "—");
 

@@ -1000,7 +1000,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         );
         $progressStatement->execute([$activityUsername, $account['username'], $account['PICname']]);
         $progressChange = (int)$progressStatement->fetchColumn();
-        $statement = $pdo->prepare("SELECT activity.id, activity.username, COALESCE((SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS display_name, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
+        $statement = $pdo->prepare("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
         $statement->bindValue(1, $limit, PDO::PARAM_INT);
         $statement->execute();
         $activities = $statement->fetchAll();
@@ -1017,7 +1017,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Activity cannot be requested for a future month.'], 400);
         }
         $earliest = $pdo->query("SELECT MIN(DATE_FORMAT(created_at, '%Y-%m')) FROM user_activity WHERE action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')")->fetchColumn();
-        $statement = $pdo->prepare("SELECT username, MAX(COALESCE((SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(user_activity.username)) LIMIT 1), (SELECT account.display_name FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(user_activity.username)) LIMIT 1), user_activity.username)) AS display_name, DAY(created_at) AS day, SUM(CASE WHEN TRIM(COALESCE(old_value,'')) = '' AND TRIM(COALESCE(new_value,'')) <> '' THEN 1 WHEN TRIM(COALESCE(old_value,'')) <> '' AND TRIM(COALESCE(new_value,'')) = '' THEN -1 ELSE 0 END) AS progress_change FROM user_activity WHERE (action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')) AND DATE_FORMAT(created_at, '%Y-%m') = ? GROUP BY username, DAY(created_at) ORDER BY username, day");
+        $statement = $pdo->prepare("SELECT username, day, SUM(progress_change) AS progress_change FROM (SELECT COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(user_activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(user_activity.username)) LIMIT 1), user_activity.username) AS username, DAY(created_at) AS day, SUM(CASE WHEN TRIM(COALESCE(old_value,'')) = '' AND TRIM(COALESCE(new_value,'')) <> '' THEN 1 WHEN TRIM(COALESCE(old_value,'')) <> '' AND TRIM(COALESCE(new_value,'')) = '' THEN -1 ELSE 0 END) AS progress_change FROM user_activity WHERE (action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')) AND DATE_FORMAT(created_at, '%Y-%m') = ? GROUP BY user_activity.username, DAY(created_at)) AS daily_activity GROUP BY username, day ORDER BY username, day");
         $statement->execute([$month]);
         $activities = $statement->fetchAll();
         jsonResponse([
@@ -1029,7 +1029,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
     }
     if ($path === '/api/audit' && $method === 'GET') {
         requirePageCapability($pdo, 'activity');
-        $activities = $pdo->query("SELECT activity.id, activity.username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id WHERE activity.created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ORDER BY activity.created_at DESC, activity.id DESC")->fetchAll();
+        $activities = $pdo->query("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id WHERE activity.created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ORDER BY activity.created_at DESC, activity.id DESC")->fetchAll();
         jsonResponse($activities);
     }
 
@@ -1081,7 +1081,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             $statement = $pdo->prepare("INSERT INTO datasets (name, filename, filepath, row_count, column_count, file_size, dataset_type, created_at, updated_at, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'local')");
             $statement->execute([$name, $safeOriginal, $filepath, max(count($rows) - 1, 0), count($rows[0]), strlen($csv), $datasetType]);
             $id = (int)$pdo->lastInsertId();
-            recordActivity($pdo, $account['display_name'], $id, $name, 'dataset_create');
+            recordActivity($pdo, $account['username'], $id, $name, 'dataset_create');
             $pdo->commit();
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) {
@@ -1130,10 +1130,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
                 }
             }
             $rows[] = $row;
-            updateCsvDataset($pdo, $dataset, normalizeRows($rows), $account['display_name']);
+            updateCsvDataset($pdo, $dataset, normalizeRows($rows), $account['username']);
             jsonResponse(['success' => true, 'datasetId' => (int)$dataset['id']], 201);
         }
-        editMappedRecord($pdo, $payload, $account['display_name'], $participant, $method === 'DELETE');
+        editMappedRecord($pdo, $payload, $account['username'], $participant, $method === 'DELETE');
     }
     if (preg_match('#^/api/datasets/(\d+)$#', $path, $matches) && $method === 'PUT') {
         $account = requirePageCapability($pdo, 'dataset', true);
@@ -1148,7 +1148,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ($rows === []) {
             jsonResponse(['success' => false, 'error' => 'Dataset cannot be empty.'], 400);
         }
-        $updated = updateCsvDataset($pdo, $dataset, $rows, $account['display_name']);
+        $updated = updateCsvDataset($pdo, $dataset, $rows, $account['username']);
         jsonResponse(['success' => true, 'id' => (int)$updated['id'], 'row_count' => (int)$updated['row_count'], 'column_count' => (int)$updated['column_count'], 'file_size' => (int)$updated['file_size'], 'version' => (int)$updated['version'], 'sync_status' => 'modified']);
     }
     $isUploadDelete = preg_match('#^/api/upload/datasets/\d+$#', $path) === 1;
@@ -1169,7 +1169,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             }
             $pdo->beginTransaction();
             try {
-                recordActivity($pdo, $account['display_name'], $id, $dataset['name'], 'dataset_delete');
+                recordActivity($pdo, $account['username'], $id, $dataset['name'], 'dataset_delete');
                 $statement->execute([$id]);
                 $pdo->commit();
             } catch (Throwable $error) {
