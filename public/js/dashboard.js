@@ -419,7 +419,7 @@ function getDatasetViewerUrl(datasetId, filters) {
     const detailParams = new URLSearchParams(query);
     detailParams.set("id", datasetId);
 
-    return `/data-set?${detailParams.toString()}`;
+    return `/set-data?${detailParams.toString()}`;
 }
 
 function openChartFilter(columnIndex, value) {
@@ -2392,14 +2392,14 @@ if (picSelect) {
     );
 }
 
-initializeDashboard();
+window.appInitialPageReady = initializeDashboard();
 
 document.addEventListener("app:page-loaded", () => {
     const pathname = typeof window.appPathname === "function"
         ? window.appPathname(window.location.pathname)
         : window.location.pathname;
     if (pathname === "/") {
-        initializeDashboard(true);
+        window.registerAppPageLoadTask(initializeDashboard(true));
     }
 });
 })();

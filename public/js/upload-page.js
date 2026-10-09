@@ -97,7 +97,7 @@ function initializeUploadPage() {
             window.setTimeout(() => {
                 window.dispatchEvent(
                     new CustomEvent("app:navigate", {
-                        detail: { url: "/data-set" }
+                        detail: { url: "/set-data" }
                     })
                 );
             }, 350);

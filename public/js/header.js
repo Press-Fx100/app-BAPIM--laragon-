@@ -29,12 +29,12 @@ function pagePermissionForPath(path) {
     if (path === "/") return "dashboard";
     if (path === "/penerima-bantuan") return "recipients";
     if (path === "/peserta-program") return "participants";
-    if (path === "/upload") return "upload";
-    if (path === "/data-set" || path.startsWith("/data-set/")) return "dataset";
-    if (path === "/user") return "activity";
-    if (path === "/account") return "account";
-    if (path === "/updates") return "updates";
-    if (path === "/manage-users") return "manageUsers";
+    if (path === "/muat-naik") return "upload";
+    if (path === "/set-data" || path.startsWith("/set-data/")) return "dataset";
+    if (path === "/aktiviti-pengguna") return "activity";
+    if (path === "/akaun-pengguna") return "account";
+    if (path === "/log-perisian") return "updates";
+    if (path === "/pengurusan-pengguna") return "manageUsers";
     return null;
 }
 
@@ -205,25 +205,25 @@ function updatePageInfo() {
 
     if (path === "/") {
         title = "Papan Pemuka";
-    } else if (path === "/upload") {
+    } else if (path === "/muat-naik") {
         title = "Muat Naik";
-    } else if (path === "/data-set") {
+    } else if (path === "/set-data") {
         title = "Set Data";
-    } else if (path.startsWith("/data-set/")) {
+    } else if (path.startsWith("/set-data/")) {
         title = "Paparan Set Data";
-    } else if (path === "/user") {
+    } else if (path === "/aktiviti-pengguna") {
         title = "Aktiviti Pengguna";
-    } else if (path === "/account") {
+    } else if (path === "/akaun-pengguna") {
         title = "Akaun Pengguna";
-    } else if (path === "/manage-users") {
+    } else if (path === "/pengurusan-pengguna") {
         title = "Pengurusan Pengguna";
-    } else if (path === "/updates") {
+    } else if (path === "/log-perisian") {
         title = "Log Perisian";
     } else if (path === "/peserta-program") {
         title = "Peserta Program";
     } else if (path === "/penerima-bantuan") {
         title = "Penerima Bantuan";
-    } else if (path === "/create-account") {
+    } else if (path === "/cipta-akaun") {
         title = "Cipta Akaun";
     }
 
@@ -314,6 +314,8 @@ function setupUserDropdown() {
 
     const logoutButton =
         document.getElementById("logoutButton");
+    const menu =
+        document.getElementById("userDropdownMenu");
 
     if (!dropdown || !button) {
         return;
@@ -325,32 +327,38 @@ function setupUserDropdown() {
 
     button.dataset.dropdownBound = "true";
 
+    const closeDropdown = () => {
+        dropdown.classList.remove("open");
+        button.setAttribute("aria-expanded", "false");
+        menu?.setAttribute("aria-hidden", "true");
+    };
+
     button.addEventListener("click", event => {
         event.stopPropagation();
 
-        dropdown.classList.toggle("open");
+        const isOpen = dropdown.classList.toggle("open");
 
-        button.setAttribute(
-            "aria-expanded",
-            dropdown.classList.contains("open")
-        );
+        button.setAttribute("aria-expanded", String(isOpen));
+        menu?.setAttribute("aria-hidden", String(!isOpen));
     });
 
     document.addEventListener("click", event => {
         if (!dropdown.contains(event.target)) {
-            dropdown.classList.remove("open");
+            closeDropdown();
+        }
+    });
 
-            button.setAttribute(
-                "aria-expanded",
-                "false"
-            );
+    dropdown.addEventListener("keydown", event => {
+        if (event.key === "Escape" && dropdown.classList.contains("open")) {
+            closeDropdown();
+            button.focus();
         }
     });
 
     if (accountButton) {
         accountButton.addEventListener("click", () => {
-            dropdown.classList.remove("open");
-            const accountUrl = typeof window.appUrl === "function" ? window.appUrl("/account") : "/account";
+            closeDropdown();
+            const accountUrl = typeof window.appUrl === "function" ? window.appUrl("/akaun-pengguna") : "/akaun-pengguna";
             if (typeof window.appUrl === "function") {
                 window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: accountUrl } }));
             } else {
@@ -361,8 +369,8 @@ function setupUserDropdown() {
 
     if (manageUsersButton) {
         manageUsersButton.addEventListener("click", () => {
-            dropdown.classList.remove("open");
-            const usersUrl = typeof window.appUrl === "function" ? window.appUrl("/manage-users") : "/manage-users";
+            closeDropdown();
+            const usersUrl = typeof window.appUrl === "function" ? window.appUrl("/pengurusan-pengguna") : "/pengurusan-pengguna";
             if (typeof window.appUrl === "function") {
                 window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: usersUrl } }));
             } else {
@@ -373,8 +381,8 @@ function setupUserDropdown() {
 
     if (updatesButton) {
         updatesButton.addEventListener("click", () => {
-            dropdown.classList.remove("open");
-            const updatesUrl = typeof window.appUrl === "function" ? window.appUrl("/updates") : "/updates";
+            closeDropdown();
+            const updatesUrl = typeof window.appUrl === "function" ? window.appUrl("/log-perisian") : "/log-perisian";
             if (typeof window.appUrl === "function") {
                 window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: updatesUrl } }));
             } else {
@@ -384,7 +392,10 @@ function setupUserDropdown() {
     }
 
     if (logoutButton) {
-        logoutButton.addEventListener("click", logout);
+        logoutButton.addEventListener("click", () => {
+            closeDropdown();
+            logout();
+        });
     }
 }
 
@@ -415,8 +426,8 @@ async function logout() {
     localStorage.removeItem("displayName");
 
     window.location.href = typeof window.appUrl === "function"
-        ? window.appUrl("/login")
-        : "/login";
+        ? window.appUrl("/log-masuk")
+        : "/log-masuk";
 }
 
 
@@ -493,11 +504,11 @@ async function loadCurrentUser() {
         const path = typeof window.appPathname === "function"
             ? window.appPathname(window.location.pathname)
             : window.location.pathname;
-        if (path !== "/login") {
+        if (path !== "/log-masuk") {
             window.location.replace(
                 typeof window.appUrl === "function"
-                    ? window.appUrl("/login")
-                    : "/login"
+                    ? window.appUrl("/log-masuk")
+                    : "/log-masuk"
             );
         }
     }

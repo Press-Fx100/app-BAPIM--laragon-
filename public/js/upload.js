@@ -1777,7 +1777,7 @@ document.addEventListener(
         if (
             (typeof window.appPathname === "function"
                 ? window.appPathname(window.location.pathname)
-                : window.location.pathname) !== "/upload" &&
+                : window.location.pathname) !== "/muat-naik" &&
             uploadOverlay?.parentElement === document.body
         ) {
             closeUpload();

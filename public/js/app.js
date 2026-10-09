@@ -12,6 +12,9 @@ const dashboardNode =
 const pageCache = new Map();
 let documentLoaded = document.readyState === "complete";
 let layoutReady = false;
+let initialRevealStarted = false;
+let initialPageTasks = [];
+let pageLoadTasks = initialPageTasks;
 let tableHeaderDrag = null;
 let suppressTableHeaderClick = null;
 let leaveConfirmationResolver = null;
@@ -401,10 +404,52 @@ if (pageContent) {
     pageContent.classList.add("page-transition");
 }
 
-function revealInitialPage() {
-    if (pageContent && documentLoaded && layoutReady) {
-        pageContent.classList.add("is-visible");
+function registerPageLoadTask(task) {
+    if (task && typeof task.then === "function") {
+        pageLoadTasks.push(Promise.resolve(task));
     }
+}
+
+window.registerAppPageLoadTask = registerPageLoadTask;
+
+if (window.appInitialPageReady) {
+    registerPageLoadTask(window.appInitialPageReady);
+}
+
+function beginPageLoading() {
+    document.body.classList.add("app-page-loading");
+}
+
+function waitForPageLoadTasks(tasks) {
+    return Promise.allSettled(tasks).then(results => {
+        results.forEach(result => {
+            if (result.status === "rejected") {
+                console.error("Page initialization failed:", result.reason);
+            }
+        });
+    });
+}
+
+async function finishPageLoading() {
+    pageContent?.classList.add("is-ready");
+    document.body.classList.remove("app-page-loading");
+    await nextFrame();
+    pageContent?.classList.add("is-visible");
+}
+
+async function revealInitialPage() {
+    if (
+        !pageContent ||
+        !documentLoaded ||
+        !layoutReady ||
+        initialRevealStarted
+    ) {
+        return;
+    }
+
+    initialRevealStarted = true;
+    await waitForPageLoadTasks(initialPageTasks);
+    await finishPageLoading();
 }
 
 function wait(milliseconds) {
@@ -421,11 +466,44 @@ async function replacePageContent(update) {
         return;
     }
 
+    pageContent.classList.remove("is-ready");
     pageContent.classList.remove("is-visible");
-    await wait(160);
     update();
     pageContent.offsetWidth;
     await nextFrame();
+}
+
+async function transitionPageOut() {
+    if (!pageContent?.classList.contains("is-visible")) {
+        return;
+    }
+
+    await nextFrame();
+    if (!pageContent.classList.contains("is-visible")) {
+        return;
+    }
+
+    let timeoutId;
+    const transitionEnded = new Promise(resolve => {
+        const finish = event => {
+            if (event && (
+                event.target !== pageContent ||
+                event.propertyName !== "opacity"
+            )) {
+                return;
+            }
+
+            pageContent.removeEventListener("transitionend", finish);
+            clearTimeout(timeoutId);
+            resolve();
+        };
+
+        pageContent.addEventListener("transitionend", finish);
+        timeoutId = window.setTimeout(() => finish(), 250);
+    });
+
+    pageContent.classList.remove("is-visible");
+    await transitionEnded;
 }
 
 async function revealPageContent() {
@@ -445,15 +523,15 @@ function updateActiveNavigation(pathname) {
         const page =
             pathname === "/"
                 ? "dashboard"
-                : pathname.startsWith("/data-set")
+                : pathname.startsWith("/set-data")
                     ? "upload"
-                    : pathname === "/upload"
+                    : pathname === "/muat-naik"
                         ? "upload"
                         : pathname === "/peserta-program"
                             ? "peserta-program"
                             : pathname === "/penerima-bantuan"
                                 ? "penerima-bantuan"
-                            : pathname === "/user"
+                            : pathname === "/aktiviti-pengguna"
                             ? "user"
                             : "";
 
@@ -473,12 +551,14 @@ function updateHistory(target, replace) {
 }
 
 async function notifyPageLoaded() {
+    pageLoadTasks = [];
     document.dispatchEvent(new Event("app:page-loaded"));
     initializeCustomSelects();
 
     if (typeof window.initHeader === "function") {
         await window.initHeader();
     }
+    await waitForPageLoadTasks(pageLoadTasks);
 }
 
 async function navigateTo(url, replace = false) {
@@ -494,15 +574,15 @@ async function navigateTo(url, replace = false) {
     const targetPathname = appPathname(target.pathname);
     const supported =
         targetPathname === "/" ||
-        targetPathname === "/data-set" ||
-        targetPathname.startsWith("/data-set/") ||
-        targetPathname === "/upload" ||
+        targetPathname === "/set-data" ||
+        targetPathname.startsWith("/set-data/") ||
+        targetPathname === "/muat-naik" ||
         targetPathname === "/peserta-program" ||
         targetPathname === "/penerima-bantuan" ||
-        targetPathname === "/user" ||
-        targetPathname === "/account" ||
-        targetPathname === "/manage-users" ||
-        targetPathname === "/updates";
+        targetPathname === "/aktiviti-pengguna" ||
+        targetPathname === "/akaun-pengguna" ||
+        targetPathname === "/pengurusan-pengguna" ||
+        targetPathname === "/log-perisian";
 
     if (
         target.origin !== window.location.origin ||
@@ -523,55 +603,67 @@ async function navigateTo(url, replace = false) {
         if (typeof window.resetTableState === "function") window.resetTableState();
     }
 
-    if (targetPathname === "/" && dashboardNode) {
-        await replacePageContent(() => pageContent.replaceChildren(dashboardNode));
+    const transitionOut = transitionPageOut();
+    beginPageLoading();
+    initialPageTasks = [];
+    pageLoadTasks = [];
+
+    try {
+        await transitionOut;
+
+        if (targetPathname === "/" && dashboardNode) {
+            await replacePageContent(() => pageContent.replaceChildren(dashboardNode));
+            updateHistory(target, replace);
+            updateActiveNavigation(targetPathname);
+            await notifyPageLoaded();
+            await finishPageLoading();
+            return;
+        }
+
+        const cacheKey = target.pathname + target.search;
+        let markup = pageCache.get(cacheKey);
+
+        if (!markup) {
+            const response = await fetch(
+                target.pathname + target.search,
+                {
+                    headers: {
+                        "X-App-Fragment": "true"
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(`Page HTTP ${response.status}`);
+            }
+
+            const fragment = await response.text();
+            const parsed = new DOMParser().parseFromString(
+                fragment,
+                "text/html"
+            );
+            const main = parsed.querySelector("main.main-content");
+
+            if (!main) {
+                throw new Error("Page fragment is missing main content.");
+            }
+
+            markup = main.innerHTML;
+            pageCache.set(cacheKey, markup);
+        }
+
+        await replacePageContent(() => {
+            pageContent.innerHTML = markup;
+        });
         updateHistory(target, replace);
         updateActiveNavigation(targetPathname);
+
         await notifyPageLoaded();
-        await revealPageContent();
-        return;
+        await finishPageLoading();
+    } catch (error) {
+        await finishPageLoading();
+        throw error;
     }
-
-    const cacheKey = target.pathname + target.search;
-    let markup = pageCache.get(cacheKey);
-
-    if (!markup) {
-        const response = await fetch(
-            target.pathname + target.search,
-            {
-                headers: {
-                    "X-App-Fragment": "true"
-                }
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error(`Page HTTP ${response.status}`);
-        }
-
-        const fragment = await response.text();
-        const parsed = new DOMParser().parseFromString(
-            fragment,
-            "text/html"
-        );
-        const main = parsed.querySelector("main.main-content");
-
-        if (!main) {
-            throw new Error("Page fragment is missing main content.");
-        }
-
-        markup = main.innerHTML;
-        pageCache.set(cacheKey, markup);
-    }
-
-    await replacePageContent(() => {
-        pageContent.innerHTML = markup;
-    });
-    updateHistory(target, replace);
-    updateActiveNavigation(targetPathname);
-
-    await notifyPageLoaded();
-    await revealPageContent();
 }
 
 document.addEventListener("click", event => {
@@ -620,4 +712,5 @@ window.addEventListener("load", () => {
     revealInitialPage();
 });
 
+beginPageLoading();
 updateActiveNavigation(appPathname(window.location.pathname));

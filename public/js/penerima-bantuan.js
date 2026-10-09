@@ -273,7 +273,7 @@
             });
             documentEventsBound = true;
         }
-        load();
+        return load();
     }
     function bind(id, event, fn) { const node = $(id); if (node) node.addEventListener(event, fn); }
     function finishEditOnOutsideClick(event) {
@@ -1055,13 +1055,15 @@
             label.textContent = `${first}-${last} daripada ${filtered.length} baris`;
         }
     }
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", () => {
+        window.registerAppPageLoadTask(init());
+    });
     document.addEventListener("app:page-loaded", () => {
         const pathname = typeof window.appPathname === "function"
             ? window.appPathname(window.location.pathname)
             : window.location.pathname;
         if (pathname === "/penerima-bantuan") {
-            init();
+            window.registerAppPageLoadTask(init());
             return;
         }
         closeAdd();

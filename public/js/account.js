@@ -38,10 +38,11 @@ function initializeAccountSettings() {
         saveButton.disabled = false;
     }
 
-    loadAccount().catch(error => {
+    const accountLoadTask = loadAccount().catch(error => {
         console.error("Account details loading error:", error);
         showMessage(error.message, "error");
     });
+    window.registerAppPageLoadTask(accountLoadTask);
 
     form.addEventListener("submit", async event => {
         event.preventDefault();

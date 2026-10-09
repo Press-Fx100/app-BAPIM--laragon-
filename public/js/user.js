@@ -968,7 +968,7 @@ function initializeUserPage() {
                 button.addEventListener("click", handler);
             }
         });
-        loadActivities();
+        return loadActivities();
     }
 }
 
@@ -991,10 +991,10 @@ function getFilteredActivityCount() {
 
 document.addEventListener(
     "DOMContentLoaded",
-    initializeUserPage
+    () => window.registerAppPageLoadTask(initializeUserPage())
 );
 document.addEventListener(
     "app:page-loaded",
-    initializeUserPage
+    () => window.registerAppPageLoadTask(initializeUserPage())
 );
 })();

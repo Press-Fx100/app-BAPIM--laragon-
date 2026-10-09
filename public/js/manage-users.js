@@ -633,7 +633,7 @@ function initializeUserManagement() {
     });
 
     document.getElementById("managedUserAccessError").hidden = true;
-    request("/api/auth/me").then(data => {
+    const pageLoadTask = request("/api/auth/me").then(data => {
         window.appCurrentUser = {
             username: data.username,
             displayName: data.displayName,
@@ -647,6 +647,7 @@ function initializeUserManagement() {
         console.error("Current user permission loading error:", error);
         showMessage(error.message);
     });
+    window.registerAppPageLoadTask(pageLoadTask);
 }
 
 document.addEventListener("app:page-loaded", initializeUserManagement);

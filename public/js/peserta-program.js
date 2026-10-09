@@ -138,10 +138,12 @@
             document.addEventListener("paste", pasteClipboard);
             documentEventsBound = true;
         }
-        load();
+        return load();
     }
 
-    document.addEventListener("DOMContentLoaded", initialize);
+    document.addEventListener("DOMContentLoaded", () => {
+        window.registerAppPageLoadTask(initialize());
+    });
     document.addEventListener("app:page-loaded", () => {
         const pathname = typeof window.appPathname === "function"
             ? window.appPathname(window.location.pathname)
@@ -154,7 +156,9 @@
             if (overlay?.parentElement === document.body) overlay.remove();
         });
     });
-    document.addEventListener("app:page-loaded", initialize);
+    document.addEventListener("app:page-loaded", () => {
+        window.registerAppPageLoadTask(initialize());
+    });
 
     async function load() {
         try {

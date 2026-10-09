@@ -1,5 +1,15 @@
 const releaseNotes = [
     {
+        date: "2026-10-09",
+        items: [
+            "Kandungan halaman hanya ditunjukkan selepas pemuatan selesai, dengan peralihan masuk dan keluar yang lancar.",
+            "Menu sisi tidak lagi memaparkan logo tambahan, dan tajuk bahagian kekal kelihatan pada paparan telefon.",
+            "Pergerakan kandungan desktop semasa menu sisi dibuka atau diciutkan kekal beranimasi.",
+            "Animasi pertukaran halaman dikekalkan walaupun tetapan Reduce Motion aktif.",
+            "Menu pengguna direka semula dengan animasi buka dan tutup serta sokongan kekunci Escape."
+        ]
+    },
+    {
         date: "2026-10-08",
         items: [
             "Tetapan Akaun Pengguna kini menggunakan susun atur yang sepadan dengan Pengurusan Pengguna.",

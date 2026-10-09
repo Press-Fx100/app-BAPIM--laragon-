@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         else if (
-            currentPath === "/upload"
+            currentPath === "/muat-naik"
         ) {
 
             currentPage =
@@ -119,7 +119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         else if (
-            currentPath === "/data-set"
+            currentPath === "/set-data"
         ) {
 
             currentPage =

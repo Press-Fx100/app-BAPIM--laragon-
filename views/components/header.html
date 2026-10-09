@@ -11,7 +11,8 @@
     <div class="topbar-right">
         <div class="user-dropdown" id="userDropdown">
 
-            <button type="button" class="user-dropdown-button" id="userDropdownButton" aria-expanded="false">
+            <button type="button" class="user-dropdown-button" id="userDropdownButton"
+                aria-expanded="false" aria-controls="userDropdownMenu">
                 <div class="user-avatar" id="userIcon">
                     <i class="bi bi-person-fill" aria-hidden="true"></i>
                 </div>
@@ -28,21 +29,25 @@
 
             </button>
 
-            <div class="user-dropdown-menu" id="userDropdownMenu">
+            <div class="user-dropdown-menu" id="userDropdownMenu" aria-hidden="true">
                 <button type="button" class="dropdown-item" id="manageUsersButton" data-access-page="manageUsers" hidden>
-                    Pengurusan Pengguna
+                    <i class="bi bi-people" aria-hidden="true"></i>
+                    <span>Pengurusan Pengguna</span>
                 </button>
 
                 <button type="button" class="dropdown-item" id="accountButton" data-access-page="account">
-                    Akaun Pengguna
+                    <i class="bi bi-person-gear" aria-hidden="true"></i>
+                    <span>Akaun Pengguna</span>
                 </button>
 
                 <button type="button" class="dropdown-item" id="updatesButton" data-access-page="updates">
-                    Log Perisian
+                    <i class="bi bi-journal-text" aria-hidden="true"></i>
+                    <span>Log Perisian</span>
                 </button>
 
                 <button type="button" class="dropdown-item logout-item" id="logoutButton">
-                    Log Keluar
+                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                    <span>Log Keluar</span>
                 </button>
             </div>
 

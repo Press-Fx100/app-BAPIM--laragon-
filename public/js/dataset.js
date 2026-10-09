@@ -59,12 +59,16 @@ function initializeDatasetListController() {
     }
 
     initializedDatasetGrid = grid;
-    loadDatasetList();
     setupDatasetEvents();
+    return loadDatasetList();
 }
 
-document.addEventListener("DOMContentLoaded", initializeDatasetListController);
-document.addEventListener("app:page-loaded", initializeDatasetListController);
+document.addEventListener("DOMContentLoaded", () => {
+    window.registerAppPageLoadTask(initializeDatasetListController());
+});
+document.addEventListener("app:page-loaded", () => {
+    window.registerAppPageLoadTask(initializeDatasetListController());
+});
 
 function setupDatasetEvents() {
     searchInput?.addEventListener("input", () => {
@@ -226,7 +230,7 @@ function renderDatasets() {
             window.dispatchEvent(
                 new CustomEvent("app:navigate", {
                     detail: {
-                        url: `/data-set?id=${encodeURIComponent(id)}`
+                        url: `/set-data?id=${encodeURIComponent(id)}`
                     }
                 })
             );
@@ -374,7 +378,7 @@ async function confirmDelete() {
         const currentPath = typeof window.appPathname === "function"
             ? window.appPathname(window.location.pathname)
             : window.location.pathname;
-        const deleteEndpoint = currentPath === "/upload"
+        const deleteEndpoint = currentPath === "/muat-naik"
             ? `/api/upload/datasets/${encodeURIComponent(id)}`
             : `/api/datasets/${encodeURIComponent(id)}`;
         const response = await fetch(
@@ -4397,9 +4401,11 @@ function initializeDatasetViewController() {
 
         if (detailView.dataset.loaded !== "true") {
             detailView.dataset.loaded = "true";
-            loadDataset();
+            return loadDataset();
         }
     }
+
+    return Promise.resolve();
 }
 
 function bindDatasetViewEvents(detailView) {
@@ -4517,21 +4523,23 @@ function bindDatasetViewEvents(detailView) {
         });
 }
 
-document.addEventListener("DOMContentLoaded", initializeDatasetViewController);
+document.addEventListener("DOMContentLoaded", () => {
+    window.registerAppPageLoadTask(initializeDatasetViewController());
+});
 document.addEventListener("app:page-loaded", () => {
     const pathname = typeof window.appPathname === "function"
         ? window.appPathname(window.location.pathname)
         : window.location.pathname;
-    const isDatasetDetail = pathname === "/data-set" &&
+    const isDatasetDetail = pathname === "/set-data" &&
         new URLSearchParams(window.location.search).has("id");
     if (isDatasetDetail) {
-        initializeDatasetViewController();
+        window.registerAppPageLoadTask(initializeDatasetViewController());
         return;
     }
     closeAddForm();
     const addForm = document.getElementById("addForm");
     if (addForm?.parentElement === document.body) addForm.remove();
-    initializeDatasetViewController();
+    window.registerAppPageLoadTask(initializeDatasetViewController());
 });
 
 })();

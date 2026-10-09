@@ -210,12 +210,12 @@ function requiredPageForPath(string $path): ?string
     if ($path === '/') return 'dashboard';
     if ($path === '/penerima-bantuan') return 'recipients';
     if ($path === '/peserta-program') return 'participants';
-    if ($path === '/upload') return 'upload';
-    if ($path === '/data-set' || preg_match('#^/data-set/\\d+$#', $path)) return 'dataset';
-    if ($path === '/user') return 'activity';
-    if ($path === '/account') return 'account';
-    if ($path === '/updates') return 'updates';
-    if ($path === '/manage-users') return 'manageUsers';
+    if ($path === '/muat-naik') return 'upload';
+    if ($path === '/set-data' || preg_match('#^/set-data/\\d+$#', $path)) return 'dataset';
+    if ($path === '/aktiviti-pengguna') return 'activity';
+    if ($path === '/akaun-pengguna') return 'account';
+    if ($path === '/log-perisian') return 'updates';
+    if ($path === '/pengurusan-pengguna') return 'manageUsers';
     return null;
 }
 
@@ -1285,35 +1285,62 @@ if (str_starts_with($path, '/api/')) {
     }
 }
 
+if (preg_match('#^/data-set/(\d+)$#', $path, $legacyDatasetMatch)) {
+    $queryParameters = [];
+    parse_str((string)(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_QUERY) ?? ''), $queryParameters);
+    $queryParameters['id'] = $legacyDatasetMatch[1];
+    $legacyDestination = '/set-data?' . http_build_query($queryParameters);
+} else {
+    $legacyPagePaths = [
+        '/user' => '/aktiviti-pengguna',
+        '/upload' => '/muat-naik',
+        '/data-set' => '/set-data',
+        '/account' => '/akaun-pengguna',
+        '/manage-users' => '/pengurusan-pengguna',
+        '/updates' => '/log-perisian',
+        '/login' => '/log-masuk',
+        '/create-account' => '/cipta-akaun',
+    ];
+    $legacyDestination = $legacyPagePaths[$path] ?? null;
+}
+if ($legacyDestination !== null) {
+    $query = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_QUERY);
+    $location = $basePath . $legacyDestination;
+    if (!str_contains($legacyDestination, '?') && is_string($query) && $query !== '') {
+        $location .= '?' . $query;
+    }
+    header('Location: ' . $location, true, 302);
+    exit;
+}
+
 $pages = [
     '/' => 'dashboard.html',
-    '/login' => 'login.html',
-    '/create-account' => 'create-account.html',
-    '/upload' => 'upload.html',
-    '/data-set' => 'dataset.html',
+    '/log-masuk' => 'login.html',
+    '/cipta-akaun' => 'create-account.html',
+    '/muat-naik' => 'upload.html',
+    '/set-data' => 'dataset.html',
     '/peserta-program' => 'peserta-program.html',
     '/penerima-bantuan' => 'penerima-bantuan.html',
-    '/user' => 'user.html',
-    '/manage-users' => 'manage-users.html',
-    '/account' => 'account.html',
-    '/updates' => 'updates.html',
+    '/aktiviti-pengguna' => 'user.html',
+    '/pengurusan-pengguna' => 'manage-users.html',
+    '/akaun-pengguna' => 'account.html',
+    '/log-perisian' => 'updates.html',
     '/sidebar' => 'components/sidebar.html',
     '/header' => 'components/header.html',
 ];
 $page = $pages[$path] ?? null;
-if ($page === null && preg_match('#^/data-set/(\d+)$#', $path, $matches)) {
-    header('Location: ' . $basePath . '/data-set?id=' . rawurlencode($matches[1]), true, 302);
+if ($page === null && preg_match('#^/set-data/(\d+)$#', $path, $matches)) {
+    header('Location: ' . $basePath . '/set-data?id=' . rawurlencode($matches[1]), true, 302);
     exit;
 }
 if ($page === null) {
-    http_response_code(404);
-    echo 'Not found';
+    header('Location: ' . $basePath . '/', true, 302);
     exit;
 }
 
 $user = currentUser($pdo);
-if ($path !== '/login' && $path !== '/create-account' && $path !== '/sidebar' && $path !== '/header' && !$user) {
-    header('Location: ' . $basePath . '/login');
+if ($path !== '/log-masuk' && $path !== '/cipta-akaun' && $path !== '/sidebar' && $path !== '/header' && !$user) {
+    header('Location: ' . $basePath . '/log-masuk');
     exit;
 }
 if ($user && ($requiredPage = requiredPageForPath($path)) !== null && !canAccessUserPage($user, $requiredPage)) {
@@ -1351,10 +1378,10 @@ $rewriteHtmlUrls = static function (string $markup) use ($basePath): string {
 };
 $html = $rewriteHtmlUrls($html);
 
-if ($path === '/account') {
+if ($path === '/akaun-pengguna') {
     $html = str_replace('__APP_CSRF_TOKEN__', htmlspecialchars(appCsrfToken(), ENT_QUOTES, 'UTF-8'), $html);
 }
-if ($path === '/manage-users') {
+if ($path === '/pengurusan-pengguna') {
     $html = str_replace('__APP_CSRF_TOKEN__', htmlspecialchars(appCsrfToken(), ENT_QUOTES, 'UTF-8'), $html);
 }
 
@@ -1367,7 +1394,7 @@ if (isset($_SERVER['HTTP_X_APP_FRAGMENT']) || in_array($path, ['/sidebar', '/hea
     exit;
 }
 
-if ($path === '/upload' || $path === '/data-set' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/user' || $path === '/manage-users' || $path === '/account' || $path === '/updates') {
+if ($path === '/muat-naik' || $path === '/set-data' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/aktiviti-pengguna' || $path === '/pengurusan-pengguna' || $path === '/akaun-pengguna' || $path === '/log-perisian') {
     $shellPath = __DIR__ . '/views/dashboard.html';
     $shell = file_get_contents($shellPath);
     $start = strpos($shell, '<main class="main-content" id="page-content">');
