@@ -32,7 +32,7 @@ return static function (PDO $pdo, string $rootDirectory): void {
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     $sourceUsers = $sourcePdo->query(
-        'SELECT username, user_email, password_hash, role, unit_id, status_acc FROM users'
+        'SELECT user_nama, user_email, password_hash, role, unit_id, status_acc FROM users'
     )->fetchAll();
     if ($sourceUsers === []) {
         throw new RuntimeException('The BPA users table is empty; no users were imported.');
@@ -76,7 +76,7 @@ return static function (PDO $pdo, string $rootDirectory): void {
             throw new RuntimeException('A BPA user has an unsupported role, unit, or status; no users were imported.');
         }
 
-        $displayName = trim((string)$sourceUser['username']);
+        $displayName = trim((string)$sourceUser['user_nama']);
         $passwordHash = (string)$sourceUser['password_hash'];
         if ($displayName === '' || strlen($displayName) > 160 || $passwordHash === '') {
             throw new RuntimeException('A BPA user is missing a required name or password hash; no users were imported.');
