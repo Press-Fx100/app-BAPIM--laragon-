@@ -261,10 +261,16 @@ function initializeUserManagement() {
             : "btn-outline-primary"}`;
     }
 
+    function setUnit(value) {
+        unitInput.value = value || "";
+        unitInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
     function resetForm() {
         editingUser = null;
         generatedPassword = null;
         form.reset();
+        setUnit("");
         usernameHelp.hidden = true;
         usernameInput.addEventListener("input", () => {
             usernameHelp.hidden = false;
@@ -379,7 +385,7 @@ function initializeUserManagement() {
         usernameInput.readOnly = currentManagerLevel() !== 0;
         displayNameInput.value = user.displayName.toLocaleUpperCase();
         emailInput.value = user.email || "";
-        unitInput.value = user.unit || "";
+        setUnit(user.unit);
         accessLevelInput.value = String(user.accessLevel);
         accessLevelInput.disabled = currentManagerLevel() !== 0 && Number(user.accessLevel) <= 1;
         accessLevelInput.querySelector('option[value="0"]').disabled = currentManagerLevel() !== 0;
@@ -713,7 +719,7 @@ function initializeUserManagement() {
                 updateFormAvatar(editingUser.username);
                 displayNameInput.value = editingUser.displayName;
                 emailInput.value = editingUser.email;
-                unitInput.value = editingUser.unit;
+                setUnit(editingUser.unit);
                 accessLevelInput.value = String(editingUser.accessLevel);
                 accessLevelInput.disabled = currentManagerLevel() !== 0 && Number(editingUser.accessLevel) <= 1;
                 accessLevelInput.dispatchEvent(new Event("change", { bubbles: true }));

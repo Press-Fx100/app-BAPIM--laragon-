@@ -800,7 +800,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if (strlen($email) > 254 || ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false)) {
             jsonResponse(['success' => false, 'error' => 'Alamat e-mel tidak sah.'], 400);
         }
-        if (!in_array($unit, ['', 'UAK', 'UPU', 'UPA', 'ULK'], true)) {
+        if (!in_array($unit, ['', 'UAK', 'UPU', 'UPA', 'ULK', 'UPP'], true)) {
             jsonResponse(['success' => false, 'error' => 'Unit yang dipilih tidak sah.'], 400);
         }
         if ($password === '') {
@@ -856,7 +856,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Alamat e-mel tidak sah.'], 400);
         }
         $unit = trim((string)($payload['unit'] ?? $target['unit']));
-        if (!in_array($unit, ['', 'UAK', 'UPU', 'UPA', 'ULK'], true)) {
+        if (!in_array($unit, ['', 'UAK', 'UPU', 'UPA', 'ULK', 'UPP'], true)) {
             jsonResponse(['success' => false, 'error' => 'Unit yang dipilih tidak sah.'], 400);
         }
         if ($accessLevel === false || $accessLevel < 0 || $accessLevel > 3 || ($accessLevel === 0 && (int)$manager['access_level'] !== 0)) {
