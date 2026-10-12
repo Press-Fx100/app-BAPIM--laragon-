@@ -7,7 +7,7 @@
 
     <title>Log Masuk</title>
 
-    <link rel="stylesheet" href="/css/style.css?v=20261009-5">
+    <link rel="stylesheet" href="/css/style.css?v=20261012-3">
 </head>
 
 <body>
@@ -25,16 +25,16 @@
 
             <section id="accountSelection" class="login-section" hidden>
 
-                <h2>Pilih Akaun</h2>
+                <h2>Pilih Profil</h2>
 
                 <p class="section-description">
-                    Pilih akaun yang pernah digunakan pada komputer ini.
+                    Pilih profil yang pernah digunakan pada komputer ini.
                 </p>
 
                 <div id="accountList" class="account-list"></div>
 
                 <button type="button" id="showLoginButton" class="secondary-button">
-                    Gunakan Akaun Lain
+                    Gunakan Profil Lain
                 </button>
 
             </section>
@@ -46,10 +46,11 @@
                     <div class="form-group">
 
                         <label for="username">
-                            Nama Pengguna
+                            Username atau E-mel
+                            <small class="username-help" hidden>Username tidak boleh mengandungi ruang.</small>
                         </label>
 
-                        <input type="text" id="username" name="username" placeholder="Masukkan nama pengguna"
+                        <input type="text" id="username" name="username" placeholder="Masukkan username atau e-mel"
                             autocomplete="username" required>
 
                     </div>
@@ -82,7 +83,7 @@
     </main>
 
     <script src="/js/auth-transition.js"></script>
-    <script src="/js/login.js"></script>
+    <script src="/js/login.js?v=20261012-3"></script>
 
 </body>
 

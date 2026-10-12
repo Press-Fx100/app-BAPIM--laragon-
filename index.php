@@ -61,7 +61,7 @@ function jsonResponse(array $data, int $status = 200): never
 
 function isValidUsername(string $username): bool
 {
-    return preg_match('/\A[a-z0-9.]{1,100}\z/', $username) === 1;
+    return preg_match('/\A[a-z0-9._]{1,100}\z/', $username) === 1;
 }
 
 function normalizeDisplayName(string $displayName): string
@@ -76,7 +76,7 @@ function currentUser(PDO $pdo): ?array
     }
 
     $statement = $pdo->prepare(
-        'SELECT id, username, display_name, active, PICname, access_level, page_permissions FROM users WHERE username = ? AND active = 1'
+        'SELECT id, username, display_name, email, unit, active, access_level, page_permissions FROM users WHERE username = ? AND active = 1'
     );
     $statement->execute([$_SESSION['username']]);
     return $statement->fetch() ?: null;
@@ -623,6 +623,8 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             'success' => true,
             'username' => $user['username'],
             'displayName' => $user['display_name'],
+            'email' => $user['email'],
+            'unit' => $user['unit'],
             'accessLevel' => (int)$user['access_level'],
             'permissions' => userPagePermissions($user),
         ]);
@@ -635,11 +637,15 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
 
         $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
+        $email = trim((string)($payload['email'] ?? $account['email'] ?? ''));
         $currentPassword = (string)($payload['currentPassword'] ?? '');
         $newPassword = (string)($payload['newPassword'] ?? '');
         $confirmPassword = (string)($payload['confirmPassword'] ?? '');
         if ($displayName === '' || strlen($displayName) > 160) {
             jsonResponse(['success' => false, 'error' => 'Display name is required and must be 160 characters or fewer.'], 400);
+        }
+        if (strlen($email) > 254 || ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false)) {
+            jsonResponse(['success' => false, 'error' => 'Alamat e-mel tidak sah.'], 400);
         }
         if ($newPassword !== '') {
             if ($newPassword !== $confirmPassword) {
@@ -654,26 +660,33 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
 
         if ($newPassword !== '') {
-            $statement = $pdo->prepare('UPDATE users SET display_name = ?, password_hash = ? WHERE username = ? AND active = 1');
-            $statement->execute([$displayName, password_hash($newPassword, PASSWORD_DEFAULT), $account['username']]);
+            $statement = $pdo->prepare('UPDATE users SET display_name = ?, email = ?, password_hash = ? WHERE username = ? AND active = 1');
+            $statement->execute([$displayName, $email, password_hash($newPassword, PASSWORD_DEFAULT), $account['username']]);
         } else {
-            $statement = $pdo->prepare('UPDATE users SET display_name = ? WHERE username = ? AND active = 1');
-            $statement->execute([$displayName, $account['username']]);
+            $statement = $pdo->prepare('UPDATE users SET display_name = ?, email = ? WHERE username = ? AND active = 1');
+            $statement->execute([$displayName, $email, $account['username']]);
         }
-        jsonResponse(['success' => true, 'displayName' => $displayName]);
+        jsonResponse(['success' => true, 'displayName' => $displayName, 'email' => $email, 'unit' => $account['unit']]);
     }
     if ($path === '/api/auth/login' && $method === 'POST') {
-        $loginName = (string)($payload['username'] ?? '');
+        $loginName = trim((string)($payload['username'] ?? ''));
         $password = (string)($payload['password'] ?? '');
-        if (!isValidUsername($loginName)) {
-            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+        if ($loginName === '' || $password === '') {
+            jsonResponse(['success' => false, 'error' => 'Username or email and password are required.'], 400);
         }
-        $statement = $pdo->prepare('SELECT username, display_name, password_hash, active, PICname FROM users WHERE username = ? LIMIT 1');
+        if (str_contains($loginName, '@')) {
+            if (strlen($loginName) > 254 || filter_var($loginName, FILTER_VALIDATE_EMAIL) === false) {
+                jsonResponse(['success' => false, 'error' => 'Sila masukkan username atau alamat e-mel yang sah.'], 400);
+            }
+            $statement = $pdo->prepare('SELECT username, display_name, password_hash, active FROM users WHERE email = ? LIMIT 1');
+        } else {
+            if (!isValidUsername($loginName)) {
+                jsonResponse(['success' => false, 'error' => 'Username hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).'], 400);
+            }
+            $statement = $pdo->prepare('SELECT username, display_name, password_hash, active FROM users WHERE username = ? LIMIT 1');
+        }
         $statement->execute([$loginName]);
         $account = $statement->fetch();
-        if ($loginName === '' || $password === '') {
-            jsonResponse(['success' => false, 'error' => 'Username and password are required.'], 400);
-        }
         if (!$account || !(int)$account['active'] || !password_verify($password, $account['password_hash'])) {
             jsonResponse(['success' => false, 'error' => 'Invalid username or password.'], 401);
         }
@@ -681,7 +694,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         $_SESSION['username'] = $account['username'];
         $statement = $pdo->prepare('INSERT INTO login_history (username) VALUES (?)');
         $statement->execute([$account['username']]);
-        jsonResponse(['success' => true, 'online' => true, 'username' => $account['username'], 'displayName' => $account['display_name'], 'PICname' => $account['PICname']]);
+        jsonResponse(['success' => true, 'online' => true, 'username' => $account['username'], 'displayName' => $account['display_name']]);
     }
     if ($path === '/api/auth/offline-login' && $method === 'POST') {
         jsonResponse(['success' => false, 'error' => 'Please sign in with your username and password.'], 401);
@@ -690,24 +703,28 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if (!$user) {
             jsonResponse(['success' => false, 'error' => 'Please sign in with your username and password.'], 401);
         }
-        jsonResponse(['success' => true, 'username' => $user['username'], 'displayName' => $user['display_name'], 'PICname' => $user['PICname']]);
+        jsonResponse(['success' => true, 'username' => $user['username'], 'displayName' => $user['display_name']]);
     }
     if ($path === '/api/auth/create-account' && $method === 'POST') {
         $name = (string)($payload['username'] ?? '');
+        $email = trim((string)($payload['email'] ?? ''));
         $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
         $password = (string)($payload['password'] ?? '');
-        if ($name === '' || $displayName === '' || $password === '') {
+        if ($name === '' || $email === '' || $displayName === '' || $password === '') {
             jsonResponse(['success' => false, 'error' => 'All fields are required.'], 400);
         }
         if (!isValidUsername($name)) {
-            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).'], 400);
         }
         if (strlen($displayName) > 160) {
             jsonResponse(['success' => false, 'error' => 'Display name must be 160 characters or fewer.'], 400);
         }
+        if (strlen($email) > 254 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            jsonResponse(['success' => false, 'error' => 'Sila masukkan alamat e-mel yang sah.'], 400);
+        }
         try {
-            $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash, access_level) VALUES (?, ?, ?, 3)');
-            $statement->execute([$name, $displayName, password_hash($password, PASSWORD_DEFAULT)]);
+            $statement = $pdo->prepare('INSERT INTO users (username, display_name, email, password_hash, access_level) VALUES (?, ?, ?, ?, 3)');
+            $statement->execute([$name, $displayName, $email, password_hash($password, PASSWORD_DEFAULT)]);
         } catch (PDOException $error) {
             if ($error->getCode() === '23000') {
                 jsonResponse(['success' => false, 'error' => 'Username already exists.'], 409);
@@ -716,7 +733,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         session_regenerate_id(true);
         $_SESSION['username'] = $name;
-        jsonResponse(['success' => true, 'username' => $name, 'displayName' => $displayName, 'PICname' => ''], 201);
+        jsonResponse(['success' => true, 'username' => $name, 'displayName' => $displayName, 'email' => $email], 201);
     }
     if ($path === '/api/auth/logout' && $method === 'POST') {
         $_SESSION = [];
@@ -748,12 +765,12 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
     }
     if ($path === '/api/auth/users' && $method === 'GET') {
         requireApiUser($pdo);
-        $users = $pdo->query('SELECT username, display_name AS displayName, PICname FROM users WHERE active = 1 ORDER BY display_name')->fetchAll();
+        $users = $pdo->query('SELECT username, display_name AS displayName FROM users WHERE active = 1 ORDER BY display_name')->fetchAll();
         jsonResponse(['success' => true, 'users' => $users]);
     }
     if ($path === '/api/admin/users' && $method === 'GET') {
         requirePageCapability($pdo, 'manageUsers');
-        $users = $pdo->query('SELECT id, username, display_name AS displayName, active, access_level AS accessLevel, page_permissions AS pagePermissions, created_at AS createdAt FROM users ORDER BY active DESC, display_name, username')->fetchAll();
+        $users = $pdo->query('SELECT id, username, display_name AS displayName, email, unit, active, access_level AS accessLevel, page_permissions AS pagePermissions, created_at AS createdAt FROM users ORDER BY active DESC, display_name, username')->fetchAll();
         foreach ($users as &$managedUser) {
             $managedUser['accessLevel'] = (int)$managedUser['accessLevel'];
             $managedUser['permissions'] = userPagePermissions([
@@ -770,13 +787,21 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         requireCsrfToken($payload);
         $newUsername = (string)($payload['username'] ?? '');
         $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
+        $email = trim((string)($payload['email'] ?? ''));
+        $unit = trim((string)($payload['unit'] ?? ''));
         $password = (string)($payload['password'] ?? '');
         $accessLevel = filter_var($payload['accessLevel'] ?? 2, FILTER_VALIDATE_INT);
         if (!isValidUsername($newUsername)) {
-            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).'], 400);
         }
         if ($displayName === '' || strlen($displayName) > 160) {
             jsonResponse(['success' => false, 'error' => 'Nama paparan diperlukan dan tidak boleh melebihi 160 aksara.'], 400);
+        }
+        if (strlen($email) > 254 || ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false)) {
+            jsonResponse(['success' => false, 'error' => 'Alamat e-mel tidak sah.'], 400);
+        }
+        if (!in_array($unit, ['', 'UAK', 'UPU', 'UPA', 'ULK'], true)) {
+            jsonResponse(['success' => false, 'error' => 'Unit yang dipilih tidak sah.'], 400);
         }
         if ($password === '') {
             jsonResponse(['success' => false, 'error' => 'Password is required.'], 400);
@@ -790,8 +815,8 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             $permissions = normalizeSubmittedPagePermissions($permissions, $accessLevel);
         }
         try {
-            $statement = $pdo->prepare('INSERT INTO users (username, display_name, password_hash, access_level, page_permissions) VALUES (?, ?, ?, ?, ?)');
-            $statement->execute([$newUsername, $displayName, password_hash($password, PASSWORD_DEFAULT), $accessLevel, json_encode($permissions, JSON_THROW_ON_ERROR)]);
+            $statement = $pdo->prepare('INSERT INTO users (username, display_name, email, unit, password_hash, access_level, page_permissions) VALUES (?, ?, ?, ?, ?, ?, ?)');
+            $statement->execute([$newUsername, $displayName, $email, $unit, password_hash($password, PASSWORD_DEFAULT), $accessLevel, json_encode($permissions, JSON_THROW_ON_ERROR)]);
         } catch (PDOException $error) {
             if ($error->getCode() === '23000') {
                 jsonResponse(['success' => false, 'error' => 'That username already exists.'], 409);
@@ -804,7 +829,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         $manager = requirePageCapability($pdo, 'manageUsers', true);
         requireCsrfToken($payload);
         $targetId = (int)$matches[1];
-        $statement = $pdo->prepare('SELECT id, username, active, access_level, page_permissions FROM users WHERE id = ? LIMIT 1');
+        $statement = $pdo->prepare('SELECT id, username, email, unit, active, access_level, page_permissions FROM users WHERE id = ? LIMIT 1');
         $statement->execute([$targetId]);
         $target = $statement->fetch();
         if (!$target) {
@@ -818,13 +843,21 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Only a dev can change a username.'], 403);
         }
         if ($usernameChanged && !isValidUsername($newUsername)) {
-            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).'], 400);
+            jsonResponse(['success' => false, 'error' => 'Nama pengguna hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).'], 400);
         }
         $displayName = normalizeDisplayName((string)($payload['displayName'] ?? ''));
         $password = (string)($payload['password'] ?? '');
         $accessLevel = filter_var($payload['accessLevel'] ?? $target['access_level'], FILTER_VALIDATE_INT);
         if ($displayName === '' || strlen($displayName) > 160) {
             jsonResponse(['success' => false, 'error' => 'Display name is required and must be 160 characters or fewer.'], 400);
+        }
+        $email = trim((string)($payload['email'] ?? $target['email']));
+        if (strlen($email) > 254 || ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false)) {
+            jsonResponse(['success' => false, 'error' => 'Alamat e-mel tidak sah.'], 400);
+        }
+        $unit = trim((string)($payload['unit'] ?? $target['unit']));
+        if (!in_array($unit, ['', 'UAK', 'UPU', 'UPA', 'ULK'], true)) {
+            jsonResponse(['success' => false, 'error' => 'Unit yang dipilih tidak sah.'], 400);
         }
         if ($accessLevel === false || $accessLevel < 0 || $accessLevel > 3 || ($accessLevel === 0 && (int)$manager['access_level'] !== 0)) {
             jsonResponse(['success' => false, 'error' => 'You are not allowed to assign that access level.'], 403);
@@ -866,11 +899,11 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         try {
             $pdo->beginTransaction();
             if ($password !== '') {
-                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, password_hash = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
-                $statement->execute([$newUsername, $displayName, password_hash($password, PASSWORD_DEFAULT), (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, email = ?, unit = ?, password_hash = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+                $statement->execute([$newUsername, $displayName, $email, $unit, password_hash($password, PASSWORD_DEFAULT), (int)$active, $accessLevel, $encodedPermissions, $targetId]);
             } else {
-                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
-                $statement->execute([$newUsername, $displayName, (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, email = ?, unit = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+                $statement->execute([$newUsername, $displayName, $email, $unit, (int)$active, $accessLevel, $encodedPermissions, $targetId]);
             }
             if ($usernameChanged) {
                 $statement = $pdo->prepare('UPDATE login_history SET username = ? WHERE username = ?');
@@ -896,7 +929,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ((int)$target['id'] === (int)$manager['id'] && $usernameChanged) {
             $_SESSION['username'] = $newUsername;
         }
-        jsonResponse(['success' => true, 'username' => $newUsername]);
+        jsonResponse(['success' => true, 'username' => $newUsername, 'email' => $email, 'unit' => $unit]);
     }
     if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) && $method === 'DELETE') {
         $manager = requirePageCapability($pdo, 'manageUsers', true);
@@ -980,15 +1013,20 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
                 $categoryIndex = array_search('KETEGORI', $headers, true);
             }
             $programIndex = array_search('PROGRAM', $headers, true);
+            $unitIndex = array_search('UNIT', $headers, true);
             foreach (array_slice($rows, 1, null, true) as $rowIndex => $row) {
                 $identity = trim($row[$identityIndex] ?? '');
                 if ($identity === '') {
                     continue;
                 }
                 if (!isset($participants[$identity])) {
-                    $participants[$identity] = ['nama' => trim($row[$nameIndex] ?? ''), 'kadPengenalan' => $identity, 'ketegori' => $categoryIndex !== false ? trim($row[$categoryIndex] ?? '') : '', 'programs' => [], 'sourceFiles' => [], 'sourceRecords' => []];
+                    $participants[$identity] = ['nama' => trim($row[$nameIndex] ?? ''), 'kadPengenalan' => $identity, 'ketegori' => $categoryIndex !== false ? trim($row[$categoryIndex] ?? '') : '', 'programs' => [], 'units' => [], 'sourceFiles' => [], 'sourceRecords' => []];
                 }
                 $item = &$participants[$identity];
+                $unit = $unitIndex !== false ? trim($row[$unitIndex] ?? '') : '';
+                if ($unit !== '' && !in_array($unit, $item['units'], true)) {
+                    $item['units'][] = $unit;
+                }
                 if (!in_array($dataset['filename'], $item['sourceFiles'], true)) {
                     $item['sourceFiles'][] = $dataset['filename'];
                 }
@@ -1007,7 +1045,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         $output = [];
         foreach (array_values($participants) as $index => $item) {
-            $output[] = ['index' => $index + 1, 'nama' => $item['nama'], 'kadPengenalan' => $item['kadPengenalan'], 'ketegori' => $item['ketegori'], 'jumlahProgram' => count($item['programs']), 'programs' => $item['programs'], 'sourceFile' => implode(', ', $item['sourceFiles']), 'datasetId' => $item['sourceRecords'][0]['datasetId'] ?? null, 'sourceRecords' => $item['sourceRecords']];
+            $output[] = ['index' => $index + 1, 'nama' => $item['nama'], 'kadPengenalan' => $item['kadPengenalan'], 'ketegori' => $item['ketegori'], 'jumlahProgram' => count($item['programs']), 'programs' => $item['programs'], 'unit' => implode(', ', $item['units']), 'sourceFile' => implode(', ', $item['sourceFiles']), 'datasetId' => $item['sourceRecords'][0]['datasetId'] ?? null, 'sourceRecords' => $item['sourceRecords']];
         }
         jsonResponse(['success' => true, 'participants' => $output]);
     }
@@ -1048,7 +1086,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         $account = requirePageCapability($pdo, 'activity');
         $limit = min(max((int)($query['limit'] ?? 1000), 1), 1000);
         $activityUsername = trim((string)$account['display_name']);
-        $picUsername = trim((string)($account['PICname'] ?: $activityUsername ?: $account['username']));
+        $picUsername = $activityUsername !== '' ? $activityUsername : (string)$account['username'];
         $statusCount = 0;
         foreach ($pdo->query('SELECT filepath FROM datasets ORDER BY id')->fetchAll(PDO::FETCH_COLUMN) as $filepath) {
             if (!is_file($filepath)) {
@@ -1071,16 +1109,16 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             }
         }
         $progressStatement = $pdo->prepare(
-            "SELECT COALESCE(SUM(progress_change), 0) FROM user_activity WHERE (LOWER(TRIM(username)) IN (LOWER(TRIM(?)), LOWER(TRIM(?)), LOWER(TRIM(?))) OR LOWER(TRIM(username)) = 'unknown') AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)"
+            "SELECT COALESCE(SUM(progress_change), 0) FROM user_activity WHERE (LOWER(TRIM(username)) IN (LOWER(TRIM(?)), LOWER(TRIM(?))) OR LOWER(TRIM(username)) = 'unknown') AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)"
         );
-        $progressStatement->execute([$activityUsername, $account['username'], $account['PICname']]);
+        $progressStatement->execute([$activityUsername, $account['username']]);
         $progressChange = (int)$progressStatement->fetchColumn();
         $statement = $pdo->prepare("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
         $statement->bindValue(1, $limit, PDO::PARAM_INT);
         $statement->execute();
         $activities = $statement->fetchAll();
         $earliest = $pdo->query("SELECT MIN(DATE_FORMAT(created_at, '%Y-%m')) FROM user_activity WHERE action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')")->fetchColumn();
-        jsonResponse(['success' => true, 'user' => ['username' => $account['username'], 'displayName' => $account['display_name'], 'PICname' => $account['PICname']], 'activityUsername' => $activityUsername, 'statusCount' => $statusCount, 'progressChange' => $progressChange, 'totalActivity' => $statusCount + $progressChange, 'activities' => $activities, 'earliestActivityMonth' => $earliest ?: '']);
+        jsonResponse(['success' => true, 'user' => ['username' => $account['username'], 'displayName' => $account['display_name']], 'activityUsername' => $activityUsername, 'statusCount' => $statusCount, 'progressChange' => $progressChange, 'totalActivity' => $statusCount + $progressChange, 'activities' => $activities, 'earliestActivityMonth' => $earliest ?: '']);
     }
     if ($path === '/api/user/activity/month' && $method === 'GET') {
         requirePageCapability($pdo, 'activity');

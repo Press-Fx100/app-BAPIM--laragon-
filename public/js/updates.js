@@ -1,5 +1,14 @@
 const releaseNotes = [
     {
+        date: "2026-10-12",
+        items: [
+            "Lajur Unit ditambah pada halaman Peserta Program dan disembunyikan secara lalai.",
+            "Pengepala lajur jumlah program dipendekkan kepada Program dan nilai dipaparkan bersama label Program.",
+            "Halaman Profil Pengguna memaparkan e-mel dan unit, manakala Unit boleh dikemas kini melalui Pengurusan Pengguna.",
+            "Paparan senarai pengguna diringkaskan kepada nama paparan dan nama pengguna."
+        ]
+    },
+    {
         date: "2026-10-09",
         items: [
             "Kandungan halaman hanya ditunjukkan selepas pemuatan selesai, dengan peralihan masuk dan keluar yang lancar.",
@@ -12,15 +21,15 @@ const releaseNotes = [
     {
         date: "2026-10-08",
         items: [
-            "Tetapan Akaun Pengguna kini menggunakan susun atur yang sepadan dengan Pengurusan Pengguna.",
-            "Akses Papan Pemuka sentiasa dikekalkan, dan Admin boleh mengemas kini akaun sendiri tanpa mengurus akaun Admin lain.",
+            "Tetapan Profil Pengguna kini menggunakan susun atur yang sepadan dengan Pengurusan Pengguna.",
+            "Akses Papan Pemuka sentiasa dikekalkan, dan Admin boleh mengemas kini profil sendiri tanpa mengurus profil Admin lain.",
             "Warna pengguna dan carta diperhalus, legenda carta bar dijajarkan dalam baris dan lajur, dan animasi tajuk halaman dipulihkan."
         ]
     },
     {
         date: "2026-10-06",
         items: [
-            "Halaman Akaun Pengguna membolehkan nama paparan dan kata laluan dikemas kini.",
+            "Halaman Profil Pengguna membolehkan nama paparan dan kata laluan dikemas kini.",
             "Menu pengguna kini mempunyai animasi yang lebih lancar."
         ]
     },

@@ -5,10 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Cipta Akaun</title>
+    <title>Cipta Profil</title>
 
     <link rel="icon" href="/app.ico" type="image/x-icon">
-    <link rel="stylesheet" href="/css/style.css?v=20261009-7">
+    <link rel="stylesheet" href="/css/style.css?v=20261012-3">
 </head>
 
 <body class="create-account-document">
@@ -18,27 +18,32 @@
         <div class="create-account-card">
 
             <div class="create-account-header">
-                <h2>Cipta Akaun</h2>
-                <p>Cipta akaun pengguna baharu</p>
+                <h2>Cipta Profil</h2>
+                <p>Cipta profil pengguna baharu</p>
             </div>
 
             <form id="createAccountForm">
 
                 <div class="form-group">
-                    <label for="username">Nama Pengguna
-                        <small class="username-help" hidden>Huruf kecil, nombor dan titik (.) sahaja.</small>
-                    </label>
-
-                    <input type="text" id="username" name="username" class="form-control" placeholder="Masukkan nama pengguna"
-                        autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-z0-9.]+"
-                        title="Gunakan huruf kecil, nombor dan titik (.) sahaja." required>
+                    <label for="displayName">Nama Pengguna</label>
+                    <input type="text" id="displayName" name="displayName" class="form-control"
+                        placeholder="Masukkan nama pengguna" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="displayName">Nama Paparan</label>
+                    <label for="username">Username
+                        <small class="username-help" hidden>Huruf kecil, nombor, titik (.) dan garis bawah (_).</small>
+                    </label>
 
-                    <input type="text" id="displayName" name="displayName" class="form-control"
-                        placeholder="Masukkan nama paparan" required>
+                    <input type="text" id="username" name="username" class="form-control" placeholder="Masukkan username"
+                        autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-z0-9._]+"
+                        title="Gunakan huruf kecil, nombor, titik (.) dan garis bawah (_)." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="email">E-mel</label>
+                    <input type="email" id="email" name="email" class="form-control" maxlength="254"
+                        placeholder="Masukkan e-mel" autocomplete="email" required>
                 </div>
 
                 <div class="form-group">
@@ -60,7 +65,7 @@
                 <div id="message" class="message" hidden></div>
 
                 <button type="submit" id="createAccountButton" class="btn btn-primary w-100">
-                    Cipta Akaun
+                    Cipta Profil
                 </button>
 
             </form>
@@ -76,7 +81,7 @@
     </div>
 
     <script src="/js/auth-transition.js?v=20261009-5"></script>
-    <script src="/js/create-account.js?v=20261008-5"></script>
+    <script src="/js/create-account.js?v=20261012-6"></script>
 
 </body>
 

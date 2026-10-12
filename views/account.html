@@ -3,8 +3,8 @@
         <section class="content-card account-settings-card manage-users-card">
             <div class="card-header-custom account-settings-header">
                 <div>
-                    <h5>Tetapan Akaun Pengguna</h5>
-                    <span>Kemas kini nama paparan atau kata laluan akaun anda.</span>
+                    <h5>Profil Pengguna</h5>
+                    <span>Kemas kini maklumat profil atau kata laluan anda.</span>
                 </div>
             </div>
 
@@ -15,18 +15,28 @@
                             <i class="bi bi-person-fill"></i>
                         </div>
                         <div class="managed-user-form-content">
-                            <div class="manage-user-fields">
+                            <div class="manage-user-fields account-profile-fields">
+                                <div class="form-field account-profile-display-name">
+                                    <label for="accountDisplayName">Nama Pengguna</label>
+                                    <input type="text" id="accountDisplayName" maxlength="160" autocomplete="name" required>
+                                </div>
+
                                 <div class="form-field">
-                                    <label for="accountUsername">Nama Pengguna</label>
+                                    <label for="accountUsername">Username</label>
                                     <input type="text" id="accountUsername" autocomplete="username" readonly>
                                 </div>
 
                                 <div class="form-field">
-                                    <label for="accountDisplayName">Nama Paparan</label>
-                                    <input type="text" id="accountDisplayName" maxlength="160" autocomplete="name" required>
+                                    <label for="accountEmail">E-mel</label>
+                                    <input type="email" id="accountEmail" maxlength="254" autocomplete="email">
                                 </div>
 
-                                <div class="account-password-section">
+                                <div class="form-field account-profile-unit">
+                                    <label for="accountUnit">Unit</label>
+                                    <input type="text" id="accountUnit" autocomplete="off" readonly>
+                                </div>
+
+                                <div class="account-password-section account-profile-password">
                                     <h5>Tukar Kata Laluan</h5>
                                     <p>Biarkan ruangan kata laluan kosong jika anda tidak mahu menukarnya.</p>
 

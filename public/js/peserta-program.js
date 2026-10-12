@@ -3,15 +3,16 @@
         ["nama", "NAMA"],
         ["kadPengenalan", "KAD PENGENALAN"],
         ["ketegori", "KATEGORI"],
-        ["jumlahProgram", "JUMLAH PROGRAM"],
+        ["jumlahProgram", "PROGRAM"],
         ["programs", "PROGRAM"],
+        ["unit", "UNIT"],
         ["sourceFile", "SUMBER FAIL"]
     ];
     const pageSize = 100;
     const $ = id => document.getElementById(id);
     let rows = [];
     let filteredRows = [];
-    let visibleColumns = columns.map((_, index) => index !== columns.length - 1);
+    let visibleColumns = columns.map(([key]) => key !== "unit" && key !== "sourceFile");
     let columnWidths = [45, ...columns.map(() => 160)];
     let currentPage = 1;
     let sortColumn = -1;
@@ -71,7 +72,7 @@
         });
         rows = [];
         filteredRows = [];
-        visibleColumns = columns.map((_, index) => index !== columns.length - 1);
+        visibleColumns = columns.map(([key]) => key !== "unit" && key !== "sourceFile");
         columnWidths = [45, ...columns.map(() => 160)];
         currentPage = 1;
         sortColumn = -1;
@@ -336,7 +337,7 @@
                     const programCell = document.createElement("div");
                     programCell.className = "participant-program-cell";
                     const count = document.createElement("span");
-                    count.textContent = cellValue(row, key);
+                    count.textContent = `${cellValue(row, key)} Program`;
                     programCell.appendChild(count);
                     const programButton = document.createElement("button");
                     programButton.type = "button";

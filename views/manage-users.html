@@ -5,7 +5,7 @@
             <div class="card-header-custom account-settings-header">
                 <div>
                     <h5>Pengurusan Pengguna</h5>
-                    <span>Cipta dan kemas kini akaun pengguna sistem.</span>
+                    <span>Cipta pengguna dan kemas kini profil mereka.</span>
                 </div>
                 <button type="button" class="dataset-upload-close managed-user-add-button"
                     id="newManagedUserButton" title="Tambah Pengguna" aria-label="Tambah Pengguna">
@@ -22,22 +22,48 @@
                         <div class="managed-user-form-content">
                             <div class="manage-user-fields">
                                 <div class="form-field">
-                                    <label for="managedUsername">Nama Pengguna
+                                    <label for="managedUsername">Username
                                         <small class="username-help" hidden>Huruf kecil, nombor dan titik (.) sahaja.</small>
                                     </label>
                                     <input type="text" id="managedUsername" maxlength="100" autocomplete="off"
-                                        autocapitalize="none" spellcheck="false" pattern="[a-z0-9.]+"
-                                        title="Gunakan huruf kecil, nombor dan titik (.) sahaja." required>
+                                        autocapitalize="none" spellcheck="false" pattern="[a-z0-9._]+"
+                                        title="Gunakan huruf kecil, nombor, titik (.) dan garis bawah (_)." required>
                                 </div>
                                 <div class="form-field">
-                                    <label for="managedDisplayName">Nama Paparan</label>
+                                    <label for="managedDisplayName">Nama Pengguna</label>
                                     <input type="text" id="managedDisplayName" maxlength="160" autocomplete="name" required>
                                 </div>
                                 <div class="form-field">
+                                    <label for="managedEmail">E-mel</label>
+                                    <input type="email" id="managedEmail" maxlength="254" autocomplete="email">
+                                </div>
+                                <div class="form-field">
+                                    <label for="managedUnit">Unit</label>
+                                    <div class="managed-access-field-controls">
+                                        <select id="managedUnit" aria-describedby="managedUnitHint">
+                                            <option value="">Tiada unit</option>
+                                            <option value="UAK">UAK</option>
+                                            <option value="UPU">UPU</option>
+                                            <option value="UPA">UPA</option>
+                                            <option value="ULK">ULK</option>
+                                        </select>
+                                    </div>
+                                    <small class="managed-unit-help" id="managedUnitHint">Pengurus pengguna boleh mengubah unit.</small>
+                                </div>
+                                <div class="form-field">
                                     <label for="managedPassword">Kata Laluan
-                                        <span class="username-help" id="managedPasswordHint"></span>
+                                        <small class="username-help" id="managedPasswordHint"></small>
                                     </label>
-                                    <input type="password" id="managedPassword" autocomplete="new-password">
+                                    <div class="managed-access-field-controls">
+                                        <input type="text" id="managedPassword" class="managed-password-display"
+                                            autocomplete="off" readonly aria-label="Kata laluan jana, klik untuk salin"
+                                            title="Klik untuk menyalin kata laluan">
+                                        <button type="button" class="btn btn-outline-primary managed-access-config-button"
+                                            id="generateManagedPasswordButton" title="Jana kata laluan rawak"
+                                            aria-label="Jana kata laluan rawak">
+                                            <i class="bi bi-shuffle" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="form-field">
                                     <label for="managedAccessLevel">Tahap Akses</label>

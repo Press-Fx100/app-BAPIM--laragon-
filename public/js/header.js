@@ -214,7 +214,7 @@ function updatePageInfo() {
     } else if (path === "/aktiviti-pengguna") {
         title = "Aktiviti Pengguna";
     } else if (path === "/akaun-pengguna") {
-        title = "Akaun Pengguna";
+        title = "Profil Pengguna";
     } else if (path === "/pengurusan-pengguna") {
         title = "Pengurusan Pengguna";
     } else if (path === "/log-perisian") {

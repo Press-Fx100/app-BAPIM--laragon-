@@ -8,7 +8,7 @@
     <title>Log Masuk</title>
 
     <link rel="icon" href="/app.ico" type="image/x-icon">
-    <link rel="stylesheet" href="/css/style.css?v=20261009-6">
+    <link rel="stylesheet" href="/css/style.css?v=20261012-3">
 </head>
 
 <body>
@@ -26,16 +26,16 @@
 
             <section id="accountSelection" class="login-section" hidden>
 
-                <h2>Pilih Akaun</h2>
+                <h2>Pilih Profil</h2>
 
                 <p class="section-description">
-                    Pilih akaun yang pernah digunakan pada komputer ini.
+                    Pilih profil yang pernah digunakan pada komputer ini.
                 </p>
 
                 <div id="accountList" class="account-list"></div>
 
                 <button type="button" id="showLoginButton" class="secondary-button">
-                    Gunakan Akaun Lain
+                    Gunakan Profil Lain
                 </button>
 
             </section>
@@ -47,13 +47,12 @@
                     <div class="form-group">
 
                         <label for="username">
-                            Nama Pengguna
-                            <small class="username-help" hidden>Huruf kecil, nombor dan titik (.) sahaja.</small>
+                            Username atau E-mel
+                            <small class="username-help" hidden>Username tidak boleh mengandungi ruang.</small>
                         </label>
 
-                        <input type="text" id="username" name="username" placeholder="Masukkan nama pengguna"
-                            autocomplete="username" autocapitalize="none" spellcheck="false"
-                            pattern="[a-z0-9.]+" title="Gunakan huruf kecil, nombor dan titik (.) sahaja." required>
+                        <input type="text" id="username" name="username" placeholder="Masukkan username atau e-mel"
+                            autocomplete="username" autocapitalize="none" spellcheck="false" required>
 
                     </div>
 
@@ -75,7 +74,7 @@
                 </form>
 
                 <div class="back-login">
-                    <a href="/cipta-akaun">Akaun baharu? Cipta akaun</a>
+                    <a href="/cipta-akaun">Pengguna baharu? Cipta profil</a>
                 </div>
 
                 <button type="button" id="backToAccountsButton" class="secondary-button" hidden>
@@ -89,7 +88,7 @@
     </main>
 
     <script src="/js/auth-transition.js?v=20261009-5"></script>
-    <script src="/js/login.js?v=20261008-3"></script>
+    <script src="/js/login.js?v=20261012-3"></script>
 
 </body>
 

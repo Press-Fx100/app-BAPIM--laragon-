@@ -1,4 +1,5 @@
 const form = document.getElementById("createAccountForm");
+const emailInput = document.getElementById("email");
 const usernameInput = document.getElementById("username");
 const displayNameInput = document.getElementById("displayName");
 const passwordInput = document.getElementById("password");
@@ -7,13 +8,34 @@ const createAccountButton = document.getElementById("createAccountButton");
 const message = document.getElementById("message");
 const usernameHelp = document.querySelector(".username-help");
 
+emailInput.addEventListener("keydown", event => {
+    if (/\s/.test(event.key)) {
+        event.preventDefault();
+    }
+});
+
+emailInput.addEventListener("input", () => {
+    const email = emailInput.value.replace(/\s/g, "");
+    if (email !== emailInput.value) {
+        emailInput.value = email;
+    }
+});
+
+function updatePasswordMatchState() {
+    const passwordsMatch = passwordInput.value !== "" &&
+        confirmPasswordInput.value !== "" &&
+        passwordInput.value === confirmPasswordInput.value;
+    passwordInput.classList.toggle("password-match", passwordsMatch);
+    confirmPasswordInput.classList.toggle("password-match", passwordsMatch);
+}
+
 if (usernameHelp) {
     usernameInput.addEventListener("input", () => {
         const caret = usernameInput.selectionStart;
         const value = usernameInput.value.toLowerCase();
-        const username = value.replace(/[^a-z0-9.]/g, "");
+        const username = value.replace(/[^a-z0-9._]/g, "");
         if (username !== usernameInput.value) {
-            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9.]/g, "").length;
+            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9._]/g, "").length;
             usernameInput.value = username;
             usernameInput.setSelectionRange(cleanCaret, cleanCaret);
         }
@@ -25,6 +47,9 @@ if (usernameHelp) {
         usernameHelp.hidden = false;
     });
 }
+
+passwordInput.addEventListener("input", updatePasswordMatchState);
+confirmPasswordInput.addEventListener("input", updatePasswordMatchState);
 
 function showMessage(text, type) {
     message.textContent = text;
@@ -47,7 +72,9 @@ form.addEventListener("submit", async event => {
     const password = passwordInput.value;
     const confirmPassword = confirmPasswordInput.value;
 
-    if (!username || !displayName || !password) {
+    const email = emailInput.value.trim();
+
+    if (!email || !username || !displayName || !password) {
         showMessage(
             "Sila lengkapkan semua ruangan.",
             "error"
@@ -55,11 +82,16 @@ form.addEventListener("submit", async event => {
         return;
     }
 
-    if (!/^[a-z0-9.]{1,100}$/.test(username)) {
+    if (!/^[a-z0-9._]{1,100}$/.test(username)) {
         showMessage(
-            "Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).",
+            "Nama pengguna hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).",
             "error"
         );
+        return;
+    }
+
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showMessage("Sila masukkan alamat e-mel yang sah.", "error");
         return;
     }
 
@@ -72,7 +104,7 @@ form.addEventListener("submit", async event => {
     }
 
     createAccountButton.disabled = true;
-    createAccountButton.textContent = "Mencipta akaun...";
+    createAccountButton.textContent = "Mencipta profil...";
 
     try {
         const response = await fetch(
@@ -83,6 +115,7 @@ form.addEventListener("submit", async event => {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
+                    email,
                     username,
                     displayName,
                     password
@@ -94,7 +127,7 @@ form.addEventListener("submit", async event => {
 
         if (!response.ok || !data.success) {
             showMessage(
-                data.error || "Gagal mencipta akaun.",
+                data.error || "Gagal mencipta profil.",
                 "error"
             );
 
@@ -102,7 +135,7 @@ form.addEventListener("submit", async event => {
         }
 
         showMessage(
-            "Akaun berjaya dicipta. Sedang log masuk...",
+            "Profil berjaya dicipta. Sedang log masuk...",
             "success"
         );
 
@@ -119,6 +152,6 @@ form.addEventListener("submit", async event => {
         );
     } finally {
         createAccountButton.disabled = false;
-        createAccountButton.textContent = "Cipta Akaun";
+        createAccountButton.textContent = "Cipta Profil";
     }
 });

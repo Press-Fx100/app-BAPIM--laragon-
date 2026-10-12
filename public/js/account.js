@@ -8,6 +8,8 @@ function initializeAccountSettings() {
     const usernameInput = document.getElementById("accountUsername");
     const formAvatar = document.getElementById("accountSettingsAvatar");
     const displayNameInput = document.getElementById("accountDisplayName");
+    const emailInput = document.getElementById("accountEmail");
+    const unitInput = document.getElementById("accountUnit");
     const currentPasswordInput = document.getElementById("accountCurrentPassword");
     const newPasswordInput = document.getElementById("accountNewPassword");
     const confirmPasswordInput = document.getElementById("accountConfirmPassword");
@@ -26,15 +28,25 @@ function initializeAccountSettings() {
         message.hidden = false;
     }
 
+    function updatePasswordMatchState() {
+        const passwordsMatch = newPasswordInput.value !== "" &&
+            confirmPasswordInput.value !== "" &&
+            newPasswordInput.value === confirmPasswordInput.value;
+        newPasswordInput.classList.toggle("password-match", passwordsMatch);
+        confirmPasswordInput.classList.toggle("password-match", passwordsMatch);
+    }
+
     async function loadAccount() {
         const response = await fetch("/api/auth/me");
         const data = await response.json();
         if (!response.ok || !data.success) {
-            throw new Error(data.error || "Tidak dapat memuatkan maklumat akaun.");
+            throw new Error(data.error || "Tidak dapat memuatkan maklumat profil.");
         }
         usernameInput.value = data.username;
         updateFormAvatar(data.username);
         displayNameInput.value = data.displayName.toLocaleUpperCase();
+        emailInput.value = data.email || "";
+        unitInput.value = data.unit || "Tiada unit";
         saveButton.disabled = false;
     }
 
@@ -43,6 +55,9 @@ function initializeAccountSettings() {
         showMessage(error.message, "error");
     });
     window.registerAppPageLoadTask(accountLoadTask);
+
+    newPasswordInput.addEventListener("input", updatePasswordMatchState);
+    confirmPasswordInput.addEventListener("input", updatePasswordMatchState);
 
     form.addEventListener("submit", async event => {
         event.preventDefault();
@@ -66,6 +81,7 @@ function initializeAccountSettings() {
                 body: JSON.stringify({
                     csrfToken: form.dataset.csrfToken,
                     displayName: displayNameInput.value.trim().toLocaleUpperCase(),
+                    email: emailInput.value.trim(),
                     currentPassword: currentPasswordInput.value,
                     newPassword,
                     confirmPassword: confirmPasswordInput.value
@@ -73,15 +89,18 @@ function initializeAccountSettings() {
             });
             const data = await response.json();
             if (!response.ok || !data.success) {
-                showMessage(data.error || "Tidak dapat menyimpan perubahan akaun.", "error");
+                showMessage(data.error || "Tidak dapat menyimpan perubahan profil.", "error");
                 return;
             }
 
             displayNameInput.value = data.displayName.toLocaleUpperCase();
+            emailInput.value = data.email || "";
+            unitInput.value = data.unit || "Tiada unit";
             currentPasswordInput.value = "";
             newPasswordInput.value = "";
             confirmPasswordInput.value = "";
-            showMessage("Perubahan akaun berjaya disimpan.", "success");
+            updatePasswordMatchState();
+            showMessage("Perubahan profil berjaya disimpan.", "success");
             const headerDisplayName = document.getElementById("userDisplayName");
             const headerIcon = document.getElementById("userIcon");
             if (headerDisplayName) {

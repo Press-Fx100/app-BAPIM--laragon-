@@ -7,9 +7,12 @@ function initializeUserManagement() {
     const formAvatar = document.getElementById("managedUserFormAvatar");
     const usernameHelp = usernameInput.parentElement.querySelector(".username-help");
     const displayNameInput = document.getElementById("managedDisplayName");
+    const emailInput = document.getElementById("managedEmail");
+    const unitInput = document.getElementById("managedUnit");
     const accessLevelInput = document.getElementById("managedAccessLevel");
     const passwordInput = document.getElementById("managedPassword");
     const passwordHint = document.getElementById("managedPasswordHint");
+    const generatePasswordButton = document.getElementById("generateManagedPasswordButton");
     const saveButton = document.getElementById("saveManagedUserButton");
     const accessButton = document.getElementById("configureManagedAccessButton");
     const statusButton = document.getElementById("managedUserStatusButton");
@@ -31,13 +34,14 @@ function initializeUserManagement() {
         { key: "upload", label: "Muat Naik & Set Data", editable: true, action: "Boleh muat naik dan urus set data" },
         { key: "dataset", label: "Paparan Set Data", editable: true, action: "Boleh sunting set data" },
         { key: "activity", label: "Aktiviti Pengguna", editable: false },
-        { key: "account", label: "Akaun Pengguna", editable: true, action: "Boleh kemas kini akaun" },
+        { key: "account", label: "Profil Pengguna", editable: true, action: "Boleh kemas kini profil" },
         { key: "updates", label: "Log Perisian", editable: false },
         { key: "manageUsers", label: "Pengurusan Pengguna", editable: false }
     ];
     const pageKeys = new Set(pageDefinitions.map(page => page.key));
     let users = [];
     let editingUser = null;
+    let generatedPassword = null;
     let accessTarget = null;
     let modalAccessLevel = Number(accessLevelInput.value);
     let draftPermissions = defaultPermissions(Number(accessLevelInput.value));
@@ -62,9 +66,9 @@ function initializeUserManagement() {
     usernameInput.addEventListener("input", () => {
         const caret = usernameInput.selectionStart;
         const value = usernameInput.value.toLowerCase();
-        const username = value.replace(/[^a-z0-9.]/g, "");
+        const username = value.replace(/[^a-z0-9._]/g, "");
         if (username !== usernameInput.value) {
-            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9.]/g, "").length;
+            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9._]/g, "").length;
             usernameInput.value = username;
             usernameInput.setSelectionRange(cleanCaret, cleanCaret);
         }
@@ -167,6 +171,89 @@ function initializeUserManagement() {
         message.textContent = "";
     }
 
+    function randomIndex(max) {
+        const range = 256 - (256 % max);
+        const bytes = new Uint8Array(1);
+        let value;
+        do {
+            window.crypto.getRandomValues(bytes);
+            value = bytes[0];
+        } while (value >= range);
+        return value % max;
+    }
+
+    function generatePassword() {
+        if (!window.crypto || typeof window.crypto.getRandomValues !== "function") {
+            showMessage("Penjanaan kata laluan rawak tidak tersedia dalam pelayar ini.");
+            return;
+        }
+
+        try {
+            const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+            const lowercase = "abcdefghijkmnopqrstuvwxyz";
+            const digits = "23456789";
+            const symbols = "!@#$%&*+-_";
+            const characters = uppercase + lowercase + digits + symbols;
+            const passwordCharacters = [
+                uppercase[randomIndex(uppercase.length)],
+                lowercase[randomIndex(lowercase.length)],
+                digits[randomIndex(digits.length)],
+                symbols[randomIndex(symbols.length)]
+            ];
+
+            while (passwordCharacters.length < 20) {
+                passwordCharacters.push(characters[randomIndex(characters.length)]);
+            }
+            for (let index = passwordCharacters.length - 1; index > 0; index -= 1) {
+                const swapIndex = randomIndex(index + 1);
+                [passwordCharacters[index], passwordCharacters[swapIndex]] =
+                    [passwordCharacters[swapIndex], passwordCharacters[index]];
+            }
+            generatedPassword = passwordCharacters.join("");
+            passwordInput.value = generatedPassword;
+            clearMessage();
+        } catch (error) {
+            console.error("Password generation error:", error);
+            showMessage("Tidak dapat menjana kata laluan rawak. Sila cuba lagi.");
+        }
+    }
+
+    async function copyGeneratedPassword() {
+        if (!generatedPassword) {
+            showDatasetSaveConfirmation("Jana kata laluan dahulu.", "error");
+            return;
+        }
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(generatedPassword);
+            } else {
+                throw new Error("Clipboard API is unavailable.");
+            }
+        } catch (clipboardError) {
+            const copyBuffer = document.createElement("textarea");
+            copyBuffer.value = generatedPassword;
+            copyBuffer.setAttribute("readonly", "");
+            copyBuffer.style.position = "fixed";
+            copyBuffer.style.opacity = "0";
+            document.body.appendChild(copyBuffer);
+            copyBuffer.select();
+            try {
+                if (!document.execCommand("copy")) {
+                    throw clipboardError;
+                }
+            } catch (error) {
+                console.error("Password copy error:", error);
+                showDatasetSaveConfirmation("Tidak dapat menyalin kata laluan.", "error");
+                return;
+            } finally {
+                copyBuffer.remove();
+            }
+        }
+
+        showDatasetSaveConfirmation("Kata laluan disalin.");
+    }
+
     function updateStatusButton(isActive) {
         statusButton.textContent = isActive ? "Nyahaktifkan Akaun" : "Aktifkan Akaun";
         statusButton.className = `btn ${isActive
@@ -176,6 +263,7 @@ function initializeUserManagement() {
 
     function resetForm() {
         editingUser = null;
+        generatedPassword = null;
         form.reset();
         usernameHelp.hidden = true;
         usernameInput.addEventListener("input", () => {
@@ -185,6 +273,7 @@ function initializeUserManagement() {
         updateFormAvatar("");
         passwordInput.required = true;
         passwordHint.textContent = "";
+        generatePasswordButton.disabled = false;
         saveButton.textContent = "Tambah Pengguna";
         statusButton.hidden = true;
         accessLevelInput.disabled = false;
@@ -284,17 +373,20 @@ function initializeUserManagement() {
 
     function beginEdit(user) {
         editingUser = user;
+        generatedPassword = null;
         usernameInput.value = user.username;
         updateFormAvatar(user.username);
         usernameInput.readOnly = currentManagerLevel() !== 0;
         displayNameInput.value = user.displayName.toLocaleUpperCase();
+        emailInput.value = user.email || "";
+        unitInput.value = user.unit || "";
         accessLevelInput.value = String(user.accessLevel);
         accessLevelInput.disabled = currentManagerLevel() !== 0 && Number(user.accessLevel) <= 1;
         accessLevelInput.querySelector('option[value="0"]').disabled = currentManagerLevel() !== 0;
         accessLevelInput.dispatchEvent(new Event("change", { bubbles: true }));
         passwordInput.value = "";
         passwordInput.required = false;
-        passwordHint.textContent = "(biarkan kosong untuk kekalkan)";
+        passwordHint.textContent = "(kosongkan atau jana kata laluan baharu)";
         saveButton.textContent = "Simpan Perubahan";
         accessButton.disabled = !canManageTarget(user);
         statusButton.hidden = user.username === window.appCurrentUser?.username
@@ -525,6 +617,8 @@ function initializeUserManagement() {
     statusButton.addEventListener("click", () => {
         if (editingUser) toggleUserStatus(editingUser);
     });
+    generatePasswordButton.addEventListener("click", generatePassword);
+    passwordInput.addEventListener("click", copyGeneratedPassword);
     accessLevelInput.addEventListener("change", () => {
         if (isSyncingDerivedAccessLevel) return;
         const nextLevel = Number(accessLevelInput.value);
@@ -562,13 +656,20 @@ function initializeUserManagement() {
             csrfToken: form.dataset.csrfToken,
             username: usernameInput.value,
             displayName: displayNameInput.value.trim().toLocaleUpperCase(),
+            email: emailInput.value.trim(),
+            unit: unitInput.value,
             accessLevel,
             permissions,
-            password: passwordInput.value
+            password: generatedPassword || ""
         };
+        if (!editingUser && payload.password === "") {
+            showMessage("Jana kata laluan sebelum menambah pengguna.");
+            saveButton.disabled = false;
+            return;
+        }
         if (!editingUser || payload.username !== editingUser.username) {
-            if (!/^[a-z0-9.]{1,100}$/.test(payload.username)) {
-                showMessage("Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).");
+            if (!/^[a-z0-9._]{1,100}$/.test(payload.username)) {
+                showMessage("Nama pengguna hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).");
                 saveButton.disabled = false;
                 return;
             }
@@ -584,6 +685,8 @@ function initializeUserManagement() {
                         csrfToken: payload.csrfToken,
                         username: payload.username,
                         displayName: payload.displayName,
+                        email: payload.email,
+                        unit: payload.unit,
                         accessLevel: payload.accessLevel,
                         permissions: payload.permissions,
                         password: payload.password,
@@ -595,17 +698,22 @@ function initializeUserManagement() {
                     ...editedUser,
                     username: result.username || payload.username,
                     displayName: payload.displayName,
+                    email: payload.email,
+                    unit: payload.unit,
                     accessLevel: payload.accessLevel,
                     permissions: payload.permissions
                 };
                 if (isCurrentUser) updateCurrentUserHeader(editingUser);
+                generatedPassword = null;
                 passwordInput.value = "";
                 passwordInput.required = false;
-                passwordHint.textContent = "(biarkan kosong untuk kekalkan)";
+                passwordHint.textContent = "(kosongkan atau jana kata laluan baharu)";
                 usernameInput.value = editingUser.username;
                 usernameInput.readOnly = currentManagerLevel() !== 0;
                 updateFormAvatar(editingUser.username);
                 displayNameInput.value = editingUser.displayName;
+                emailInput.value = editingUser.email;
+                unitInput.value = editingUser.unit;
                 accessLevelInput.value = String(editingUser.accessLevel);
                 accessLevelInput.disabled = currentManagerLevel() !== 0 && Number(editingUser.accessLevel) <= 1;
                 accessLevelInput.dispatchEvent(new Event("change", { bubbles: true }));

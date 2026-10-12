@@ -33,23 +33,38 @@ const usernameHelp =
 
 let cachedUsers = [];
 
-if (usernameInput && usernameHelp) {
+if (usernameInput) {
     usernameInput.addEventListener("input", () => {
         const caret = usernameInput.selectionStart;
+        const valueWithoutSpaces = usernameInput.value.replace(/\s/g, "");
+        if (valueWithoutSpaces !== usernameInput.value) {
+            const cleanCaret = usernameInput.value
+                .slice(0, caret ?? usernameInput.value.length)
+                .replace(/\s/g, "")
+                .length;
+            usernameInput.value = valueWithoutSpaces;
+            usernameInput.setSelectionRange(cleanCaret, cleanCaret);
+        }
+        if (usernameInput.value.includes("@")) {
+            if (usernameHelp) usernameHelp.hidden = true;
+            return;
+        }
         const value = usernameInput.value.toLowerCase();
-        const username = value.replace(/[^a-z0-9.]/g, "");
+        const username = value.replace(/[^a-z0-9._]/g, "");
         if (username !== usernameInput.value) {
-            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9.]/g, "").length;
+            const cleanCaret = value.slice(0, caret ?? value.length).replace(/[^a-z0-9._]/g, "").length;
             usernameInput.value = username;
             usernameInput.setSelectionRange(cleanCaret, cleanCaret);
         }
     });
-    usernameInput.addEventListener("input", () => {
-        usernameHelp.hidden = false;
-    }, { once: true });
-    usernameInput.addEventListener("invalid", () => {
-        usernameHelp.hidden = false;
-    });
+    if (usernameHelp) {
+        usernameInput.addEventListener("input", () => {
+            usernameHelp.hidden = usernameInput.value.includes("@");
+        });
+        usernameInput.addEventListener("invalid", () => {
+            usernameHelp.hidden = false;
+        });
+    }
 }
 
 
@@ -249,8 +264,8 @@ function renderAccounts() {
             <button
                 type="button"
                 class="remove-account-button"
-                title="Buang akaun"
-                aria-label="Buang akaun ${escapeHtml(username)}"
+                title="Buang profil"
+                aria-label="Buang profil ${escapeHtml(username)}"
             >
                 <i class="bi bi-x-lg" aria-hidden="true"></i>
             </button>
@@ -316,7 +331,7 @@ async function removeCachedAccount(
 
     const confirmed =
         window.confirm(
-            `Buang akaun "${username}" daripada komputer ini?`
+            `Buang profil "${username}" daripada komputer ini?`
         );
 
     if (!confirmed) {
@@ -353,7 +368,7 @@ async function removeCachedAccount(
 
             showMessage(
                 data.error ||
-                "Gagal membuang akaun.",
+                "Gagal membuang profil.",
                 "error"
             );
 
@@ -391,7 +406,7 @@ async function removeCachedAccount(
         );
 
         showMessage(
-            "Tidak dapat membuang akaun.",
+            "Tidak dapat membuang profil.",
             "error"
         );
 
@@ -513,16 +528,16 @@ async function handleLogin(event) {
 
     if (!username || !password) {
         showMessage(
-            "Sila masukkan nama pengguna dan kata laluan.",
+            "Sila masukkan username atau e-mel dan kata laluan.",
             "error"
         );
 
         return;
     }
 
-    if (!/^[a-z0-9.]{1,100}$/.test(username)) {
+    if (!username.includes("@") && !/^[a-z0-9._]{1,100}$/.test(username)) {
         showMessage(
-            "Nama pengguna hanya boleh mengandungi huruf kecil, nombor dan titik (.).",
+            "Username hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).",
             "error"
         );
         return;
