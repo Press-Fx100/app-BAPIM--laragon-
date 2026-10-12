@@ -39,6 +39,7 @@ return static function (PDO $pdo, string $rootDirectory): void {
     }
 
     $units = [
+        '' => '',
         '1' => 'UAK',
         '2' => 'UPU',
         '3' => 'UPA',
@@ -70,9 +71,15 @@ return static function (PDO $pdo, string $rootDirectory): void {
         $seenUsernames[$username] = true;
 
         $roleKey = strtolower(trim((string)$sourceUser['role']));
-        $unitKey = trim((string)$sourceUser['unit_id']);
-        $status = (string)$sourceUser['status_acc'];
-        if (!isset($roles[$roleKey], $units[$unitKey]) || !in_array($status, ['0', '1'], true)) {
+        $unitKey = trim((string)($sourceUser['unit_id'] ?? ''));
+        $statusKey = strtolower(trim((string)$sourceUser['status_acc']));
+        $statuses = [
+            '0' => 0,
+            '1' => 1,
+            'inactive' => 0,
+            'active' => 1,
+        ];
+        if (!isset($roles[$roleKey], $units[$unitKey], $statuses[$statusKey])) {
             throw new RuntimeException('A BPA user has an unsupported role, unit, or status; no users were imported.');
         }
 
@@ -88,7 +95,7 @@ return static function (PDO $pdo, string $rootDirectory): void {
             $email,
             $units[$unitKey],
             $passwordHash,
-            (int)$status,
+            $statuses[$statusKey],
             $roles[$roleKey],
         ];
     }
