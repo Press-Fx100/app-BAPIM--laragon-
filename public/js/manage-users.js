@@ -34,7 +34,6 @@ function initializeUserManagement() {
         { key: "upload", label: "Muat Naik & Set Data", editable: true, action: "Boleh muat naik dan urus set data" },
         { key: "dataset", label: "Paparan Set Data", editable: true, action: "Boleh sunting set data" },
         { key: "activity", label: "Aktiviti Pengguna", editable: false },
-        { key: "account", label: "Profil Pengguna", editable: true, action: "Boleh kemas kini profil" },
         { key: "updates", label: "Log Perisian", editable: false },
         { key: "manageUsers", label: "Pengurusan Pengguna", editable: false }
     ];
@@ -154,7 +153,9 @@ function initializeUserManagement() {
         const permissions = Object.fromEntries(pageDefinitions.map(page => [
             page.key,
             {
-                access: page.key === "manageUsers" ? level <= 1 : true,
+                access: ["bpaBudget", "bpaSku"].includes(page.key)
+                    ? level === 0
+                    : page.key === "manageUsers" ? level <= 1 : true,
                 edit: page.editable ? editable : page.key === "manageUsers" && level <= 1
             }
         ]));
