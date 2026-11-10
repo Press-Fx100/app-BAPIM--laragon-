@@ -631,6 +631,7 @@ async function finishPageLoading(initial = false) {
         pageContent.classList.add("is-visible");
         document.body.classList.remove("app-page-loading");
         pageContent.offsetWidth;
+        pageContent.style.removeProperty("transition");
         refreshBpaDashboardCharts(pageContent, { animate: true });
         return;
     }
@@ -2535,6 +2536,14 @@ async function navigateTo(url, replace = false) {
             const main = parsedPage.querySelector("main.main-content");
 
             if (!main) {
+                if (isBpaPage) {
+                    console.warn(
+                        "BPA page returned without BAPIM shell content; falling back to full navigation.",
+                        target.href
+                    );
+                    window.location.assign(target.href);
+                    return;
+                }
                 throw new Error("Page fragment is missing main content.");
             }
 
