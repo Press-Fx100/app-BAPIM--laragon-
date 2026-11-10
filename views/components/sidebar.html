@@ -15,32 +15,59 @@
             MENU
         </div>
 
-        <a href="/" class="nav-item" data-page="dashboard" aria-label="Papan Pemuka" title="Papan Pemuka">
+        <a href="/" class="nav-item" data-page="dashboard" data-access-page="dashboard" aria-label="Papan Pemuka" title="Papan Pemuka">
             <span class="nav-icon"><i class="bi bi-speedometer2" aria-hidden="true"></i></span>
             <span>Papan Pemuka</span>
         </a>
 
-        <a href="/penerima-bantuan" class="nav-item" data-page="penerima-bantuan" aria-label="Penerima Bantuan"
+        <a href="/penerima-bantuan" class="nav-item" data-page="penerima-bantuan" data-access-page="recipients" aria-label="Penerima Bantuan"
             title="Penerima Bantuan">
             <span class="nav-icon"><i class="bi bi-person-vcard" aria-hidden="true"></i></span>
             <span>Penerima Bantuan</span>
         </a>
 
-        <a href="/peserta-program" class="nav-item" data-page="peserta-program" aria-label="Peserta Program"
+        <a href="/peserta-program" class="nav-item" data-page="peserta-program" data-access-page="participants" aria-label="Peserta Program"
             title="Peserta Program">
             <span class="nav-icon"><i class="bi bi-people" aria-hidden="true"></i></span>
             <span>Peserta Program</span>
         </a>
 
-        <a href="/upload" class="nav-item" data-page="upload" aria-label="Muat Naik &amp; Set Data"
+        <a href="/muat-naik" class="nav-item" data-page="upload" data-access-page="upload" aria-label="Muat Naik &amp; Set Data"
             title="Muat Naik &amp; Set Data">
             <span class="nav-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></span>
             <span>Muat Naik &amp; Set Data</span>
         </a>
 
-        <a href="/user" class="nav-item" data-page="user" aria-label="Pengguna" title="Pengguna">
-            <span class="nav-icon"><i class="bi bi-person" aria-hidden="true"></i></span>
-            <span>Pengguna</span>
+        <a href="/aktiviti-pengguna" class="nav-item" data-page="user" data-access-page="activity" aria-label="Aktiviti Pengguna"
+            title="Aktiviti Pengguna">
+            <span class="nav-icon"><i class="bi bi-activity" aria-hidden="true"></i></span>
+            <span>Aktiviti Pengguna</span>
+        </a>
+
+        <div class="nav-section-title">BPA</div>
+
+        <a href="/bpa/dashboard" class="nav-item" data-page="bpa-dashboard" data-access-page="bpaDashboard" aria-label="Dashboard"
+            title="Dashboard">
+            <span class="nav-icon"><i class="bi bi-grid-1x2" aria-hidden="true"></i></span>
+            <span>Dashboard</span>
+        </a>
+
+        <a href="/bpa/admin/bajet_list" class="nav-item" data-page="bpa-budget-list" data-access-page="bpaBudget" aria-label="Bajet"
+            title="Bajet">
+            <span class="nav-icon"><i class="bi bi-cash-coin" aria-hidden="true"></i></span>
+            <span>Bajet</span>
+        </a>
+
+        <a href="/bpa/admin/sku_list" class="nav-item" data-page="bpa-sku-list" data-access-page="bpaSku" aria-label="SKU"
+            title="SKU">
+            <span class="nav-icon"><i class="bi bi-bullseye" aria-hidden="true"></i></span>
+            <span>SKU</span>
+        </a>
+
+        <a href="/bpa/laporan/program_list" class="nav-item" data-page="bpa-report-list" data-access-page="bpaPrograms" aria-label="Program"
+            title="Program">
+            <span class="nav-icon"><i class="bi bi-file-earmark-text" aria-hidden="true"></i></span>
+            <span>Program</span>
         </a>
 
     </nav>
@@ -48,7 +75,7 @@
     <div class="sidebar-bottom">
 
         <button type="button" class="database-status update-check-button"
-            data-csrf-token="__APP_CSRF_TOKEN__" aria-label="Semak kemas kini aplikasi">
+            data-csrf-token="__APP_CSRF_TOKEN__" aria-label="Semak kemas kini aplikasi" hidden>
             <span class="update-check-icon" aria-hidden="true">
                 <i class="bi bi-arrow-repeat"></i>
             </span>

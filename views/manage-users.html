@@ -1,0 +1,169 @@
+<main class="main-content">
+    <div class="dashboard-content account-page manage-users-page">
+        <div class="manage-users-layout">
+        <section class="content-card account-settings-card manage-users-card">
+            <div class="card-header-custom account-settings-header">
+                <div>
+                    <h5>Pengurusan Pengguna</h5>
+                    <span>Cipta pengguna dan kemas kini profil mereka.</span>
+                </div>
+                <button type="button" class="dataset-upload-close managed-user-add-button"
+                    id="newManagedUserButton" title="Tambah Pengguna" aria-label="Tambah Pengguna">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            <div class="account-settings-body">
+                <form id="managedUserForm" data-csrf-token="__APP_CSRF_TOKEN__" novalidate>
+                    <div class="managed-user-form-layout">
+                        <div class="managed-user-form-avatar" id="managedUserFormAvatar" aria-hidden="true">
+                            <i class="bi bi-person-fill"></i>
+                        </div>
+                        <div class="managed-user-form-content">
+                            <div class="manage-user-fields">
+                                <div class="form-field">
+                                    <label for="managedDisplayName">Nama Pengguna</label>
+                                    <input type="text" id="managedDisplayName" maxlength="160" autocomplete="name" required>
+                                </div>
+                                <div class="form-field">
+                                    <label for="managedUsername">Username
+                                        <small class="username-help" hidden>Huruf kecil, nombor dan titik (.) sahaja.</small>
+                                    </label>
+                                    <input type="text" id="managedUsername" maxlength="100" autocomplete="off"
+                                        autocapitalize="none" spellcheck="false" pattern="[a-z0-9._]+"
+                                        title="Gunakan huruf kecil, nombor, titik (.) dan garis bawah (_)." required>
+                                </div>
+                                <div class="form-field">
+                                    <label for="managedEmail">E-mel</label>
+                                    <input type="email" id="managedEmail" maxlength="254" autocomplete="email">
+                                </div>
+                                <div class="form-field">
+                                    <label for="managedUnit">Unit</label>
+                                    <div class="managed-access-field-controls">
+                                        <select id="managedUnit" aria-describedby="managedUnitHint">
+                                            <option value="">Tiada unit</option>
+                                            <option value="UAK">UAK</option>
+                                            <option value="UPU">UPU</option>
+                                            <option value="UPA">UPA</option>
+                                            <option value="ULK">ULK</option>
+                                            <option value="UPP">UPP</option>
+                                        </select>
+                                    </div>
+                                    <small class="managed-unit-help" id="managedUnitHint">Pengurus pengguna boleh mengubah unit.</small>
+                                </div>
+                                <div class="form-field">
+                                    <label for="managedPassword">Kata Laluan
+                                        <small class="username-help" id="managedPasswordHint"></small>
+                                    </label>
+                                    <div class="managed-access-field-controls">
+                                        <input type="text" id="managedPassword" class="managed-password-display"
+                                            autocomplete="off" readonly aria-label="Kata laluan jana, klik untuk salin"
+                                            title="Klik untuk menyalin kata laluan">
+                                        <button type="button" class="btn btn-outline-primary managed-access-config-button"
+                                            id="generateManagedPasswordButton" title="Jana kata laluan rawak"
+                                            aria-label="Jana kata laluan rawak">
+                                            <i class="bi bi-shuffle" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-field">
+                                    <label for="managedAccessLevel">Tahap Akses</label>
+                                    <div class="managed-access-field-controls">
+                                        <select id="managedAccessLevel" required>
+                                            <option value="0">0 - Dev (akses penuh)</option>
+                                            <option value="1">1 - Admin (urus pengguna)</option>
+                                            <option value="2">2 - Editor (sunting dan muat naik)</option>
+                                            <option value="3" selected>3 - Viewer (paparan sahaja)</option>
+                                        </select>
+                                        <button type="button" class="btn btn-outline-primary managed-access-config-button"
+                                            id="configureManagedAccessButton" title="Kebenaran Akses"
+                                            aria-label="Kebenaran Akses">
+                                            <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="managedUserMessage" class="message" role="status" aria-live="polite" hidden></div>
+                            <div class="form-actions">
+                                <button type="button" class="btn btn-outline-danger" id="managedUserStatusButton" hidden></button>
+                                <button type="submit" class="budget-list-action bpa-budget-save-button managed-user-save-button"
+                                    id="saveManagedUserButton">
+                                    <span class="budget-list-action-icon"><i class="bi bi-person-plus" aria-hidden="true"></i></span>
+                                    <span class="managed-user-save-label">Tambah Pengguna</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="content-card managed-users-list-card">
+            <div class="search-toolbar-group managed-users-controls">
+                <div class="search-box">
+                    <i class="bi bi-search" aria-hidden="true"></i>
+                    <input type="text" id="managedUserSearch" placeholder="Cari nama pengguna..."
+                        aria-label="Cari nama paparan atau nama pengguna" autocomplete="off">
+                </div>
+                <div class="toolbar-group toolbar-control-cluster">
+                    <div class="filter-menu-wrapper managed-users-filter-wrapper">
+                        <button type="button" id="managedUserFilterButton" class="toolbar-button icon-button"
+                            title="Tapis mengikut tahap akses" aria-controls="managedUserFilterMenu"
+                            aria-expanded="false">
+                            <i class="bi bi-funnel" aria-hidden="true"></i>
+                        </button>
+                        <div class="filter-menu managed-users-filter-menu" id="managedUserFilterMenu">
+                            <label class="managed-users-filter-option">
+                                <input type="radio" name="managedUserAccessFilter" value="" checked>
+                                <span>Semua tahap</span>
+                            </label>
+                            <label class="managed-users-filter-option">
+                                <input type="radio" name="managedUserAccessFilter" value="0">
+                                <span>Dev (akses penuh)</span>
+                            </label>
+                            <label class="managed-users-filter-option">
+                                <input type="radio" name="managedUserAccessFilter" value="1">
+                                <span>Admin (urus pengguna)</span>
+                            </label>
+                            <label class="managed-users-filter-option">
+                                <input type="radio" name="managedUserAccessFilter" value="2">
+                                <span>Editor (sunting dan muat naik)</span>
+                            </label>
+                            <label class="managed-users-filter-option">
+                                <input type="radio" name="managedUserAccessFilter" value="3">
+                                <span>Viewer (paparan sahaja)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="managed-users-list" id="managedUsersBody" role="list"
+                aria-label="Senarai pengguna">
+                <div class="managed-user-list-empty">Memuatkan pengguna...</div>
+            </div>
+        </section>
+        </div>
+    </div>
+
+    <dialog class="bpa-create-dialog managed-user-access-modal" id="managedUserAccessModal"
+        aria-labelledby="managedUserAccessTitle">
+        <header class="bpa-create-dialog__header">
+            <div>
+                <h2 id="managedUserAccessTitle">Kebenaran Akses</h2>
+                <p class="bpa-create-dialog__subtitle">Kembangkan bahagian untuk mengurus kebenaran akses halaman.</p>
+            </div>
+            <button type="button" class="bpa-create-dialog__close" id="closeManagedUserAccess" aria-label="Tutup">&times;</button>
+        </header>
+        <div class="bpa-create-dialog__body managed-user-access-body">
+            <div class="managed-user-access-list" id="managedUserAccessList"
+                aria-label="Bahagian kebenaran akses"></div>
+        </div>
+        <div class="managed-user-access-error" id="managedUserAccessError" role="alert" hidden></div>
+        <div class="managed-user-access-actions bpa-budget-modal-footer">
+            <button type="button" class="budget-list-action bpa-budget-save-button managed-user-access-save" id="saveManagedUserAccess">
+                <span class="budget-list-action-icon"><i class="bi bi-check2" aria-hidden="true"></i></span>
+                <span>Simpan Kebenaran</span>
+            </button>
+        </div>
+    </dialog>
+</main>

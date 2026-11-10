@@ -12,46 +12,27 @@ let isolatedLegendUser = null;
 let searchQuery = "";
 let selectedActivityUser = "";
 let selectedActivityAction = "";
+let selectedActivityColumn = "";
 let selectedActivityDataset = "";
 let selectedActivityDate = "";
 let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
 const rowsPerPage = 10;
-const userColors = {
-    Dini: "#2563eb",
-    Ezri: "#db2777",
-    Faiz: "#059669",
-    Rais: "#d97706"
-};
-const fallbackUserColors = [
-    "#7c3aed", "#0891b2", "#dc2626", "#4f46e5", "#65a30d", "#c026d3"
-];
-
-function getUserColor(username) {
-    if (userColors[username]) {
-        return userColors[username];
-    }
-
-    const hash = Array.from(username).reduce(
-        (total, character) => (total * 31 + character.charCodeAt(0)) >>> 0,
-        0
-    );
-    return fallbackUserColors[hash % fallbackUserColors.length];
-}
 
 function getUserBadgeStyle(username) {
-    const color = getUserColor(username);
-    const hex = color.slice(1);
-    const channels = [0, 2, 4].map(
-        offset => parseInt(hex.slice(offset, offset + 2), 16)
-    );
-    const background = `#${channels
-        .map(channel => Math.round(channel + (255 - channel) * 0.88)
+    const color = window.getInverseTextAverageColor(username);
+    const background = `#${[1, 3, 5].map(offset => {
+        const channel = parseInt(color.slice(offset, offset + 2), 16);
+        return Math.round(channel + (255 - channel) * 0.85)
             .toString(16)
-            .padStart(2, "0"))
-        .join("")}`;
-
-    return `background:${background};color:${color}`;
+            .padStart(2, "0");
+    }).join("").toUpperCase()}`;
+    const textColor = `#${[1, 3, 5].map(offset =>
+        Math.round(parseInt(color.slice(offset, offset + 2), 16) * 0.72)
+            .toString(16)
+            .padStart(2, "0")
+    ).join("").toUpperCase()}`;
+    return `background:${background};color:${textColor}`;
 }
 
 async function loadActivities() {
@@ -419,19 +400,25 @@ function createChartData() {
         if (!Number.isInteger(day) || day < 1 || day > daysInMonth) return;
 
         if (!dailyByUser.has(username)) {
-            dailyByUser.set(username, Array(daysInMonth).fill(0));
+            dailyByUser.set(username, {
+                values: Array(daysInMonth).fill(0)
+            });
         }
 
-        dailyByUser.get(username)[day - 1] += Number(
+        dailyByUser.get(username).values[day - 1] += Number(
             activity.progress_change ?? activity.progressChange ?? 0
         );
     });
 
     const datasets = [...dailyByUser.entries()]
         .sort(([first], [second]) => first.localeCompare(second))
-        .map(([username, dailyValues]) => {
+        .map(([username, { values: dailyValues }]) => {
             let cumulative = 0;
-            const color = getUserColor(username);
+            const color = window.getInverseTextAverageColor(username);
+            const [red, green, blue] = color.match(/[A-F0-9]{2}/gi).map(channel =>
+                Number.parseInt(channel, 16)
+            );
+            const lineColor = `rgba(${red}, ${green}, ${blue}, 0.65)`;
 
             return {
                 label: username,
@@ -439,10 +426,10 @@ function createChartData() {
                     cumulative += value;
                     return cumulative;
                 }),
-                borderColor: color,
-                backgroundColor: color,
+                borderColor: lineColor,
+                backgroundColor: lineColor,
                 borderWidth: 2,
-                tension: 0.3,
+                tension: 0,
                 fill: false,
                 pointRadius: 3,
                 pointHoverRadius: 5,
@@ -471,6 +458,21 @@ function renderChart() {
 
     const data =
         createChartData();
+
+    const highestProgress = Math.max(
+        0,
+        ...data.datasets.flatMap(dataset =>
+            dataset.data.map(value => Number(value) || 0)
+        )
+    );
+    const progressAxisMaximum = Math.max(
+        25,
+        Math.ceil(highestProgress / 5) * 5
+    );
+    const progressAxisPadding = Math.max(
+        5,
+        Math.ceil(progressAxisMaximum * 0.05 / 5) * 5
+    );
 
     if (auditChart) {
         auditChart.destroy();
@@ -530,14 +532,15 @@ function renderChart() {
                     }
                 },
                 y: {
-                    beginAtZero: true,
-                    min: 0,
+                    min: -progressAxisPadding,
+                    max: progressAxisMaximum + progressAxisPadding,
                     title: {
                         display: true,
                         text: "PROGRES"
                     },
                     ticks: {
-                        stepSize: 1
+                        stepSize: 5,
+                        callback: value => value < 0 ? "" : value
                     }
                 }
             }
@@ -583,6 +586,7 @@ function renderTable() {
         return matchesSearch &&
             (!selectedActivityUser || activity.username === selectedActivityUser) &&
             (!selectedActivityAction || action === selectedActivityAction) &&
+            (!selectedActivityColumn || activity.column === selectedActivityColumn) &&
             (!selectedActivityDataset || activity.dataset === selectedActivityDataset) &&
             (!selectedActivityDate || getActivityDateKey(activity.createdAt) === selectedActivityDate);
     });
@@ -665,9 +669,9 @@ function renderTable() {
 
                 <td class="audit-location-cell">
                     <div class="audit-location-values">
-                        <span class="audit-location-badge">${escapeHTML(activity.row || "—")}</span>
+                        <span class="audit-location-badge" title="${escapeHTML(activity.row || "—")}"><span class="audit-location-text">${escapeHTML(activity.row || "—")}</span></span>
                         <span class="audit-location-transition" aria-hidden="true">, </span>
-                        <span class="audit-location-badge">${escapeHTML(activity.column || "—")}</span>
+                        <span class="audit-location-badge" title="${escapeHTML(activity.column || "—")}"><span class="audit-location-text">${escapeHTML(activity.column || "—")}</span></span>
                     </div>
                 </td>
 
@@ -680,7 +684,7 @@ function renderTable() {
                 </td>
 
                 <td>
-                    ${escapeHTML(activity.dataset || "—")}
+                    <span class="audit-dataset-cell" title="${escapeHTML(activity.dataset || "—")}">${escapeHTML(activity.dataset || "—")}</span>
                 </td>
 
                 <td>
@@ -704,7 +708,7 @@ function renderTable() {
     const filterButton = document.getElementById("auditFilterButton");
     filterButton?.classList.toggle(
         "active",
-        Boolean(selectedActivityUser || selectedActivityAction || selectedActivityDataset)
+        Boolean(selectedActivityUser || selectedActivityAction || selectedActivityColumn || selectedActivityDataset)
     );
     const dateButton = document.getElementById("auditDateFilterButton");
     const calendarMenu = document.getElementById("auditCalendarMenu");
@@ -731,16 +735,20 @@ function getActivityActionLabel(action) {
 function populateActivityFilters() {
     const userFilter = document.getElementById("auditUserFilter");
     const actionFilter = document.getElementById("auditActionFilter");
+    const columnFilter = document.getElementById("auditColumnFilter");
     const datasetFilter = document.getElementById("auditDatasetFilter");
-    if (!userFilter || !actionFilter || !datasetFilter) return;
+    if (!userFilter || !actionFilter || !columnFilter || !datasetFilter) return;
 
     const selectedUser = userFilter.value || selectedActivityUser;
     const selectedAction = actionFilter.value || selectedActivityAction;
+    const selectedColumn = columnFilter.value || selectedActivityColumn;
     const selectedDataset = datasetFilter.value || selectedActivityDataset;
     const normalized = activities.map(normalizeActivity);
     const users = [...new Set(normalized.map(activity => activity.username).filter(Boolean))]
         .sort((first, second) => first.localeCompare(second));
     const actions = [...new Set(normalized.map(activity => getActivityActionLabel(activity.action)).filter(Boolean))]
+        .sort((first, second) => first.localeCompare(second));
+    const columns = [...new Set(normalized.map(activity => activity.column).filter(Boolean))]
         .sort((first, second) => first.localeCompare(second));
     const datasets = [...new Set(normalized.map(activity => activity.dataset).filter(Boolean))]
         .sort((first, second) => first.localeCompare(second));
@@ -749,14 +757,18 @@ function populateActivityFilters() {
     users.forEach(user => userFilter.add(new Option(user, user)));
     actionFilter.replaceChildren(new Option("Semua tindakan", ""));
     actions.forEach(action => actionFilter.add(new Option(action, action)));
+    columnFilter.replaceChildren(new Option("Semua lajur", ""));
+    columns.forEach(column => columnFilter.add(new Option(column, column)));
     datasetFilter.replaceChildren(new Option("Semua set data", ""));
     datasets.forEach(dataset => datasetFilter.add(new Option(dataset, dataset)));
 
     userFilter.value = users.includes(selectedUser) ? selectedUser : "";
     actionFilter.value = actions.includes(selectedAction) ? selectedAction : "";
+    columnFilter.value = columns.includes(selectedColumn) ? selectedColumn : "";
     datasetFilter.value = datasets.includes(selectedDataset) ? selectedDataset : "";
     selectedActivityUser = userFilter.value;
     selectedActivityAction = actionFilter.value;
+    selectedActivityColumn = columnFilter.value;
     selectedActivityDataset = datasetFilter.value;
 }
 
@@ -915,13 +927,14 @@ function initializeUserPage() {
                 dateButton?.setAttribute("aria-expanded", "false");
             });
         }
-        [["auditUserFilter", "user"], ["auditActionFilter", "action"], ["auditDatasetFilter", "dataset"]].forEach(([id, field]) => {
+        [["auditUserFilter", "user"], ["auditActionFilter", "action"], ["auditColumnFilter", "column"], ["auditDatasetFilter", "dataset"]].forEach(([id, field]) => {
             const select = document.getElementById(id);
             if (!select || select.dataset.bound === "true") return;
             select.dataset.bound = "true";
             select.addEventListener("change", () => {
                 if (field === "user") selectedActivityUser = select.value;
                 else if (field === "action") selectedActivityAction = select.value;
+                else if (field === "column") selectedActivityColumn = select.value;
                 else selectedActivityDataset = select.value;
                 currentPage = 1;
                 renderTable();
@@ -959,7 +972,7 @@ function initializeUserPage() {
                 button.addEventListener("click", handler);
             }
         });
-        loadActivities();
+        return loadActivities();
     }
 }
 
@@ -974,6 +987,7 @@ function getFilteredActivityCount() {
         return matchesSearch &&
             (!selectedActivityUser || activity.username === selectedActivityUser) &&
             (!selectedActivityAction || action === selectedActivityAction) &&
+            (!selectedActivityColumn || activity.column === selectedActivityColumn) &&
             (!selectedActivityDataset || activity.dataset === selectedActivityDataset) &&
             (!selectedActivityDate || getActivityDateKey(activity.createdAt) === selectedActivityDate);
     }).length;
@@ -981,10 +995,10 @@ function getFilteredActivityCount() {
 
 document.addEventListener(
     "DOMContentLoaded",
-    initializeUserPage
+    () => window.registerAppPageLoadTask(initializeUserPage())
 );
 document.addEventListener(
     "app:page-loaded",
-    initializeUserPage
+    () => window.registerAppPageLoadTask(initializeUserPage())
 );
 })();

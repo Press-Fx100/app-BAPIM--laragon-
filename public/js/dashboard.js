@@ -10,6 +10,10 @@ let pageSize = 50;
 let sortColumn = -1;
 let sortDirection = "asc";
 let selectedPIC = "";
+let dashboardMode = "recipients";
+let recipientRows = [];
+let participantRows = [];
+let dashboardRowsLoaded = false;
 
 let lineChart = null;
 let barChart = null;
@@ -20,6 +24,7 @@ let totalRecords;
 let totalRecipients;
 let totalParticipants;
 let contactedRecipients;
+let uncontactedRecipients;
 let multiProgramParticipants;
 let participantTotal = 0;
 let currentDateTime;
@@ -43,13 +48,149 @@ let pieTotal;
 let pieLegend;
 let lineLegend;
 let barLegend;
+const chartColorCache = new Map();
+const chartPalette = [
+    "#60A5FA",
+    "#FB923C",
+    "#34D399",
+    "#A78BFA",
+    "#F472B6",
+    "#FACC15",
+    "#22D3EE",
+    "#F87171",
+    "#A3E635",
+    "#C084FC",
+    "#2DD4BF",
+    "#FDBA74",
+    "#F9A8D4",
+    "#93C5FD",
+    "#86EFAC",
+    "#FDE047",
+    "#C4B5FD",
+    "#67E8F9",
+    "#FCA5A5",
+    "#818CF8",
+    "#6EE7B7",
+    "#E879F9",
+    "#FBBF24",
+    "#7DD3FC"
+];
 
-async function initializeDashboard() {
+const barHoverLiftPlugin = {
+    id: "barHoverLift",
+    afterDatasetsDraw(chart) {
+        const active = chart.getActiveElements().find(
+            element => element.datasetIndex === 0
+        );
+        if (!active) {
+            return;
+        }
+
+        const bar = chart.getDatasetMeta(active.datasetIndex).data[active.index];
+        const { x, y, base, width } = bar.getProps(["x", "y", "base", "width"], true);
+        const left = x - width / 2;
+        const top = Math.max(chart.chartArea.top, y);
+        const right = x + width / 2;
+        const radius = Math.min(5, width / 2, Math.max(0, (base - top) / 2));
+        const ctx = chart.ctx;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(
+            chart.chartArea.left,
+            chart.chartArea.top,
+            chart.chartArea.right - chart.chartArea.left,
+            chart.chartArea.bottom - chart.chartArea.top
+        );
+        ctx.clip();
+        ctx.fillStyle = bar.options.backgroundColor;
+        ctx.shadowColor = "rgba(15, 23, 42, .28)";
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 3;
+        ctx.beginPath();
+        ctx.moveTo(left + radius, top);
+        ctx.lineTo(right - radius, top);
+        ctx.quadraticCurveTo(right, top, right, top + radius);
+        ctx.lineTo(right, base - radius);
+        ctx.quadraticCurveTo(right, base, right - radius, base);
+        ctx.lineTo(left + radius, base);
+        ctx.quadraticCurveTo(left, base, left, base - radius);
+        ctx.lineTo(left, top + radius);
+        ctx.quadraticCurveTo(left, top, left + radius, top);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+};
+
+const dashboardChartTooltipPlugin = {
+    id: "dashboardChartTooltip",
+    afterDraw(chart) {
+        const tooltip = chart.tooltip;
+        const canvas = chart.canvas;
+        const wrapper = canvas.parentElement;
+        let tooltipElement = wrapper.querySelector(".dashboard-chart-tooltip");
+
+        if (!tooltipElement) {
+            tooltipElement = document.createElement("div");
+            tooltipElement.className = "dashboard-chart-tooltip";
+            tooltipElement.setAttribute("role", "tooltip");
+            wrapper.append(tooltipElement);
+        }
+
+        if (!tooltip || tooltip.opacity === 0) {
+            tooltipElement.style.opacity = "0";
+            return;
+        }
+
+        tooltipElement.replaceChildren();
+        tooltip.title.forEach((titleText, index) => {
+            const title = document.createElement("div");
+            title.className = "dashboard-chart-tooltip-title";
+            title.textContent = titleText;
+            if (index === tooltip.title.length - 1 && tooltip.body.length) {
+                title.style.marginBottom = "4px";
+            }
+            tooltipElement.append(title);
+        });
+
+        tooltip.body.forEach((bodyItem, index) => {
+            const point = tooltip.dataPoints[index];
+            bodyItem.lines.forEach(lineText => {
+                const row = document.createElement("div");
+                row.className = "dashboard-chart-tooltip-row";
+
+                if (tooltip.options.displayColors && point) {
+                    const marker = document.createElement("span");
+                    marker.className = "dashboard-chart-tooltip-marker";
+                    marker.style.backgroundColor = Array.isArray(point.dataset.backgroundColor)
+                        ? point.dataset.backgroundColor[point.dataIndex]
+                        : point.dataset.backgroundColor;
+                    row.append(marker);
+                }
+
+                const text = document.createElement("span");
+                text.textContent = lineText;
+                row.append(text);
+                tooltipElement.append(row);
+            });
+        });
+
+        const canvasRect = canvas.getBoundingClientRect();
+        const wrapperRect = wrapper.getBoundingClientRect();
+        tooltipElement.style.left = `${canvasRect.left - wrapperRect.left + tooltip.x}px`;
+        tooltipElement.style.top = `${canvasRect.top - wrapperRect.top + tooltip.y}px`;
+        tooltipElement.style.opacity = "1";
+    }
+};
+
+async function initializeDashboard(animateCharts = false) {
     picSelect = document.getElementById("picSelect");
     totalRecords = document.getElementById("totalRecords");
     totalRecipients = document.getElementById("totalRecipients");
     totalParticipants = document.getElementById("totalParticipants");
     contactedRecipients = document.getElementById("contactedRecipients");
+    uncontactedRecipients = document.getElementById("uncontactedRecipients");
     multiProgramParticipants = document.getElementById("multiProgramParticipants");
     currentDateTime = document.getElementById("currentDateTime");
     currentDate = document.getElementById("currentDate");
@@ -92,6 +233,7 @@ async function initializeDashboard() {
     if (picSelect.dataset.initialized !== "true") {
         picSelect.dataset.initialized = "true";
 
+        setupDashboardStatCards();
         tableSearch?.addEventListener("input", applyFilters);
         pageSizeSelect?.addEventListener("change", () => {
             pageSize = Number(pageSizeSelect.value);
@@ -104,8 +246,12 @@ async function initializeDashboard() {
         });
     }
 
+    setDashboardMode(dashboardMode, false);
     arrangeDashboard();
-    await loadCombinedRecipientData();
+    document.querySelector(".dashboard-page")?.classList.add(
+        "dashboard-data-pending"
+    );
+    await loadCombinedRecipientData(animateCharts);
 }
 
 function updateDashboardClock() {
@@ -136,6 +282,155 @@ function arrangeDashboard() {
     }
 
     dashboardContent.prepend(statsSection);
+}
+
+function setupDashboardStatCards() {
+    document.querySelectorAll(".stat-card[data-dashboard-mode]").forEach(card => {
+        if (card.dataset.clickBound === "true") {
+            return;
+        }
+
+        card.dataset.clickBound = "true";
+        const activate = () => {
+            const mode = card.dataset.dashboardMode;
+            if (mode === "recipients" || mode === "participants") {
+                setDashboardMode(mode);
+            }
+        };
+
+        card.addEventListener("click", activate);
+        card.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                activate();
+            }
+        });
+    });
+}
+
+function setDashboardMode(mode, animateEntrance = true) {
+    dashboardMode = mode;
+    const isParticipants = mode === "participants";
+    const dashboardContentTitle = document.getElementById("dashboardDataTitle");
+    const dashboardContentDescription = document.getElementById("dashboardDataDescription");
+    const analysisTitle = document.getElementById("datasetAnalysisTitle");
+    const noDataTitle = document.getElementById("dashboardNoDataTitle");
+    const noDataMessage = document.getElementById("dashboardNoDataMessage");
+    const recordsTitle = document.getElementById("dashboardRecordsTitle");
+    const recordsDescription = document.getElementById("dashboardRecordsDescription");
+    const picControl = document.querySelector(".pic-control");
+    const pieCenterLabel = document.getElementById("pieCenterLabel");
+
+    document.querySelectorAll(".stat-card[data-dashboard-mode]").forEach(card => {
+        const selected = card.dataset.dashboardMode === mode;
+        if (card.dataset.dashboardMode !== "unchanged") {
+            card.classList.toggle("is-selected", selected);
+            card.setAttribute("aria-pressed", String(selected));
+        }
+    });
+
+    if (dashboardContentTitle) {
+        dashboardContentTitle.textContent = isParticipants
+            ? "Peserta Program"
+            : "Penerima Bantuan";
+    }
+    if (dashboardContentDescription) {
+        dashboardContentDescription.textContent = isParticipants
+            ? "Data gabungan semua peserta program"
+            : "Data gabungan semua penerima bantuan";
+    }
+    if (analysisTitle) {
+        analysisTitle.textContent = isParticipants
+            ? "Analisis Peserta Program"
+            : "Analisis Penerima Bantuan";
+    }
+    if (noDataTitle) {
+        noDataTitle.textContent = isParticipants
+            ? "Tiada data peserta program"
+            : "Tiada data penerima bantuan";
+    }
+    if (noDataMessage) {
+        noDataMessage.textContent = isParticipants
+            ? "Tiada data peserta program untuk dipaparkan."
+            : "Tiada data penerima bantuan untuk dipaparkan.";
+    }
+    if (recordsTitle) {
+        recordsTitle.textContent = isParticipants
+            ? "Rekod Peserta Program"
+            : "Rekod Penerima Bantuan";
+    }
+    if (recordsDescription) {
+        recordsDescription.textContent = isParticipants
+            ? "Lihat, cari dan susun rekod peserta program"
+            : "Lihat, cari dan susun rekod penerima bantuan";
+    }
+    if (tableSearch) {
+        tableSearch.placeholder = isParticipants
+            ? "Cari peserta program..."
+            : "Cari penerima bantuan...";
+    }
+    if (picControl) {
+        picControl.style.display = isParticipants ? "none" : "";
+    }
+    if (pieCenterLabel) {
+        pieCenterLabel.textContent = isParticipants
+            ? "Penyertaan Program"
+            : "Penerima Bantuan";
+    }
+
+    const pieChartTitle = document.getElementById("pieChartTitle");
+    const pieChartDescription = document.getElementById("pieChartDescription");
+    const barChartTitle = document.getElementById("barChartTitle");
+    const barChartDescription = document.getElementById("barChartDescription");
+    if (pieChartTitle) {
+        pieChartTitle.textContent = isParticipants
+            ? "Taburan Program Peserta"
+            : "Taburan Status Penerima Bantuan";
+    }
+    if (pieChartDescription) {
+        pieChartDescription.textContent = isParticipants
+            ? "Peratus dan jumlah penyertaan bagi setiap program."
+            : "Peratus dan jumlah penerima bagi setiap status.";
+    }
+    if (barChartTitle) {
+        barChartTitle.textContent = isParticipants
+            ? "Bilangan Peserta Mengikut Program"
+            : "Bilangan Penerima Mengikut Status";
+    }
+    if (barChartDescription) {
+        barChartDescription.textContent = isParticipants
+            ? "Jumlah peserta yang menyertai setiap program."
+            : "Jumlah penerima bantuan dalam setiap kategori status.";
+    }
+
+    if (!dashboardRowsLoaded) {
+        return;
+    }
+
+    currentHeaders = isParticipants
+        ? ["NAMA", "KAD PENGENALAN", "KATEGORI", "JUMLAH PROGRAM", "PROGRAM"]
+        : ["NAMA", "KAD PENGENALAN", "TELEFON", "EMAIL", "STATUS", "CATATAN", "PIC"];
+    currentRows = isParticipants ? participantRows : recipientRows;
+    currentDataset = {
+        id: `combined-${mode}`,
+        name: isParticipants ? "Peserta Program" : "Penerima Bantuan"
+    };
+    selectedPIC = "";
+    currentPage = 1;
+    sortColumn = -1;
+    sortDirection = "asc";
+    if (picSelect) {
+        picSelect.value = "";
+    }
+    if (tableSearch) {
+        tableSearch.value = "";
+    }
+
+    populatePICFilter();
+    filteredRows = [...currentRows];
+    renderTable();
+    renderAnalysis();
+    updateCharts(animateEntrance);
 }
 
 function getHeaders() {
@@ -185,7 +480,7 @@ function getDatasetViewerUrl(datasetId, filters) {
     const detailParams = new URLSearchParams(query);
     detailParams.set("id", datasetId);
 
-    return `/data-set?${detailParams.toString()}`;
+    return `/set-data?${detailParams.toString()}`;
 }
 
 function openChartFilter(columnIndex, value) {
@@ -227,6 +522,8 @@ function openChartFilter(columnIndex, value) {
             ? "status"
             : normalizedColumn === "pic"
                 ? "pic"
+                : normalizedColumn === "program"
+                    ? "program"
                 : "";
 
     if (!normalizedFilterColumn) {
@@ -251,7 +548,10 @@ function openChartFilter(columnIndex, value) {
     });
 
     const query = params.toString();
-    const url = `/penerima-bantuan${query ? `?${query}` : ""}`;
+    const destination = dashboardMode === "participants"
+        ? "/peserta-program"
+        : "/penerima-bantuan";
+    const url = `${destination}${query ? `?${query}` : ""}`;
 
     window.dispatchEvent(
         new CustomEvent("app:navigate", {
@@ -760,11 +1060,11 @@ function renderPagination(totalPages) {
     );
 }
 
-async function loadCombinedRecipientData() {
+async function loadCombinedRecipientData(animateCharts = false) {
     try {
         const [recipientResponse, participantResponse] = await Promise.all([
-            fetch("/api/penerima-bantuan"),
-            fetch("/api/peserta-program")
+            fetch("/api/penerima-bantuan", { cache: "no-store" }),
+            fetch("/api/peserta-program", { cache: "no-store" })
         ]);
 
         if (!recipientResponse.ok || !participantResponse.ok) {
@@ -779,20 +1079,12 @@ async function loadCombinedRecipientData() {
         const contactedRecipientTotal = recipients.filter(recipient =>
             String(recipient.status ?? "").trim()
         ).length;
+        const uncontactedRecipientTotal = recipients.length - contactedRecipientTotal;
         const multiProgramParticipantTotal = participants.filter(participant =>
             Number(participant.jumlahProgram) > 1
         ).length;
 
-        currentHeaders = [
-            "NAMA",
-            "KAD PENGENALAN",
-            "TELEFON",
-            "EMAIL",
-            "STATUS",
-            "CATATAN",
-            "PIC"
-        ];
-        currentRows = recipients.map(recipient => [
+        recipientRows = recipients.map(recipient => [
             recipient.nama || "",
             recipient.kadPengenalan || "",
             recipient.telefon || "",
@@ -801,15 +1093,18 @@ async function loadCombinedRecipientData() {
             recipient.catatan || "",
             recipient.pic || ""
         ]);
-        currentDataset = { id: "combined-recipients", name: "Penerima Bantuan" };
-        selectedPIC = "";
-        currentPage = 1;
+        participantRows = participants.map(participant => [
+            participant.nama || "",
+            participant.kadPengenalan || "",
+            participant.ketegori || participant.kategori || "",
+            Number(participant.jumlahProgram) || 0,
+            Array.isArray(participant.programs)
+                ? participant.programs.join(", ")
+                : String(participant.programs || "")
+        ]);
+        dashboardRowsLoaded = true;
         sortColumn = -1;
         sortDirection = "asc";
-
-        if (tableSearch) {
-            tableSearch.value = "";
-        }
 
         if (totalRecipients) {
             totalRecipients.textContent = recipients.length.toLocaleString();
@@ -821,22 +1116,28 @@ async function loadCombinedRecipientData() {
             contactedRecipients.textContent =
                 contactedRecipientTotal.toLocaleString();
         }
+        if (uncontactedRecipients) {
+            uncontactedRecipients.textContent =
+                uncontactedRecipientTotal.toLocaleString();
+        }
         if (multiProgramParticipants) {
             multiProgramParticipants.textContent =
                 multiProgramParticipantTotal.toLocaleString();
         }
         updateDashboardClock();
 
-        populatePICFilter();
-        filteredRows = [...currentRows];
         document.querySelector(".dashboard-page")?.classList.remove(
             "dashboard-data-pending"
         );
-        renderTable();
-        renderAnalysis();
-        updateCharts();
+        setDashboardMode(dashboardMode, animateCharts);
     } catch (error) {
         console.error("Dashboard loading error:", error);
+        document.querySelectorAll(".dashboard-data-pending .dashboard-loading-state").forEach(
+            state => {
+                state.textContent = "Gagal memuatkan data. Sila muat semula halaman untuk mencuba lagi.";
+                state.classList.add("dashboard-loading-error");
+            }
+        );
         alert(error.message);
     }
 }
@@ -1218,15 +1519,6 @@ function getCategoryCounts(columnIndex) {
             ).trim();
 
         if (!rawValue) {
-            counts.set(
-                "(Kosong)",
-                (
-                    counts.get(
-                        "(Kosong)"
-                    ) || 0
-                ) + 1
-            );
-
             return;
         }
 
@@ -1261,26 +1553,43 @@ function getCategoryCounts(columnIndex) {
     );
 }
 
-function chartColors(count) {
-    const palette = [
-        "#344F61",
-        "#6E93AA",
-        "#9FBCCB",
-        "#B8CFDB",
-        "#7D9BA9",
-        "#CBDCE3"
-    ];
+function chartColors(labels) {
+    return labels.map(label => {
+        const key = String(label);
+        if (!chartColorCache.has(key)) {
+            chartColorCache.set(key, chartPalette[chartColorCache.size % chartPalette.length]);
+        }
+        return chartColorCache.get(key);
+    });
+}
 
-    return Array.from(
-        { length: count },
-        (_, index) => palette[index % palette.length]
+function shouldHideBarXAxisLabels(labels, canvas) {
+    if (labels.length < 2) {
+        return false;
+    }
+
+    const context = canvas.getContext("2d");
+    const font = Chart.defaults.font;
+    context.save();
+    context.font = `${font.size}px ${font.family}`;
+    const maxLabelWidth = Math.max(
+        ...labels.map(label => context.measureText(String(label)).width)
     );
+    context.restore();
+
+    const availableTickWidth = Math.max(
+        0,
+        (canvas.clientWidth - 60) / labels.length
+    );
+
+    return maxLabelWidth > availableTickWidth;
 }
 
 function createLegendItem(
     container,
     label,
-    count
+    count,
+    color
 ) {
     const item =
         document.createElement(
@@ -1297,6 +1606,8 @@ function createLegendItem(
 
     dot.className =
         "legend-dot";
+    dot.style.backgroundColor =
+        color;
 
     const text =
         document.createElement(
@@ -1345,8 +1656,12 @@ function renderCategoryLegend(
             0
         );
 
+    const colors = chartColors(
+        entries.map(([label]) => label)
+    );
+
     entries.forEach(
-        ([label, count]) => {
+        ([label, count], index) => {
             const percentage =
                 total
                     ? (
@@ -1361,7 +1676,8 @@ function renderCategoryLegend(
                 label,
                 showPercentages
                     ? `${percentage}% (${count.toLocaleString()})`
-                    : count
+                    : count,
+                colors[index]
             );
         }
     );
@@ -1391,17 +1707,12 @@ function destroyCharts() {
         "0";
 }
 
-function updateCharts() {
-    updateBarChart();
-    updatePieChart();
+function updateCharts(animateEntrance = false) {
+    updateBarChart(animateEntrance);
+    updatePieChart(animateEntrance);
 }
 
-function updateBarChart() {
-    if (barChart) {
-        barChart.destroy();
-        barChart = null;
-    }
-
+function updateBarChart(animateEntrance = false) {
     barLegend.innerHTML =
         "";
 
@@ -1414,6 +1725,16 @@ function updateBarChart() {
         return;
     }
 
+    const canvas = document.getElementById("barChart");
+    if (!canvas) {
+        return;
+    }
+
+    const registeredChart = Chart.getChart(canvas);
+    if (barChart !== registeredChart) {
+        barChart = registeredChart || null;
+    }
+
     const wrapper =
         section.querySelector(
             ".chart-wrapper"
@@ -1424,11 +1745,17 @@ function updateBarChart() {
             ".chart-legend"
         );
 
+    const chartCategory = dashboardMode === "participants" ? "program" : "status";
     const barIndex = getHeaders().findIndex(
-        header => String(header).trim().toLowerCase() === "status"
+        header => String(header).trim().toLowerCase() === chartCategory
     );
 
     if (!currentRows.length || barIndex < 0) {
+        if (barChart) {
+            barChart.destroy();
+            barChart = null;
+        }
+
         wrapper.style.display =
             "none";
 
@@ -1453,19 +1780,49 @@ function updateBarChart() {
         );
 
     if (!entries.length) {
+        if (barChart) {
+            barChart.destroy();
+            barChart = null;
+        }
         return;
     }
 
+    const labels = entries.map(([label]) => label);
+    const values = entries.map(([, count]) => count);
+    const hasSameData = barChart &&
+        barChart.data.labels.length === labels.length &&
+        labels.every((label, index) => barChart.data.labels[index] === label) &&
+        barChart.data.datasets[0]?.data.length === values.length &&
+        values.every((value, index) => barChart.data.datasets[0].data[index] === value);
+
+    if (hasSameData && !animateEntrance) {
+        barChart.resize();
+        barChart.options.scales.x.ticks.display =
+            !shouldHideBarXAxisLabels(labels, canvas);
+        barChart.update("none");
+        renderCategoryLegend(
+            barLegend,
+            entries,
+            false
+        );
+        return;
+    }
+
+    if (barChart) {
+        barChart.destroy();
+        barChart = null;
+    }
+
     barChart = new Chart(
-        document.getElementById("barChart"),
+        canvas,
         {
             type: "bar",
             data: {
-                labels: entries.map(([label]) => label),
+                labels,
                 datasets: [{
                     label: "Kuantiti",
-                    data: entries.map(([, count]) => count),
-                    backgroundColor: chartColors(entries.length),
+                    data: values,
+                    backgroundColor: chartColors(labels),
                     borderWidth: 0
                 }]
             },
@@ -1482,18 +1839,42 @@ function updateBarChart() {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        backgroundColor: "rgba(0,0,0,0)",
+                        titleColor: "rgba(255,255,255,0)",
+                        bodyColor: "rgba(255,255,255,0)",
+                        borderColor: "rgba(0,0,0,0)",
+                        borderWidth: 0,
+                        caretSize: 0,
                         callbacks: {
                             label: context =>
-                                `Kuantiti: ${context.parsed.y.toLocaleString()}`
+                                `Bilangan: ${context.parsed.y.toLocaleString()}`
                         }
                     }
                 },
                 scales: {
-                    x: { grid: { display: false } },
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            display: !shouldHideBarXAxisLabels(labels, canvas)
+                        }
+                    },
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 },
-                animation: { duration: 250 }
-            }
+                animation: {
+                    duration: 1300,
+                    easing: "easeOutCubic"
+                },
+                transitions: {
+                    attach: { animation: { duration: 0 } },
+                    resize: { animation: { duration: 0 } }
+                },
+                animations: {
+                    y: {
+                        from: context => context.chart.scales.y.getPixelForValue(0)
+                    }
+                }
+            },
+            plugins: [barHoverLiftPlugin, dashboardChartTooltipPlugin]
         }
     );
 
@@ -1504,12 +1885,7 @@ function updateBarChart() {
     );
 }
 
-function updatePieChart() {
-    if (pieChart) {
-        pieChart.destroy();
-        pieChart = null;
-    }
-
+function updatePieChart(animateEntrance = false) {
     pieLegend.innerHTML =
         "";
 
@@ -1525,6 +1901,16 @@ function updatePieChart() {
         return;
     }
 
+    const canvas = document.getElementById("pieChart");
+    if (!canvas) {
+        return;
+    }
+
+    const registeredChart = Chart.getChart(canvas);
+    if (pieChart !== registeredChart) {
+        pieChart = registeredChart || null;
+    }
+
     const wrapper =
         section.querySelector(
             ".pie-wrapper"
@@ -1535,11 +1921,17 @@ function updatePieChart() {
             ".chart-legend"
         );
 
+    const chartCategory = dashboardMode === "participants" ? "program" : "status";
     const pieIndex = getHeaders().findIndex(
-        header => String(header).trim().toLowerCase() === "status"
+        header => String(header).trim().toLowerCase() === chartCategory
     );
 
     if (!currentRows.length || pieIndex < 0) {
+        if (pieChart) {
+            pieChart.destroy();
+            pieChart = null;
+        }
+
         wrapper.style.display =
             "none";
 
@@ -1564,6 +1956,10 @@ function updatePieChart() {
         );
 
     if (!entries.length) {
+        if (pieChart) {
+            pieChart.destroy();
+            pieChart = null;
+        }
         return;
     }
 
@@ -1574,26 +1970,64 @@ function updatePieChart() {
             0
         );
 
+    const labels = entries.map(([label]) => label);
+    const values = entries.map(([, count]) => count);
+    const hasSameData = pieChart &&
+        pieChart.data.labels.length === labels.length &&
+        labels.every((label, index) => pieChart.data.labels[index] === label) &&
+        pieChart.data.datasets[0]?.data.length === values.length &&
+        values.every((value, index) => pieChart.data.datasets[0].data[index] === value);
+
+    if (hasSameData && !animateEntrance) {
+        pieChart.resize();
+        pieChart.update("none");
+        renderCategoryLegend(
+            pieLegend,
+            entries,
+            true
+        );
+        pieTotal.textContent = total.toLocaleString();
+        return;
+    }
+
+    if (pieChart) {
+        pieChart.destroy();
+        pieChart = null;
+    }
+
     pieTotal.textContent =
         total.toLocaleString();
 
     pieChart = new Chart(
-        document.getElementById("pieChart"),
+        canvas,
         {
             type: "doughnut",
             data: {
-                labels: entries.map(([label]) => label),
+                labels,
                 datasets: [{
-                    data: entries.map(([, count]) => count),
-                    backgroundColor: chartColors(entries.length),
+                    data: values,
+                    backgroundColor: chartColors(labels),
                     borderWidth: 3,
+                    clip: false,
                     hoverOffset: 12
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: 14
+                },
                 cutout: "64%",
+                animation: {
+                    duration: 1100,
+                    animateRotate: true,
+                    animateScale: false
+                },
+                transitions: {
+                    attach: { animation: { duration: 0 } },
+                    resize: { animation: { duration: 0 } }
+                },
                 onClick: (event, elements) => {
                     const index = elements[0]?.index;
                     const value = entries[index]?.[0];
@@ -1604,17 +2038,24 @@ function updatePieChart() {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        backgroundColor: "rgba(0,0,0,0)",
+                        titleColor: "rgba(255,255,255,0)",
+                        bodyColor: "rgba(255,255,255,0)",
+                        borderColor: "rgba(0,0,0,0)",
+                        borderWidth: 0,
+                        caretSize: 0,
                         callbacks: {
                             label: context => {
                                 const percentage = total
                                     ? (context.parsed / total * 100).toFixed(1)
                                     : "0.0";
-                                return `${context.label}: ${percentage}% (${context.parsed.toLocaleString()})`;
+                                return `Peratusan: ${percentage}% (${context.parsed.toLocaleString()})`;
                             }
                         }
                     }
                 }
-            }
+            },
+            plugins: [dashboardChartTooltipPlugin]
         }
     );
 
@@ -2025,14 +2466,14 @@ if (picSelect) {
     );
 }
 
-initializeDashboard();
+window.appInitialPageReady = initializeDashboard();
 
 document.addEventListener("app:page-loaded", () => {
     const pathname = typeof window.appPathname === "function"
         ? window.appPathname(window.location.pathname)
         : window.location.pathname;
     if (pathname === "/") {
-        initializeDashboard();
+        window.registerAppPageLoadTask(initializeDashboard(true));
     }
 });
 })();

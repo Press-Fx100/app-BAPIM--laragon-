@@ -1363,34 +1363,16 @@ async function importDataset() {
         }
 
         if (selectedType === "csv" || uploadMode === "peserta") {
-            alert(
-                `Berjaya import "${result.name || uploadDatasetName.value}"\n\n` +
-                `${Number(result.rows || 0).toLocaleString()} baris`
+            window.showAppAlert?.(
+                `Berjaya import "${result.name || uploadDatasetName.value}" (${Number(result.rows || 0).toLocaleString()} baris).`,
+                "success"
             );
         } else {
             const importedSheets =
                 result.sheets || [];
-
-            const sheetNames =
-                importedSheets
-                    .map(
-                        sheet =>
-                            `${sheet.name} (${Number(
-                                sheet.rows || 0
-                            ).toLocaleString()} baris)`
-                    )
-                    .join("\n");
-
-            alert(
-                `Berjaya import fail Excel.\n\n` +
-                `Worksheets imported: ${Number(
-                    result.imported ||
-                    importedSheets.length
-                ).toLocaleString()}\n` +
-                `Jumlah baris: ${Number(
-                    result.rows || 0
-                ).toLocaleString()}\n\n` +
-                sheetNames
+            window.showAppAlert?.(
+                `Berjaya import fail Excel: ${Number(result.imported || importedSheets.length).toLocaleString()} worksheets, ${Number(result.rows || 0).toLocaleString()} baris.`,
+                "success"
             );
         }
 
@@ -1777,7 +1759,7 @@ document.addEventListener(
         if (
             (typeof window.appPathname === "function"
                 ? window.appPathname(window.location.pathname)
-                : window.location.pathname) !== "/upload" &&
+                : window.location.pathname) !== "/muat-naik" &&
             uploadOverlay?.parentElement === document.body
         ) {
             closeUpload();

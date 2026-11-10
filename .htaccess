@@ -1,4 +1,4 @@
-Options -Indexes
+Options -Indexes -MultiViews
 RewriteEngine On
 
 RewriteRule ^(?:config|data|views|__pycache__|build|dist[^/]*)(?:/|$) - [F,L,NC]
@@ -8,6 +8,8 @@ RewriteRule ^(css|js|logo\.png|app\.ico|favicon\.ico)(/.*)?$ public/$1$2 [L,NC]
 RewriteRule ^(?:package(?:-lock)?\.json|README\.md|requirements\.txt|DatasetManagement\.spec|database\.sql|[^/]+\.(?:js|py|bat|db|spec|txt))$ - [F,L,NC]
 
 RewriteRule ^index\.php$ - [L]
+RewriteRule ^(?:app-bapim/)?bpa(?:/.*)?$ index.php [QSA,L]
+RewriteRule ^(?:app-bapim/)?bpa/.*\.php$ index.php [QSA,L]
 RewriteCond %{REQUEST_FILENAME} -f
 RewriteRule ^ - [L]
 

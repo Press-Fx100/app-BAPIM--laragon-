@@ -8,38 +8,50 @@
             <div class="dataset-header-controls">
                 <div class="search-toolbar-group">
                     <div class="search-box">
+                        <i class="bi bi-search" aria-hidden="true"></i>
                         <input type="text" id="recipientSearch" placeholder="Cari penerima..." autocomplete="off">
                     </div>
-                    <div class="toolbar-group toolbar-filter">
-                    <div class="column-menu-wrapper">
-                        <button type="button" id="recipientColumnButton" class="toolbar-button icon-button" title="Lajur">
-                            <i class="bi bi-layout-three-columns"></i>
-                        </button>
-                        <div id="recipientColumnMenu" class="column-menu">
-                            <div class="column-menu-header">
-                                <button type="button" id="recipientSelectAllColumns">Pilih Semua</button>
+                    <div class="toolbar-group toolbar-control-cluster">
+                        <div class="toolbar-filter">
+                            <div class="column-menu-wrapper">
+                                <button type="button" id="recipientColumnButton" class="toolbar-button icon-button" title="Lajur"
+                                    aria-controls="recipientColumnMenu" aria-expanded="false">
+                                    <i class="bi bi-layout-three-columns"></i>
+                                </button>
+                                <div id="recipientColumnMenu" class="column-menu">
+                                    <div class="column-menu-header">
+                                        <button type="button" id="recipientSelectAllColumns">Pilih Semua</button>
+                                    </div>
+                                    <div id="recipientColumnChecklist"></div>
+                                </div>
                             </div>
-                            <div id="recipientColumnChecklist"></div>
+                            <div class="filter-menu-wrapper">
+                                <button type="button" id="recipientFilterButton" class="toolbar-button icon-button" title="Tapis"
+                                    aria-controls="recipientFilterMenu" aria-expanded="false">
+                                    <i class="bi bi-funnel"></i>
+                                </button>
+                                <div id="recipientFilterMenu" class="filter-menu"></div>
+                            </div>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button type="button" id="recipientSaveButton"
+                                data-permission-edit="recipients"
+                                class="toolbar-button icon-button dataset-save-button" disabled
+                                title="Disimpan" aria-label="Disimpan">
+                                <i class="bi bi-floppy"></i>
+                            </button>
+                            <button type="button" id="recipientExportButton" class="toolbar-button icon-button"
+                                title="Muat turun Excel" aria-label="Muat turun Excel">
+                                <i class="bi bi-download" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="recipientAddButton" data-permission-edit="recipients" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                            <button type="button" id="recipientDeleteButton" data-permission-edit="recipients" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
+                                <i class="bi bi-trash3"></i>
+                            </button>
                         </div>
                     </div>
-                        <div class="filter-menu-wrapper">
-                        <button type="button" id="recipientFilterButton" class="toolbar-button icon-button" title="Tapis">
-                            <i class="bi bi-funnel"></i>
-                        </button>
-                        <div id="recipientFilterMenu" class="filter-menu"></div>
-                        </div>
-                    </div>
-                    <button type="button" id="recipientSaveButton"
-                        class="toolbar-button icon-button dataset-save-button" disabled
-                        title="Disimpan" aria-label="Disimpan">
-                        <i class="bi bi-floppy"></i>
-                    </button>
-                    <button type="button" id="recipientAddButton" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
-                    <button type="button" id="recipientDeleteButton" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
-                        <i class="bi bi-trash3"></i>
-                    </button>
                 </div>
                 <div id="recipientDeleteOverlay" class="delete-confirmation-overlay"></div>
                 <div id="recipientDeleteConfirmation" class="delete-confirmation" role="dialog" aria-modal="true" aria-hidden="true">
@@ -49,13 +61,13 @@
                         <p id="recipientDeleteMessage"></p>
                         <div class="delete-confirmation-actions">
                             <button type="button" id="recipientCancelDelete" class="cancel-delete">Batal</button>
-                            <button type="button" id="recipientConfirmDelete" class="confirm-delete">Padam</button>
+                            <button type="button" id="recipientConfirmDelete" data-permission-edit="recipients" class="confirm-delete">Padam</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div id="recipientAddForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
+            <div id="recipientAddForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
                 <div id="recipientAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
                     aria-modal="true" aria-labelledby="recipientAddTitle" aria-hidden="true">
                     <div class="dataset-upload-header">
@@ -76,15 +88,16 @@
                             <div class="form-field"><label for="recipientAddKP">KP</label><input id="recipientAddKP" autocomplete="off"></div>
                             <div class="form-field"><label for="recipientAddTelefon">Telefon</label><input id="recipientAddTelefon" autocomplete="off"></div>
                             <div class="form-field"><label for="recipientAddEmail">Email</label><input id="recipientAddEmail" autocomplete="off"></div>
-                            <div class="form-field"><label for="recipientAddStatus">Status</label><select id="recipientAddStatus"></select><input id="recipientAddStatusCustom" autocomplete="off" placeholder="Masukkan status baharu" style="display:none;"></div>
-                            <div class="form-field"><label for="recipientAddPIC">PIC</label><input id="recipientAddPIC" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddStatus">Status</label><input id="recipientAddStatus" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddStatusPekerjaan">Pekerjaan</label><input id="recipientAddStatusPekerjaan" autocomplete="off"></div>
+                            <div class="form-field"><label for="recipientAddPIC">PIC</label><select id="recipientAddPIC"></select></div>
                             <div class="form-field full"><label for="recipientAddCatatan">Catatan</label><textarea id="recipientAddCatatan"></textarea></div>
                         </div>
                     </div>
 
                     <div class="dataset-upload-footer">
                         <button type="button" id="recipientCancelAdd" class="btn btn-light">Batal</button>
-                        <button type="button" id="recipientConfirmAdd" class="btn btn-primary">Tambah</button>
+                        <button type="button" id="recipientConfirmAdd" data-permission-edit="recipients" class="btn btn-primary">Tambah</button>
                     </div>
                 </div>
             </div>
@@ -106,6 +119,7 @@
                             <th>KAD PENGENALAN</th>
                             <th>TELEFON</th>
                             <th>EMAIL</th>
+                            <th>PEKERJAAN</th>
                             <th>STATUS</th>
                             <th>CATATAN</th>
                             <th>PIC</th>

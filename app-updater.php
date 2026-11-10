@@ -329,7 +329,62 @@ function bapimRemoveTree(string $path): void
     }
 }
 
-function bapimApplyGitHubUpdate(string $rootDirectory, string $storageDirectory, string $expectedCommit): array
+function bapimApplyDatabaseMigrations(PDO $pdo, string $sourceDirectory, string $rootDirectory): array
+{
+    $migrationDirectory = $sourceDirectory . '/database/migrations';
+    if (!is_dir($migrationDirectory)) {
+        return [];
+    }
+
+    $files = [];
+    foreach (new FilesystemIterator($migrationDirectory, FilesystemIterator::SKIP_DOTS) as $file) {
+        if ($file->isLink() || !$file->isFile() ||
+            !preg_match('/^\d{8,14}_[a-z0-9][a-z0-9_-]*\.php$/', $file->getFilename())) {
+            throw new RuntimeException('The update contains an invalid database migration file.');
+        }
+        $files[] = $file->getPathname();
+    }
+    sort($files, SORT_STRING);
+
+    if ($files === []) {
+        return [];
+    }
+
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS app_schema_migrations (
+            migration_id VARCHAR(190) NOT NULL,
+            applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (migration_id)
+        ) ENGINE=InnoDB'
+    );
+
+    $appliedStatement = $pdo->query('SELECT migration_id FROM app_schema_migrations');
+    $applied = array_fill_keys($appliedStatement->fetchAll(PDO::FETCH_COLUMN), true);
+    $recordStatement = $pdo->prepare(
+        'INSERT INTO app_schema_migrations (migration_id) VALUES (?)'
+    );
+    $completed = [];
+
+    foreach ($files as $filePath) {
+        $migrationId = basename($filePath);
+        if (isset($applied[$migrationId])) {
+            continue;
+        }
+
+        $migration = require $filePath;
+        if (!is_callable($migration)) {
+            throw new RuntimeException('Database migration must return a callable: ' . $migrationId);
+        }
+
+        $migration($pdo, $rootDirectory);
+        $recordStatement->execute([$migrationId]);
+        $completed[] = $migrationId;
+    }
+
+    return $completed;
+}
+
+function bapimApplyGitHubUpdate(string $rootDirectory, string $storageDirectory, string $expectedCommit, PDO $pdo): array
 {
     if (!preg_match('/^[a-f0-9]{40}$/i', $expectedCommit)) {
         throw new RuntimeException('The requested update version is invalid.');
@@ -429,6 +484,8 @@ function bapimApplyGitHubUpdate(string $rootDirectory, string $storageDirectory,
             }
         }
 
+        $databaseMigrations = bapimApplyDatabaseMigrations($pdo, $sourceDirectory, $rootDirectory);
+
         if (is_file($statePath)) {
             if (!@copy($statePath, $stateBackup)) {
                 throw new RuntimeException('Could not preserve the installed version marker.');
@@ -460,7 +517,7 @@ function bapimApplyGitHubUpdate(string $rootDirectory, string $storageDirectory,
         } catch (Throwable $cleanupError) {
             error_log('App update succeeded but temporary backups could not be removed: ' . $cleanupError->getMessage());
         }
-        return ['commit' => $latest['sha']];
+        return ['commit' => $latest['sha'], 'databaseMigrations' => $databaseMigrations];
     } catch (Throwable $error) {
         $rollbackErrors = [];
         if ($stateWasWritten) {

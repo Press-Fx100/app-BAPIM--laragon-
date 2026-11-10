@@ -2,16 +2,17 @@
     const columns = [
         ["nama", "NAMA"],
         ["kadPengenalan", "KAD PENGENALAN"],
-        ["ketegori", "KETEGORI"],
-        ["jumlahProgram", "JUMLAH PROGRAM"],
+        ["ketegori", "KATEGORI"],
+        ["jumlahProgram", "PROGRAM"],
         ["programs", "PROGRAM"],
+        ["unit", "UNIT"],
         ["sourceFile", "SUMBER FAIL"]
     ];
     const pageSize = 100;
     const $ = id => document.getElementById(id);
     let rows = [];
     let filteredRows = [];
-    let visibleColumns = columns.map((_, index) => index !== columns.length - 1);
+    let visibleColumns = columns.map(([key]) => key !== "unit" && key !== "sourceFile");
     let columnWidths = [45, ...columns.map(() => 160)];
     let currentPage = 1;
     let sortColumn = -1;
@@ -24,9 +25,12 @@
     let deleteMode = false;
     let editingCell = null;
     let pendingChanges = new Map(), pendingDeleteRow = null;
+    let savingChanges = false;
+    let saveBadgeTimer = null;
     let undoStack = [];
     let redoStack = [];
     let documentEventsBound = false;
+    let categorySuggestionState = null;
 
     const rowKey = row => `${row.kadPengenalan}:${(row.sourceRecords || [])
         .map(record => `${record.datasetId}:${record.rowIndex}`).join(",")}`;
@@ -37,19 +41,48 @@
     const escapeHtml = value => String(value ?? "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
         .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    function showSaveConfirmation() {
+        const topbar = document.querySelector(".topbar");
+        if (!topbar) return;
+        let badge = document.querySelector(".save-success-badge");
+        if (!badge) {
+            badge = document.createElement("div");
+            badge.className = "save-success-badge";
+            badge.setAttribute("role", "status");
+            badge.setAttribute("aria-live", "polite");
+            badge.textContent = "Disimpan";
+            document.body.appendChild(badge);
+        }
+        badge.style.top = `${topbar.getBoundingClientRect().bottom}px`;
+        clearTimeout(saveBadgeTimer);
+        badge.classList.remove("is-visible");
+        requestAnimationFrame(() => badge.classList.add("is-visible"));
+        saveBadgeTimer = setTimeout(() => badge.classList.remove("is-visible"), 1800);
+    }
 
     function initialize() {
         const body = $("participantTableBody");
         if (!body || body.dataset.ready === "true") return;
         body.dataset.ready = "true";
+        ["participantAddForm", "participantProgramsOverlay"].forEach(id => {
+            const overlay = $(id);
+            if (overlay && overlay.parentElement !== document.body) {
+                document.body.appendChild(overlay);
+            }
+        });
         rows = [];
         filteredRows = [];
-        visibleColumns = columns.map((_, index) => index !== columns.length - 1);
+        visibleColumns = columns.map(([key]) => key !== "unit" && key !== "sourceFile");
         columnWidths = [45, ...columns.map(() => 160)];
         currentPage = 1;
         sortColumn = -1;
         sortDirection = "asc";
         filters = {};
+        const params = new URLSearchParams(window.location.search);
+        const programFilter = params.get("program");
+        if (programFilter) {
+            filters.programs = programFilter;
+        }
         selectedCell = null;
         selectionAnchor = null;
         selectionRange = null;
@@ -61,7 +94,10 @@
         undoStack = [];
         redoStack = [];
         deleteButtonStyles(false);
-        window.hasUnsavedTableChanges = () => pendingChanges.size > 0;
+        window.hasUnsavedTableChanges = () =>
+            pendingChanges.size > 0 ||
+            Boolean(editingCell && editingCell.cell.querySelector(".inline-edit-input")?.value !== editingCell.oldValue);
+        window.isSavingTableChanges = () => savingChanges;
         window.resetTableState = () => {
             pendingChanges.clear();
             selectedCell = null;
@@ -73,6 +109,7 @@
         $("participantSearch").addEventListener("input", applyFilters);
         $("participantAddButton").addEventListener("click", openAddForm);
         $("participantSaveButton").addEventListener("click", saveChanges);
+        $("participantExportButton").addEventListener("click", exportToExcel);
         $("participantCancelDelete").addEventListener("click", closeDeleteConfirmation);
         $("participantConfirmDelete").addEventListener("click", confirmDelete);
         $("participantDeleteOverlay").addEventListener("click", closeDeleteConfirmation);
@@ -89,7 +126,11 @@
         ["First", "Previous", "Next", "Last"].forEach(name =>
             $(`participant${name}Page`).addEventListener("click", () => changePage(name))
         );
-        $("closeParticipantPrograms")?.addEventListener("click", () => $("participantProgramsOverlay").style.display = "none");
+        $("closeParticipantPrograms")?.addEventListener("click", closeProgramsModal);
+        $("closeParticipantProgramsFooter")?.addEventListener("click", closeProgramsModal);
+        $("participantProgramsOverlay")?.addEventListener("click", event => {
+            if (event.target === $("participantProgramsOverlay")) closeProgramsModal();
+        });
         if (!documentEventsBound) {
             document.addEventListener("click", closeMenus);
             document.addEventListener("keydown", handleKeyboard);
@@ -98,16 +139,27 @@
             document.addEventListener("paste", pasteClipboard);
             documentEventsBound = true;
         }
-        load();
+        return load();
     }
 
-    document.addEventListener("DOMContentLoaded", initialize);
-    window.addEventListener("beforeunload", event => {
-        if (!pendingChanges.size) return;
-        event.preventDefault();
-        event.returnValue = "";
+    document.addEventListener("DOMContentLoaded", () => {
+        window.registerAppPageLoadTask(initialize());
     });
-    document.addEventListener("app:page-loaded", initialize);
+    document.addEventListener("app:page-loaded", () => {
+        const pathname = typeof window.appPathname === "function"
+            ? window.appPathname(window.location.pathname)
+            : window.location.pathname;
+        if (pathname === "/peserta-program") return;
+        closeAddForm();
+        closeProgramsModal();
+        ["participantAddForm", "participantProgramsOverlay"].forEach(id => {
+            const overlay = $(id);
+            if (overlay?.parentElement === document.body) overlay.remove();
+        });
+    });
+    document.addEventListener("app:page-loaded", () => {
+        window.registerAppPageLoadTask(initialize());
+    });
 
     async function load() {
         try {
@@ -157,6 +209,7 @@
         const checklist = $("participantColumnChecklist");
         checklist.innerHTML = "";
         columns.forEach(([key, label], index) => {
+            if (key === "programs") return;
             const item = document.createElement("label");
             item.className = "column-checkbox";
             item.innerHTML = `<input type="checkbox" ${visibleColumns[index] ? "checked" : ""}><span>${label}</span>`;
@@ -244,7 +297,8 @@
         head.innerHTML = "";
         const headerRow = head.insertRow();
         appendHeader(headerRow, "", -1);
-        columns.forEach(([, label], index) => {
+        columns.forEach(([key, label], index) => {
+            if (key === "programs") return;
             if (visibleColumns[index]) appendHeader(headerRow, label, index);
         });
         const body = $("participantTableBody");
@@ -275,11 +329,37 @@
             }
             tr.appendChild(numberCell);
             columns.forEach(([key], columnIndex) => {
+                if (key === "programs") return;
                 if (!visibleColumns[columnIndex]) return;
                 const td = document.createElement("td");
                 td.className = "excel-cell";
-                td.textContent = cellValue(row, key);
-                td.title = td.textContent;
+                if (key === "jumlahProgram") {
+                    const programCell = document.createElement("div");
+                    programCell.className = "participant-program-cell";
+                    const count = document.createElement("span");
+                    count.textContent = `${cellValue(row, key)} Program`;
+                    programCell.appendChild(count);
+                    const programButton = document.createElement("button");
+                    programButton.type = "button";
+                    programButton.className = "participant-programs-button";
+                    programButton.setAttribute(
+                        "aria-label",
+                        `Lihat senarai program untuk ${row.nama || row.kadPengenalan || "peserta"}`
+                    );
+                    programButton.title = "Lihat senarai program";
+                    programButton.innerHTML = '<i class="bi bi-three-dots" aria-hidden="true"></i>';
+                    programButton.addEventListener("mousedown", event => event.stopPropagation());
+                    programButton.addEventListener("dblclick", event => event.stopPropagation());
+                    programButton.addEventListener("click", event => {
+                        event.stopPropagation();
+                        openProgramsModal(row);
+                    });
+                    programCell.appendChild(programButton);
+                    td.appendChild(programCell);
+                } else {
+                    td.textContent = cellValue(row, key);
+                    td.title = td.textContent;
+                }
                 td.tabIndex = 0;
                 td.dataset.rowIndex = String(actualIndex);
                 td.dataset.columnIndex = String(columnIndex);
@@ -311,6 +391,8 @@
             save.disabled = !hasChanges;
             save.title = hasChanges ? "Simpan perubahan" : "Disimpan";
             save.setAttribute("aria-label", save.title);
+            save.innerHTML = '<i class="bi bi-floppy"></i>';
+            save.classList.remove("is-saving");
             save.classList.toggle("has-changes", hasChanges);
             save.classList.toggle("saved", !hasChanges);
         }
@@ -318,6 +400,46 @@
 
     function numberCellForHeader(header) {
         return header.cells[0];
+    }
+
+    function openProgramsModal(row) {
+        const overlay = $("participantProgramsOverlay");
+        const card = $("participantProgramsCard");
+        const title = $("participantProgramsTitle");
+        const list = $("participantProgramsList");
+        if (!overlay || !card || !title || !list) return;
+
+        const programs = Array.isArray(row.programs) ? row.programs : [];
+        title.textContent = `Program — ${row.nama || row.kadPengenalan || "Peserta"}`;
+        list.replaceChildren();
+        if (programs.length) {
+            programs.forEach(program => {
+                const item = document.createElement("li");
+                item.textContent = String(program);
+                list.appendChild(item);
+            });
+        } else {
+            const item = document.createElement("li");
+            item.textContent = "Tiada program disenaraikan.";
+            item.className = "participant-programs-empty";
+            list.appendChild(item);
+        }
+
+        overlay.classList.add("show");
+        card.classList.add("show");
+        overlay.setAttribute("aria-hidden", "false");
+        card.setAttribute("aria-hidden", "false");
+        $("closeParticipantPrograms")?.focus();
+    }
+
+    function closeProgramsModal() {
+        const overlay = $("participantProgramsOverlay");
+        const card = $("participantProgramsCard");
+        if (!overlay || !card) return;
+        overlay.classList.remove("show");
+        card.classList.remove("show");
+        overlay.setAttribute("aria-hidden", "true");
+        card.setAttribute("aria-hidden", "true");
     }
 
     function appendHeader(row, label, columnIndex) {
@@ -344,19 +466,29 @@
             });
         }
         th.appendChild(content);
-        const handle = document.createElement("span");
-        handle.className = "column-resize-handle";
-        handle.addEventListener("mousedown", event => beginResize(event, columnIndex + 1));
-        th.appendChild(handle);
+        if (columnIndex !== 0) {
+            const handle = document.createElement("span");
+            handle.className = "column-resize-handle";
+            handle.addEventListener("mousedown", event => beginResize(event, columnIndex + 1));
+            th.appendChild(handle);
+        }
         applyWidth(th, columnIndex + 1);
         row.appendChild(th);
     }
 
     function applyWidth(element, index) {
-        const width = columnWidths[index] || 160;
-        element.style.width = `${width}px`;
-        element.style.minWidth = `${width}px`;
-        element.style.maxWidth = `${width}px`;
+        if (index === 0) {
+            element.style.width = "45px";
+            element.style.minWidth = "45px";
+            element.style.maxWidth = "45px";
+            return;
+        }
+        if (index > 0) {
+            element.style.width = "auto";
+            element.style.minWidth = `${columnWidths[index] || 160}px`;
+            element.style.maxWidth = "none";
+            return;
+        }
     }
 
     function beginResize(event, index) {
@@ -523,6 +655,78 @@
         }
     }
 
+    function openCategorySuggestions(cell, row, input) {
+        const popup = document.createElement("div");
+        popup.className = "recipient-cell-suggestions";
+        popup.setAttribute("role", "listbox");
+        const cellStyle = window.getComputedStyle(cell);
+        popup.style.fontFamily = cellStyle.fontFamily;
+        popup.style.fontSize = cellStyle.fontSize;
+        popup.style.fontWeight = cellStyle.fontWeight;
+        popup.style.lineHeight = cellStyle.lineHeight;
+        popup.style.letterSpacing = cellStyle.letterSpacing;
+        document.body.appendChild(popup);
+
+        const tableWrapper = $("participantTableWrapper");
+        const hideOnScroll = () => {
+            popup.style.display = "none";
+        };
+        tableWrapper?.addEventListener("scroll", hideOnScroll, { passive: true });
+        categorySuggestionState = { cell, row, input, popup, options: [], activeIndex: -1, tableWrapper, hideOnScroll };
+        input.addEventListener("input", updateCategorySuggestions);
+        updateCategorySuggestions();
+    }
+
+    function updateCategorySuggestions() {
+        const state = categorySuggestionState;
+        if (!state) return;
+        const currentValue = state.input.value.trim();
+        const query = currentValue.toLocaleLowerCase();
+        const values = new Set(
+            rows.map(item => String(item.kategori ?? item.ketegori ?? "").trim()).filter(Boolean)
+        );
+        if (currentValue) values.add(currentValue);
+        state.options = [
+            ...(query ? [] : [""]),
+            ...[...values]
+                .filter(value => value.toLocaleLowerCase().includes(query))
+                .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }))
+        ];
+        state.activeIndex = state.options.findIndex(value =>
+            value.toLocaleLowerCase() === currentValue.toLocaleLowerCase()
+        );
+        state.popup.replaceChildren();
+        state.options.forEach((value, index) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "recipient-cell-suggestion";
+            option.setAttribute("role", "option");
+            option.setAttribute("aria-selected", String(index === state.activeIndex));
+            if (index === state.activeIndex) option.classList.add("active");
+            option.textContent = value;
+            option.addEventListener("mousedown", event => event.preventDefault());
+            option.addEventListener("click", () => {
+                state.input.value = value;
+                finishEditing(true);
+            });
+            state.popup.appendChild(option);
+        });
+        const rect = state.cell.getBoundingClientRect();
+        state.popup.style.display = state.options.length ? "block" : "none";
+        state.popup.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - rect.width))}px`;
+        state.popup.style.top = `${rect.bottom}px`;
+        state.popup.style.width = `${rect.width}px`;
+    }
+
+    function closeCategorySuggestions() {
+        if (!categorySuggestionState) return;
+        const { input, popup, tableWrapper, hideOnScroll } = categorySuggestionState;
+        input.removeEventListener("input", updateCategorySuggestions);
+        tableWrapper?.removeEventListener("scroll", hideOnScroll);
+        popup.remove();
+        categorySuggestionState = null;
+    }
+
     function startEditing(cell, row, key, initialCharacter = null) {
         if (editingCell || !editable(key)) return;
         editingCell = { cell, row, key, oldValue: cellValue(row, key) };
@@ -534,9 +738,35 @@
         input.value = initialCharacter ?? editingCell.oldValue;
         cell.textContent = "";
         cell.appendChild(input);
+        if (key === "ketegori") openCategorySuggestions(cell, row, input);
         input.focus();
         if (initialCharacter === null) input.select();
         const handleEditKey = event => {
+            if (key === "ketegori" && categorySuggestionState?.input === input) {
+                const state = categorySuggestionState;
+                if (["ArrowDown", "ArrowUp"].includes(event.key) && state.options.length) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const direction = event.key === "ArrowDown" ? 1 : -1;
+                    state.activeIndex = state.activeIndex < 0
+                        ? (direction > 0 ? 0 : state.options.length - 1)
+                        : (state.activeIndex + direction + state.options.length) % state.options.length;
+                    state.popup.querySelectorAll(".recipient-cell-suggestion").forEach((option, index) => {
+                        const active = index === state.activeIndex;
+                        option.classList.toggle("active", active);
+                        option.setAttribute("aria-selected", String(active));
+                        if (active) option.scrollIntoView({ block: "nearest" });
+                    });
+                    return;
+                }
+                if (event.key === "Enter" && state.activeIndex >= 0) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    input.value = state.options[state.activeIndex];
+                    finishEditing(true);
+                    return;
+                }
+            }
             if (event.key === "Escape") {
                 event.preventDefault();
                 event.stopPropagation();
@@ -568,6 +798,7 @@
     async function finishEditing(save) {
         if (!editingCell) return;
         const state = editingCell;
+        closeCategorySuggestions();
         editingCell = null;
         state.cell.classList.remove("editing-cell");
         const input = state.cell.querySelector(".inline-edit-input");
@@ -577,6 +808,7 @@
             render();
             return;
         }
+
         try {
             const pendingKey = `${rowKey(state.row)}:${state.key}`;
             const existing = pendingChanges.get(pendingKey);
@@ -588,6 +820,31 @@
         } catch (error) {
             showError(error);
             render();
+        }
+    }
+
+    async function exportToExcel() {
+        try {
+            if (editingCell) await finishEditing(true);
+            applyFilters();
+            if (!window.XLSX) throw new Error("Pustaka eksport Excel tidak tersedia.");
+
+            const exportColumns = columns.filter((_, index) => visibleColumns[index]);
+            const worksheetData = [
+                exportColumns.map(([, label]) => label),
+                ...filteredRows.map(row =>
+                    exportColumns.map(([key]) => cellValue(row, key))
+                )
+            ];
+            const worksheet = window.XLSX.utils.aoa_to_sheet(worksheetData);
+            const workbook = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(workbook, worksheet, "Peserta Program");
+            window.XLSX.writeFile(
+                workbook,
+                `peserta-program-${new Date().toISOString().slice(0, 10)}.xlsx`
+            );
+        } catch (error) {
+            showError(error);
         }
     }
 
@@ -612,7 +869,21 @@
     }
 
     function handleKeyboard(event) {
+        if (event.key === "Escape" && $("participantProgramsOverlay")?.classList.contains("show")) {
+            closeProgramsModal();
+            return;
+        }
         if (!$("participantTableBody")) return;
+        const modifier = event.ctrlKey || event.metaKey;
+        if (modifier && event.key.toLowerCase() === "s") {
+            event.preventDefault();
+            if (editingCell) {
+                finishEditing(true).then(saveChanges);
+            } else {
+                saveChanges();
+            }
+            return;
+        }
         if (event.key === "Escape" && $("participantAddForm")?.classList.contains("show")) {
             event.preventDefault();
             closeAddForm();
@@ -620,7 +891,6 @@
         }
         const target = event.target;
         const typing = target.matches?.("input, textarea, select, button, [contenteditable='true']");
-        const modifier = event.ctrlKey || event.metaKey;
         if (modifier && event.key.toLowerCase() === "z" && !typing) {
             event.preventDefault();
             undo();
@@ -764,16 +1034,28 @@
 
     async function saveChanges() {
         const save = $("participantSaveButton");
+        const savedChangeCount = pendingChanges.size;
+        if (!savedChangeCount) return;
+        savingChanges = true;
         if (save) {
             save.disabled = true;
             save.title = "Menyimpan...";
             save.setAttribute("aria-label", save.title);
+            save.classList.add("is-saving");
+            save.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         }
         try {
             for (const { row, key, newValue } of pendingChanges.values()) await sendChange(row, key, newValue);
             pendingChanges.clear();
             render();
-        } catch (error) { showError(error); render(); }
+            showSaveConfirmation();
+        } catch (error) {
+            render();
+            showError(error);
+        } finally {
+            savingChanges = false;
+            render();
+        }
     }
 
     function pushHistory(action) {

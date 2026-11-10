@@ -1,0 +1,75 @@
+<main class="main-content">
+    <div class="dashboard-content account-page">
+        <section class="content-card account-settings-card manage-users-card">
+            <div class="card-header-custom account-settings-header">
+                <div>
+                    <h5>Profil Pengguna</h5>
+                    <span>Kemas kini maklumat profil atau kata laluan anda.</span>
+                </div>
+            </div>
+
+            <div class="account-settings-body">
+                <form id="accountSettingsForm" data-csrf-token="__APP_CSRF_TOKEN__">
+                    <div class="managed-user-form-layout">
+                        <div class="managed-user-form-avatar" id="accountSettingsAvatar" aria-hidden="true">
+                            <i class="bi bi-person-fill"></i>
+                        </div>
+                        <div class="managed-user-form-content">
+                            <div class="manage-user-fields account-profile-fields">
+                                <div class="form-field account-profile-display-name">
+                                    <label for="accountDisplayName">Nama Pengguna</label>
+                                    <input type="text" id="accountDisplayName" maxlength="160" autocomplete="name" required>
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="accountUsername">Username</label>
+                                    <input type="text" id="accountUsername" autocomplete="username" readonly>
+                                </div>
+
+                                <div class="form-field">
+                                    <label for="accountEmail">E-mel</label>
+                                    <input type="email" id="accountEmail" maxlength="254" autocomplete="email">
+                                </div>
+
+                                <div class="form-field account-profile-unit">
+                                    <label for="accountUnit">Unit</label>
+                                    <input type="text" id="accountUnit" autocomplete="off" readonly>
+                                </div>
+
+                                <div class="account-password-section account-profile-password">
+                                    <h5>Tukar Kata Laluan</h5>
+                                    <p>Biarkan ruangan kata laluan kosong jika anda tidak mahu menukarnya.</p>
+
+                                    <div class="form-field">
+                                        <label for="accountCurrentPassword">Kata Laluan Semasa</label>
+                                        <input type="password" id="accountCurrentPassword" autocomplete="current-password">
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label for="accountNewPassword">Kata Laluan Baharu</label>
+                                        <input type="password" id="accountNewPassword" autocomplete="new-password">
+                                    </div>
+
+                                    <div class="form-field">
+                                        <label for="accountConfirmPassword">Sahkan Kata Laluan Baharu</label>
+                                        <input type="password" id="accountConfirmPassword" autocomplete="new-password">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="accountSettingsMessage" class="message" role="status" aria-live="polite" hidden></div>
+
+                            <div class="form-actions">
+                                <button type="submit" id="accountSaveButton" data-permission-edit="account"
+                                    class="budget-list-action bpa-budget-save-button account-save-button" disabled>
+                                    <span class="budget-list-action-icon"><i class="bi bi-check2" aria-hidden="true"></i></span>
+                                    <span>Simpan Perubahan</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>

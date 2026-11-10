@@ -8,38 +8,50 @@
             <div class="dataset-header-controls">
                 <div class="search-toolbar-group">
                     <div class="search-box">
+                        <i class="bi bi-search" aria-hidden="true"></i>
                         <input type="text" id="participantSearch" placeholder="Cari peserta..." autocomplete="off">
                     </div>
-                    <div class="toolbar-group toolbar-filter">
-                    <div class="column-menu-wrapper">
-                        <button type="button" id="participantColumnButton" class="toolbar-button icon-button" title="Lajur">
-                            <i class="bi bi-layout-three-columns"></i>
-                        </button>
-                        <div id="participantColumnMenu" class="column-menu">
-                            <div class="column-menu-header">
-                                <button type="button" id="participantSelectAllColumns">Pilih Semua</button>
+                    <div class="toolbar-group toolbar-control-cluster">
+                        <div class="toolbar-filter">
+                            <div class="column-menu-wrapper">
+                                <button type="button" id="participantColumnButton" class="toolbar-button icon-button" title="Lajur"
+                                    aria-controls="participantColumnMenu" aria-expanded="false">
+                                    <i class="bi bi-layout-three-columns"></i>
+                                </button>
+                                <div id="participantColumnMenu" class="column-menu">
+                                    <div class="column-menu-header">
+                                        <button type="button" id="participantSelectAllColumns">Pilih Semua</button>
+                                    </div>
+                                    <div id="participantColumnChecklist"></div>
+                                </div>
                             </div>
-                            <div id="participantColumnChecklist"></div>
+                            <div class="filter-menu-wrapper">
+                                <button type="button" id="participantFilterButton" class="toolbar-button icon-button" title="Tapis"
+                                    aria-controls="participantFilterMenu" aria-expanded="false">
+                                    <i class="bi bi-funnel"></i>
+                                </button>
+                                <div id="participantFilterMenu" class="filter-menu"></div>
+                            </div>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button type="button" id="participantSaveButton"
+                                data-permission-edit="participants"
+                                class="toolbar-button icon-button dataset-save-button" disabled
+                                title="Disimpan" aria-label="Disimpan">
+                                <i class="bi bi-floppy"></i>
+                            </button>
+                            <button type="button" id="participantExportButton" class="toolbar-button icon-button"
+                                title="Muat turun Excel" aria-label="Muat turun Excel">
+                                <i class="bi bi-download" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="participantAddButton" data-permission-edit="participants" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                            <button type="button" id="participantDeleteButton" data-permission-edit="participants" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
+                                <i class="bi bi-trash3"></i>
+                            </button>
                         </div>
                     </div>
-                        <div class="filter-menu-wrapper">
-                        <button type="button" id="participantFilterButton" class="toolbar-button icon-button" title="Tapis">
-                            <i class="bi bi-funnel"></i>
-                        </button>
-                        <div id="participantFilterMenu" class="filter-menu"></div>
-                        </div>
-                    </div>
-                    <button type="button" id="participantSaveButton"
-                        class="toolbar-button icon-button dataset-save-button" disabled
-                        title="Disimpan" aria-label="Disimpan">
-                        <i class="bi bi-floppy"></i>
-                    </button>
-                    <button type="button" id="participantAddButton" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
-                        <i class="bi bi-plus-lg"></i>
-                    </button>
-                    <button type="button" id="participantDeleteButton" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
-                        <i class="bi bi-trash3"></i>
-                    </button>
                 </div>
                 <div id="participantDeleteOverlay" class="delete-confirmation-overlay"></div>
                 <div id="participantDeleteConfirmation" class="delete-confirmation" role="dialog" aria-modal="true" aria-hidden="true">
@@ -49,13 +61,13 @@
                         <p id="participantDeleteMessage"></p>
                         <div class="delete-confirmation-actions">
                             <button type="button" id="participantCancelDelete" class="cancel-delete">Batal</button>
-                            <button type="button" id="participantConfirmDelete" class="confirm-delete">Padam</button>
+                            <button type="button" id="participantConfirmDelete" data-permission-edit="participants" class="confirm-delete">Padam</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div id="participantAddForm" class="dataset-upload-overlay dataset-add-overlay" aria-hidden="true">
+            <div id="participantAddForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
                 <div id="participantAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
                     aria-modal="true" aria-labelledby="participantAddTitle" aria-hidden="true">
                     <div class="dataset-upload-header">
@@ -74,14 +86,14 @@
                             <div class="form-field full"><label for="participantAddDataset">Fail sumber</label><select id="participantAddDataset"></select></div>
                             <div class="form-field"><label for="participantAddNama">Nama</label><input id="participantAddNama" autocomplete="off"></div>
                             <div class="form-field"><label for="participantAddKP">KP</label><input id="participantAddKP" autocomplete="off"></div>
-                            <div class="form-field"><label for="participantAddCategory">Ketegori</label><input id="participantAddCategory" autocomplete="off"></div>
+                            <div class="form-field"><label for="participantAddCategory">Kategori</label><input id="participantAddCategory" autocomplete="off"></div>
                             <div class="form-field full"><label for="participantAddProgram">Program</label><input id="participantAddProgram" autocomplete="off"></div>
                         </div>
                     </div>
 
                     <div class="dataset-upload-footer">
                         <button type="button" id="participantCancelAdd" class="btn btn-light">Batal</button>
-                        <button type="button" id="participantConfirmAdd" class="btn btn-primary">Tambah</button>
+                        <button type="button" id="participantConfirmAdd" data-permission-edit="participants" class="btn btn-primary">Tambah</button>
                     </div>
                 </div>
             </div>
@@ -103,7 +115,6 @@
                             <th>KAD PENGENALAN</th>
                             <th>KATEGORI</th>
                             <th>JUMLAH PROGRAM</th>
-                            <th>PROGRAM</th>
                         </tr>
                     </thead>
                     <tbody id="participantTableBody"></tbody>
@@ -118,13 +129,26 @@
         </div>
     </div>
 
-    <div id="participantProgramsOverlay" class="participant-programs-overlay" style="display:none;">
-        <div class="participant-programs-dialog">
-            <button type="button" id="closeParticipantPrograms" class="dataset-upload-remove" aria-label="Tutup">
-                <i class="bi bi-x-lg" aria-hidden="true"></i>
-            </button>
-            <h5 id="participantProgramsTitle">Program</h5>
-            <ul id="participantProgramsList"></ul>
+    <div id="participantProgramsOverlay" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay participant-programs-overlay"
+        aria-hidden="true">
+        <div id="participantProgramsCard" class="dataset-upload-card dataset-add-card participant-programs-dialog"
+            role="dialog" aria-modal="true" aria-labelledby="participantProgramsTitle" aria-hidden="true">
+            <div class="dataset-upload-header">
+                <div>
+                    <h5 id="participantProgramsTitle">Program</h5>
+                    <p>Senarai program yang disertai oleh peserta ini.</p>
+                </div>
+                <button type="button" id="closeParticipantPrograms" class="dataset-upload-close"
+                    aria-label="Tutup senarai program">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="dataset-upload-body participant-programs-body">
+                <ul id="participantProgramsList" class="participant-programs-list"></ul>
+            </div>
+            <div class="dataset-upload-footer">
+                <button type="button" id="closeParticipantProgramsFooter" class="btn btn-light">Tutup</button>
+            </div>
         </div>
     </div>
 </main>

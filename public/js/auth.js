@@ -37,7 +37,7 @@
         );
 
         window.location.replace(
-            typeof window.appUrl === "function" ? window.appUrl("/login") : "/login"
+            typeof window.appUrl === "function" ? window.appUrl("/log-masuk") : "/log-masuk"
         );
 
         return false;
@@ -74,7 +74,7 @@
         );
 
         window.location.replace(
-            typeof window.appUrl === "function" ? window.appUrl("/login") : "/login"
+            typeof window.appUrl === "function" ? window.appUrl("/log-masuk") : "/log-masuk"
         );
     }
 

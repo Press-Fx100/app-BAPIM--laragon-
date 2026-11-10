@@ -6,6 +6,122 @@ async function initHeader() {
     await loadCurrentUser();
 }
 
+window.appCurrentUser = window.appCurrentUser || null;
+document.addEventListener("app:page-loaded", updatePageInfo);
+
+function canAccessAppPage(page) {
+    const user = window.appCurrentUser;
+    if (!user) return false;
+    if (Number(user.accessLevel) === 0) return true;
+    return user.permissions?.[page]?.access === true;
+}
+
+function canEditAppPage(page) {
+    const user = window.appCurrentUser;
+    if (!user) return false;
+    if (Number(user.accessLevel) === 0) {
+        return ["recipients", "participants", "upload", "dataset", "account", "manageUsers"].includes(page);
+    }
+    if (Number(user.accessLevel) >= 3) return false;
+    return canAccessAppPage(page) && user.permissions?.[page]?.edit === true;
+}
+
+function pagePermissionForPath(path) {
+    if (path === "/") return "dashboard";
+    if (path === "/penerima-bantuan") return "recipients";
+    if (path === "/peserta-program") return "participants";
+    if (path === "/muat-naik") return "upload";
+    if (path === "/set-data" || path.startsWith("/set-data/")) return "dataset";
+    if (path === "/aktiviti-pengguna") return "activity";
+    if (path === "/akaun-pengguna") return "account";
+    if (path === "/log-perisian") return "updates";
+    if (path === "/pengurusan-pengguna") return "manageUsers";
+    return null;
+}
+
+function getPermissionTableCell(target) {
+    if (!(target instanceof Element)) return null;
+    return target.closest(
+        ".dataset-table .excel-cell, .recipient-table td[data-row][data-col]"
+    );
+}
+
+function applyAppPermissions() {
+    if (!window.appCurrentUser) return;
+    document.querySelectorAll("[data-access-page]").forEach(element => {
+        element.hidden = !canAccessAppPage(element.dataset.accessPage);
+    });
+    document.querySelectorAll("[data-permission-edit]").forEach(element => {
+        element.hidden = !canEditAppPage(element.dataset.permissionEdit);
+    });
+    document.querySelectorAll("[data-permission-upload]").forEach(element => {
+        element.hidden = !canEditAppPage(element.dataset.permissionUpload);
+    });
+    const updateButton = document.querySelector("#sidebar .update-check-button");
+    if (updateButton) {
+        updateButton.hidden = Number(window.appCurrentUser.accessLevel) !== 0;
+    }
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    const readOnly = page !== null && !canEditAppPage(page);
+    document.body.classList.toggle("permission-read-only", readOnly);
+    if (readOnly) {
+        document.querySelectorAll(
+            ".dataset-table td.selected-cell, .dataset-table td.active-cell"
+        ).forEach(cell => cell.classList.remove("selected-cell", "active-cell"));
+    }
+}
+
+window.canAccessAppPage = canAccessAppPage;
+window.canEditAppPage = canEditAppPage;
+window.applyAppPermissions = applyAppPermissions;
+document.addEventListener("app:page-loaded", applyAppPermissions);
+document.addEventListener("dblclick", event => {
+    const cell = getPermissionTableCell(event.target);
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (!cell || !page || canEditAppPage(page)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}, true);
+document.addEventListener("mousedown", event => {
+    const cell = getPermissionTableCell(event.target);
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (
+        !cell ||
+        !page ||
+        canEditAppPage(page) ||
+        event.target.closest("button, a, input, select, textarea")
+    ) return;
+    event.stopImmediatePropagation();
+}, true);
+document.addEventListener("keydown", event => {
+    const cell = getPermissionTableCell(event.target);
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (!cell || !page || canEditAppPage(page)) return;
+    event.stopImmediatePropagation();
+}, true);
+document.addEventListener("paste", event => {
+    const cell = getPermissionTableCell(event.target);
+    const path = typeof window.appPathname === "function"
+        ? window.appPathname(window.location.pathname)
+        : window.location.pathname;
+    const page = pagePermissionForPath(path);
+    if (!cell || !page || canEditAppPage(page)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}, true);
+
 function setupSidebarToggle() {
     const button = document.getElementById("sidebarToggle");
 
@@ -86,24 +202,49 @@ function updatePageInfo() {
         : window.location.pathname;
 
     let title = "Papan Pemuka";
-    const breadcrumb = "SISTEM PENGURUSAN DATA";
+    let breadcrumb = "SISTEM PENGURUSAN DATA";
 
     if (path === "/") {
         title = "Papan Pemuka";
-    } else if (path === "/upload") {
+    } else if (path === "/muat-naik") {
         title = "Muat Naik";
-    } else if (path === "/data-set") {
+    } else if (path === "/set-data") {
         title = "Set Data";
-    } else if (path.startsWith("/data-set/")) {
+    } else if (path.startsWith("/set-data/")) {
         title = "Paparan Set Data";
-    } else if (path === "/user") {
-        title = "Pengguna";
+    } else if (path === "/aktiviti-pengguna") {
+        title = "Aktiviti Pengguna";
+    } else if (path === "/akaun-pengguna") {
+        title = "Profil Pengguna";
+    } else if (path === "/pengurusan-pengguna") {
+        title = "Pengurusan Pengguna";
+    } else if (path === "/log-perisian") {
+        title = "Log Perisian";
     } else if (path === "/peserta-program") {
         title = "Peserta Program";
     } else if (path === "/penerima-bantuan") {
         title = "Penerima Bantuan";
-    } else if (path === "/create-account") {
+    } else if (path === "/cipta-akaun") {
         title = "Cipta Akaun";
+    } else if (path.startsWith("/bpa/")) {
+        breadcrumb = "BAHAGIAN PEMBANGUNAN ASNAF";
+        const bpaTitles = {
+            "/bpa/dashboard": "Dashboard BPA",
+            "/bpa/admin/dashboard_admin": "Dashboard Admin BPA",
+            "/bpa/admin/user_add": "Tambah User BPA",
+            "/bpa/admin/user_list": "Senarai User BPA",
+            "/bpa/admin/bajet_add": "Tambah Bajet BPA",
+            "/bpa/admin/bajet_list": "Bajet BPA",
+            "/bpa/admin/sku_add": "Tambah SKU BPA",
+            "/bpa/admin/sku_list": "SKU BPA",
+            "/bpa/laporan/program_list": "Program BPA",
+            "/bpa/uak/dashboard": "Dashboard UAK",
+            "/bpa/upa/dashboard": "Dashboard UPA",
+            "/bpa/upu/dashboard": "Dashboard UPU",
+            "/bpa/ulk/dashboard": "Dashboard ULK",
+        };
+        const routeName = path.split("/").pop().replace(/\.php$/i, "").replace(/[_-]+/g, " ");
+        title = bpaTitles[path] || routeName.replace(/\b\w/g, character => character.toUpperCase());
     }
 
     const titleElement =
@@ -112,7 +253,9 @@ function updatePageInfo() {
     const breadcrumbElement =
         document.getElementById("pageBreadcrumb");
 
-    typeHeaderTitle(titleElement, title.toUpperCase());
+    if (titleElement) {
+        typeHeaderTitle(titleElement, title.toUpperCase());
+    }
 
     if (breadcrumbElement) {
         breadcrumbElement.textContent = breadcrumb;
@@ -151,30 +294,21 @@ function typeHeaderTitle(element, text) {
 }
 
 
-/* ==========================================
-   USER INITIALS
-   ========================================== */
+function getUserColorBackground(color) {
+    return `#${[1, 3, 5].map(offset => {
+        const channel = parseInt(color.slice(offset, offset + 2), 16);
+        return Math.round(channel + (255 - channel) * 0.85)
+            .toString(16)
+            .padStart(2, "0");
+    }).join("").toUpperCase()}`;
+}
 
-function getUserInitials(name) {
-    if (!name) {
-        return "?";
-    }
-
-    const parts = name
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-    if (parts.length >= 2) {
-        return (
-            parts[0].charAt(0) +
-            parts[1].charAt(0)
-        ).toUpperCase();
-    }
-
-    return parts[0]
-        .slice(0, 2)
-        .toUpperCase();
+function getUserColorText(color) {
+    return `#${[1, 3, 5].map(offset =>
+        Math.round(parseInt(color.slice(offset, offset + 2), 16) * 0.72)
+            .toString(16)
+            .padStart(2, "0")
+    ).join("").toUpperCase()}`;
 }
 
 
@@ -192,8 +326,16 @@ function setupUserDropdown() {
     const accountButton =
         document.getElementById("accountButton");
 
+    const manageUsersButton =
+        document.getElementById("manageUsersButton");
+
+    const updatesButton =
+        document.getElementById("updatesButton");
+
     const logoutButton =
         document.getElementById("logoutButton");
+    const menu =
+        document.getElementById("userDropdownMenu");
 
     if (!dropdown || !button) {
         return;
@@ -205,38 +347,75 @@ function setupUserDropdown() {
 
     button.dataset.dropdownBound = "true";
 
+    const closeDropdown = () => {
+        dropdown.classList.remove("open");
+        button.setAttribute("aria-expanded", "false");
+        menu?.setAttribute("aria-hidden", "true");
+    };
+
     button.addEventListener("click", event => {
         event.stopPropagation();
 
-        dropdown.classList.toggle("open");
+        const isOpen = dropdown.classList.toggle("open");
 
-        button.setAttribute(
-            "aria-expanded",
-            dropdown.classList.contains("open")
-        );
+        button.setAttribute("aria-expanded", String(isOpen));
+        menu?.setAttribute("aria-hidden", String(!isOpen));
     });
 
     document.addEventListener("click", event => {
         if (!dropdown.contains(event.target)) {
-            dropdown.classList.remove("open");
+            closeDropdown();
+        }
+    });
 
-            button.setAttribute(
-                "aria-expanded",
-                "false"
-            );
+    dropdown.addEventListener("keydown", event => {
+        if (event.key === "Escape" && dropdown.classList.contains("open")) {
+            closeDropdown();
+            button.focus();
         }
     });
 
     if (accountButton) {
         accountButton.addEventListener("click", () => {
-            dropdown.classList.remove("open");
+            closeDropdown();
+            const accountUrl = typeof window.appUrl === "function" ? window.appUrl("/akaun-pengguna") : "/akaun-pengguna";
+            if (typeof window.appUrl === "function") {
+                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: accountUrl } }));
+            } else {
+                window.location.assign(accountUrl);
+            }
+        });
+    }
 
-            console.log("Account clicked");
+    if (manageUsersButton) {
+        manageUsersButton.addEventListener("click", () => {
+            closeDropdown();
+            const usersUrl = typeof window.appUrl === "function" ? window.appUrl("/pengurusan-pengguna") : "/pengurusan-pengguna";
+            if (typeof window.appUrl === "function") {
+                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: usersUrl } }));
+            } else {
+                window.location.assign(usersUrl);
+            }
+        });
+    }
+
+    if (updatesButton) {
+        updatesButton.addEventListener("click", () => {
+            closeDropdown();
+            const updatesUrl = typeof window.appUrl === "function" ? window.appUrl("/log-perisian") : "/log-perisian";
+            if (typeof window.appUrl === "function") {
+                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: updatesUrl } }));
+            } else {
+                window.location.assign(updatesUrl);
+            }
         });
     }
 
     if (logoutButton) {
-        logoutButton.addEventListener("click", logout);
+        logoutButton.addEventListener("click", () => {
+            closeDropdown();
+            logout();
+        });
     }
 }
 
@@ -267,8 +446,8 @@ async function logout() {
     localStorage.removeItem("displayName");
 
     window.location.href = typeof window.appUrl === "function"
-        ? window.appUrl("/login")
-        : "/login";
+        ? window.appUrl("/log-masuk")
+        : "/log-masuk";
 }
 
 
@@ -310,7 +489,7 @@ async function loadCurrentUser() {
 
         if (userDisplayName) {
             userDisplayName.textContent =
-                displayName;
+                displayName.toLocaleUpperCase();
         }
 
         if (userName) {
@@ -318,9 +497,18 @@ async function loadCurrentUser() {
                 data.username;
         }
 
+        window.appCurrentUser = {
+            username: data.username,
+            displayName: displayName.toLocaleUpperCase(),
+            accessLevel: Number(data.accessLevel ?? 2),
+            permissions: data.permissions || {}
+        };
+        applyAppPermissions();
+
         if (userIcon) {
-            userIcon.textContent =
-                getUserInitials(displayName);
+            const color = window.getInverseTextAverageColor(data.username);
+            userIcon.style.backgroundColor = getUserColorBackground(color);
+            userIcon.style.color = getUserColorText(color);
         }
 
     } catch (error) {
@@ -336,11 +524,11 @@ async function loadCurrentUser() {
         const path = typeof window.appPathname === "function"
             ? window.appPathname(window.location.pathname)
             : window.location.pathname;
-        if (path !== "/login") {
+        if (path !== "/log-masuk") {
             window.location.replace(
                 typeof window.appUrl === "function"
-                    ? window.appUrl("/login")
-                    : "/login"
+                    ? window.appUrl("/log-masuk")
+                    : "/log-masuk"
             );
         }
     }

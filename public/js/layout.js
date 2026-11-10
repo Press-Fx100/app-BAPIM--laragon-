@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 title.textContent = "Kemas Kini Tersedia";
                 status.textContent = `Versi ${check.latestCommit.slice(0, 7)} tersedia`;
                 icon.className = "bi bi-cloud-arrow-down";
-                if (!window.confirm("Kemas kini tersedia. Muat turun dan pasang sekarang? Database, muat naik dan konfigurasi tempatan akan dikekalkan.")) {
+                if (!window.confirm("Kemas kini tersedia. Muat turun dan pasang sekarang? Data dan konfigurasi tempatan akan dikekalkan, dan migrasi pangkalan data akan dijalankan jika disertakan.")) {
                     return;
                 }
 
@@ -70,7 +70,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
                 title.textContent = "Kemas Kini Selesai";
-                status.textContent = "Memuat semula aplikasi...";
+                const migrationCount = install.databaseMigrations?.length || 0;
+                status.textContent = migrationCount
+                    ? `${migrationCount} migrasi pangkalan data selesai. Memuat semula...`
+                    : "Memuat semula aplikasi...";
                 window.setTimeout(() => window.location.reload(), 900);
             } catch (error) {
                 console.error("App update failed:", error);

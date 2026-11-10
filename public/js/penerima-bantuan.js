@@ -3,28 +3,45 @@
 
     const columns = [
         ["nama", "NAMA"], ["kadPengenalan", "KAD PENGENALAN"],
-        ["telefon", "TELEFON"], ["email", "EMAIL"], ["status", "STATUS"],
-        ["catatan", "CATATAN"], ["pic", "PIC"], ["sourceFile", "SUMBER FAIL"]
+        ["telefon", "TELEFON"], ["email", "EMAIL"], ["statusPekerjaan", "PEKERJAAN"],
+        ["status", "STATUS"], ["catatan", "CATATAN"],
+        ["pic", "PIC"], ["sourceFile", "SUMBER FAIL"]
     ];
     const pageSize = 100;
     const $ = id => document.getElementById(id);
-    const newStatusValue = "__add_new_status__";
     let data = [], filtered = [], page = 1, sortKey = "", sortDirection = "asc";
-    let visible = columns.map(c => c[0] !== "sourceFile");
+    let visible = columns.map(c => !["sourceFile", "pic"].includes(c[0]));
     let filters = {}, widths = [45].concat(columns.map(() => 160));
     let deleteMode = false, active = null, anchor = null;
     let pendingChanges = new Map(), pendingDeleteRow = null;
+    let savingChanges = false;
+    let saveBadgeTimer = null;
     let dragging = false, shiftSelecting = false, editing = false, currentEdit = null, undoStack = [], redoStack = [], initializedBody = null, documentEventsBound = false;
+    let addSuggestions = null, addSuggestionInputId = null, addSuggestionKey = null;
+    let addSuggestionMatches = [], addSuggestionActiveIndex = -1, addSuggestionPositionHandler = null;
 
     const rowKey = row => `${row.datasetId}:${row.rowIndex}`;
     const esc = value => String(value == null ? "" : value).replace(/[&<>"']/g, c => (
         { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
     ));
     const value = (row, key) => String(row[key] == null ? "" : row[key]);
-    function statusOptions(currentValue = "") {
-        const options = new Set(data.map(row => value(row, "status").trim()).filter(Boolean));
-        if (currentValue.trim()) options.add(currentValue.trim());
-        return [...options].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    function showSaveConfirmation() {
+        const topbar = document.querySelector(".topbar");
+        if (!topbar) return;
+        let badge = document.querySelector(".save-success-badge");
+        if (!badge) {
+            badge = document.createElement("div");
+            badge.className = "save-success-badge";
+            badge.setAttribute("role", "status");
+            badge.setAttribute("aria-live", "polite");
+            badge.textContent = "Disimpan";
+            document.body.appendChild(badge);
+        }
+        badge.style.top = `${topbar.getBoundingClientRect().bottom}px`;
+        clearTimeout(saveBadgeTimer);
+        badge.classList.remove("is-visible");
+        requestAnimationFrame(() => badge.classList.add("is-visible"));
+        saveBadgeTimer = setTimeout(() => badge.classList.remove("is-visible"), 1800);
     }
     function cellSuggestions(key, currentValue = "") {
         const options = new Set(
@@ -33,20 +50,121 @@
         if (currentValue.trim()) options.add(currentValue.trim());
         return [...options].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     }
-    function refreshStatusOptions(select, currentValue = "", includeNewStatus = false) {
+    function refreshValueOptions(select, key) {
         if (!select) return;
+        const currentValue = select.value;
+        const options = new Set(
+            data.map(row => value(row, key).trim()).filter(Boolean)
+        );
         select.replaceChildren(new Option("", ""));
-        statusOptions(currentValue).forEach(status => select.add(new Option(status, status)));
-        if (includeNewStatus) {
-            select.add(new Option("Tambah status baharu...", newStatusValue));
-        }
-        select.value = currentValue;
+        [...options].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+            .forEach(option => select.add(new Option(option, option)));
+        select.value = options.has(currentValue) ? currentValue : "";
     }
-    function showNewStatusInput(select, input) {
-        if (!select || !input) return;
-        const addingNew = select.value === newStatusValue;
-        input.style.display = addingNew ? "" : "none";
-        if (addingNew) input.focus();
+    function closeAddSuggestions(inputId = null) {
+        if (inputId && addSuggestionInputId !== inputId) return;
+        if (addSuggestionPositionHandler) {
+            window.removeEventListener("resize", addSuggestionPositionHandler);
+            window.removeEventListener("scroll", addSuggestionPositionHandler, true);
+            addSuggestionPositionHandler = null;
+        }
+        addSuggestions?.remove();
+        addSuggestions = null;
+        addSuggestionInputId = null;
+        addSuggestionKey = null;
+        addSuggestionMatches = [];
+        addSuggestionActiveIndex = -1;
+    }
+    function positionAddSuggestions(input) {
+        if (!addSuggestions) return;
+        const rect = input.getBoundingClientRect();
+        const height = Math.min(220, addSuggestions.scrollHeight);
+        const below = Math.max(0, window.innerHeight - rect.bottom - 8);
+        const above = Math.max(0, rect.top - 8);
+        const dropUp = below < height && above > below;
+        const available = dropUp ? above : below;
+        addSuggestions.style.left = `${Math.max(0, Math.min(rect.left, window.innerWidth - rect.width))}px`;
+        addSuggestions.style.width = `${rect.width}px`;
+        addSuggestions.style.maxHeight = `${Math.max(60, Math.min(220, available))}px`;
+        addSuggestions.style.top = dropUp ? "auto" : `${rect.bottom}px`;
+        addSuggestions.style.bottom = dropUp ? `${window.innerHeight - rect.top}px` : "auto";
+    }
+    function updateAddSuggestions() {
+        const input = $(addSuggestionInputId);
+        if (!input || !addSuggestions) return;
+        const query = input.value.trim().toLocaleLowerCase();
+        addSuggestionMatches = [
+            ...(query ? [] : [""]),
+            ...cellSuggestions(addSuggestionKey).filter(option => option.toLocaleLowerCase().includes(query))
+        ];
+        addSuggestionActiveIndex = addSuggestionMatches.length
+            ? Math.max(0, addSuggestionMatches.indexOf(input.value))
+            : -1;
+        addSuggestions.replaceChildren();
+        addSuggestionMatches.forEach((suggestion, index) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "recipient-cell-suggestion";
+            option.setAttribute("role", "option");
+            option.setAttribute("aria-selected", String(index === addSuggestionActiveIndex));
+            if (index === addSuggestionActiveIndex) option.classList.add("active");
+            option.textContent = suggestion;
+            option.addEventListener("mousedown", event => event.preventDefault());
+            option.addEventListener("click", () => {
+                input.value = suggestion;
+                closeAddSuggestions();
+                input.focus();
+            });
+            addSuggestions.appendChild(option);
+        });
+        addSuggestions.style.display = addSuggestionMatches.length ? "block" : "none";
+        positionAddSuggestions(input);
+    }
+    function openAddSuggestions(inputId, key) {
+        const input = $(inputId);
+        if (!input) return;
+        if (addSuggestions && addSuggestionInputId !== inputId) closeAddSuggestions();
+        addSuggestionInputId = inputId;
+        addSuggestionKey = key;
+        if (!addSuggestions) {
+            addSuggestions = document.createElement("div");
+            addSuggestions.className = "recipient-cell-suggestions recipient-add-autocomplete-suggestions";
+            addSuggestions.setAttribute("role", "listbox");
+            document.body.appendChild(addSuggestions);
+            addSuggestionPositionHandler = () => positionAddSuggestions(input);
+            window.addEventListener("resize", addSuggestionPositionHandler);
+            window.addEventListener("scroll", addSuggestionPositionHandler, true);
+        }
+        updateAddSuggestions();
+    }
+    function handleAddSuggestionKey(event) {
+        if (!addSuggestions || !addSuggestionMatches.length) return;
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            closeAddSuggestions();
+            return;
+        }
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const direction = event.key === "ArrowDown" ? 1 : -1;
+            addSuggestionActiveIndex = addSuggestionActiveIndex < 0
+                ? (direction > 0 ? 0 : addSuggestionMatches.length - 1)
+                : (addSuggestionActiveIndex + direction + addSuggestionMatches.length) % addSuggestionMatches.length;
+            addSuggestions.querySelectorAll(".recipient-cell-suggestion").forEach((option, index) => {
+                const active = index === addSuggestionActiveIndex;
+                option.classList.toggle("active", active);
+                option.setAttribute("aria-selected", String(active));
+                if (active) option.scrollIntoView({ block: "nearest" });
+            });
+            return;
+        }
+        if (event.key === "Enter" && addSuggestionActiveIndex >= 0) {
+            event.preventDefault();
+            event.stopPropagation();
+            $(addSuggestionInputId).value = addSuggestionMatches[addSuggestionActiveIndex];
+            closeAddSuggestions();
+        }
     }
     const error = e => { console.error(e); window.alert(e && e.message ? e.message : "Operasi gagal"); };
     const api = async (method, body) => {
@@ -62,12 +180,16 @@
         const body = $("recipientTableBody");
         if (!body || body === initializedBody) return;
         initializedBody = body;
+        const addForm = $("recipientAddForm");
+        if (addForm && addForm.parentElement !== document.body) {
+            document.body.appendChild(addForm);
+        }
         data = [];
         filtered = [];
         page = 1;
         sortKey = "";
         sortDirection = "asc";
-        visible = columns.map(c => c[0] !== "sourceFile");
+        visible = columns.map(c => !["sourceFile", "pic"].includes(c[0]));
         filters = {};
         widths = [45].concat(columns.map(() => 160));
         deleteMode = false;
@@ -88,7 +210,10 @@
                 filters[key] = filter;
             }
         });
-        window.hasUnsavedTableChanges = () => pendingChanges.size > 0;
+        window.hasUnsavedTableChanges = () =>
+            pendingChanges.size > 0 ||
+            Boolean(currentEdit && currentEdit.cell.querySelector(".inline-edit-input")?.value !== currentEdit.oldValue);
+        window.isSavingTableChanges = () => savingChanges;
         window.resetTableState = () => {
             pendingChanges.clear();
             active = null;
@@ -104,10 +229,26 @@
         bind("recipientAddForm", "click", event => {
             if (event.target === $("recipientAddForm")) closeAdd();
         });
-        bind("recipientAddStatus", "change", () => showNewStatusInput($("recipientAddStatus"), $("recipientAddStatusCustom")));
+        [["recipientAddStatus", "status"], ["recipientAddStatusPekerjaan", "statusPekerjaan"]]
+            .forEach(([inputId, key]) => {
+                const open = () => openAddSuggestions(inputId, key);
+                bind(inputId, "focus", open);
+                bind(inputId, "click", open);
+                bind(inputId, "input", updateAddSuggestions);
+                bind(inputId, "keydown", handleAddSuggestionKey);
+                bind(inputId, "blur", () => window.setTimeout(() => {
+                    if (
+                        addSuggestionInputId === inputId &&
+                        !addSuggestions?.contains(document.activeElement)
+                    ) {
+                        closeAddSuggestions(inputId);
+                    }
+                }));
+            });
         bind("recipientConfirmAdd", "click", addRecord);
         bind("recipientDeleteButton", "click", deleteAction);
         bind("recipientSaveButton", "click", saveChanges);
+        bind("recipientExportButton", "click", exportToExcel);
         bind("recipientCancelDelete", "click", closeDeleteConfirmation);
         bind("recipientConfirmDelete", "click", confirmDelete);
         bind("recipientDeleteOverlay", "click", closeDeleteConfirmation);
@@ -132,7 +273,7 @@
             });
             documentEventsBound = true;
         }
-        load();
+        return load();
     }
     function bind(id, event, fn) { const node = $(id); if (node) node.addEventListener(event, fn); }
     function finishEditOnOutsideClick(event) {
@@ -154,7 +295,7 @@
                 `#recipientTableBody td[data-row="${active.row}"][data-col="${active.col}"]`
             );
             if (!currentCell) return;
-            if (["status", "catatan"].includes(columns[targetCol - 1]?.[0])) {
+            if (["status", "statusPekerjaan", "pic", "catatan"].includes(columns[targetCol - 1]?.[0])) {
                 edit(currentCell, targetRow, targetCol, undefined, event);
             } else {
                 focusSelectedCell(targetRow, targetCol);
@@ -175,7 +316,7 @@
             const response = await fetch("/api/penerima-bantuan");
             if (!response.ok) throw new Error("Gagal memuatkan penerima");
             data = (await response.json()).recipients || [];
-            refreshStatusOptions($("recipientAddStatus"), "", true);
+            refreshValueOptions($("recipientAddPIC"), "pic");
             await loadDatasets(); buildColumns(); buildFilters(); apply();
         } catch (e) { error(e); const node = $("recipientLoading"); if (node) node.textContent = "Gagal memuatkan penerima."; }
     }
@@ -250,7 +391,8 @@
             addCell(tr, String(start + offset + 1), rowIndex, 0, row);
             columns.forEach((column, index) => { if (visible[index]) addCell(tr, value(row, column[0]), rowIndex, index + 1, row); });
         });
-        table.style.tableLayout = "auto";
+        table.style.width = "100%";
+        table.style.tableLayout = "fixed";
         paginateRender();
         updateSelectionInfo();
         updateHistory();
@@ -260,6 +402,8 @@
             save.disabled = !hasChanges;
             save.title = hasChanges ? "Simpan perubahan" : "Disimpan";
             save.setAttribute("aria-label", save.title);
+            save.innerHTML = '<i class="bi bi-floppy"></i>';
+            save.classList.remove("is-saving");
             save.classList.toggle("has-changes", hasChanges);
             save.classList.toggle("saved", !hasChanges);
         }
@@ -288,7 +432,8 @@
             });
         }
         th.appendChild(content);
-        addResize(th, index); row.appendChild(th);
+        if (index !== 0) addResize(th, index);
+        row.appendChild(th);
     }
     function addCell(tr, text, rowIndex, colIndex, row) {
         const td = tr.insertCell(); td.textContent = text; td.tabIndex = 0;
@@ -326,7 +471,7 @@
             if (currentEdit) {
                 if (
                     currentEdit.cell !== td ||
-                    !["status", "catatan"].includes(columns[colIndex - 1]?.[0])
+                    !["status", "statusPekerjaan", "pic", "catatan"].includes(columns[colIndex - 1]?.[0])
                 ) return;
                 const finish = currentEdit.finish;
                 finish(false).then(() => {
@@ -346,16 +491,23 @@
     function addResize(th, index) {
         const handle = document.createElement("span"); handle.className = "column-resize-handle";
         handle.addEventListener("mousedown", event => {
-            event.preventDefault(); event.stopPropagation(); const x = event.clientX, width = widths[index];
-            const move = e => { widths[index] = Math.max(70, width + e.clientX - x); document.querySelectorAll(`[data-resize-column="${index}"]`).forEach(n => { n.style.width = `${widths[index]}px`; n.style.minWidth = `${widths[index]}px`; }); };
+            event.preventDefault(); event.stopPropagation(); const x = event.clientX, width = th.getBoundingClientRect().width;
+            const move = e => { widths[index] = Math.max(70, width + e.clientX - x); document.querySelectorAll(`[data-resize-column="${index}"]`).forEach(n => applyWidth(n, index)); };
             const stop = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", stop); };
             document.addEventListener("mousemove", move); document.addEventListener("mouseup", stop);
         }); th.appendChild(handle);
     }
     function applyWidth(element, index) {
+        if (index === 0) {
+            element.style.width = "45px";
+            element.style.minWidth = "45px";
+            element.style.maxWidth = "45px";
+            return;
+        }
         const width = widths[index] || 160;
         element.style.width = `${width}px`;
         element.style.minWidth = `${width}px`;
+        element.style.maxWidth = "none";
     }
     function inSelection(row, col) {
         if (!active) return false; const end = anchor || active;
@@ -492,13 +644,16 @@
         cell.classList.remove("active-cell", "selected-cell");
         cell.classList.add("editing-cell");
         const key = columns[col - 1][0], old = value(row, key);
-        const hasSuggestions = ["status", "catatan"].includes(key);
+        const hasSuggestions = ["status", "statusPekerjaan", "pic", "catatan"].includes(key);
         const input = document.createElement("input");
         input.className = "inline-edit-input";
         let suggestionPopup = null;
+        const tableWrapper = $("recipientTableWrapper");
+        const hideSuggestionsOnTableScroll = () => {
+            if (suggestionPopup) suggestionPopup.style.display = "none";
+        };
         let matchingSuggestions = [];
         let activeSuggestionIndex = -1;
-        let hasTypedQuery = false;
         input.value = initial === undefined ? old : initial;
         cell.textContent = "";
         cell.appendChild(input);
@@ -513,6 +668,7 @@
             suggestionPopup.style.lineHeight = cellStyle.lineHeight;
             suggestionPopup.style.letterSpacing = cellStyle.letterSpacing;
             document.body.appendChild(suggestionPopup);
+            tableWrapper?.addEventListener("scroll", hideSuggestionsOnTableScroll, { passive: true });
         }
         input.focus();
         if (initial === undefined && input instanceof HTMLInputElement) {
@@ -524,6 +680,7 @@
             if (finished) return;
             finished = true;
             if (currentEdit?.cell === cell) currentEdit = null;
+            tableWrapper?.removeEventListener("scroll", hideSuggestionsOnTableScroll);
             suggestionPopup?.remove();
             const next = input.value;
             const was = old;
@@ -550,7 +707,7 @@
             if (!suggestionPopup) return;
             const query = input.value.trim().toLocaleLowerCase();
             matchingSuggestions = [
-                ...(hasTypedQuery ? [] : [""]),
+                ...(query ? [] : [""]),
                 ...cellSuggestions(key, old).filter(option =>
                     option.toLocaleLowerCase().includes(query)
                 )
@@ -596,11 +753,16 @@
         if (hasSuggestions) {
             updateSuggestions();
             input.addEventListener("input", () => {
-                hasTypedQuery = true;
                 updateSuggestions();
             });
         }
         const handleEditKey = e => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+                e.preventDefault();
+                e.stopPropagation();
+                finish(true).then(saveChanges);
+                return;
+            }
             e.stopPropagation();
             if (e.key === "Escape") {
                 e.preventDefault(); e.stopPropagation();
@@ -727,6 +889,16 @@
     function updateHistory() { /* Undo/redo are intentionally keyboard-only. */ }
     function keyboard(event) {
         if (!$("recipientTableBody")) return;
+        const mod = event.ctrlKey || event.metaKey;
+        if (mod && event.key.toLowerCase() === "s") {
+            event.preventDefault();
+            if (editing && currentEdit) {
+                currentEdit.finish(true).then(saveChanges);
+            } else {
+                saveChanges();
+            }
+            return;
+        }
         if (event.key === "Escape" && $("recipientAddForm")?.classList.contains("show")) {
             event.preventDefault();
             closeAdd();
@@ -737,7 +909,7 @@
             currentEdit.finish(false);
             return;
         }
-        if (editing) return; const mod = event.ctrlKey || event.metaKey;
+        if (editing) return;
         if (event.key === "Escape" && deleteMode) {
             deleteMode = false;
             deleteActionStyles(false);
@@ -758,6 +930,7 @@
         $("recipientAddNama")?.focus();
     }
     function closeAdd() {
+        closeAddSuggestions();
         const form = $("recipientAddForm");
         const card = $("recipientAddCard");
         if (!form || !card) return;
@@ -767,14 +940,32 @@
         card.setAttribute("aria-hidden", "true");
     }
     async function addRecord() {
-        const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
+        const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["status", "recipientAddStatus"], ["statusPekerjaan", "recipientAddStatusPekerjaan"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
         const changes = {}; fields.forEach(([key, id]) => { const input = $(id); changes[key] = input ? input.value : ""; });
-        const statusSelect = $("recipientAddStatus");
-        const customStatus = $("recipientAddStatusCustom");
-        changes.status = statusSelect?.value === newStatusValue ? (customStatus?.value || "") : (statusSelect?.value || "");
         const datasetId = $("recipientAddDataset") && $("recipientAddDataset").value;
         try { await api("POST", { datasetId, changes }); historyPush({ type: "add", datasetId, changes }); closeAdd(); await load(); }
         catch (e) { error(e); }
+    }
+    async function exportToExcel() {
+        try {
+            if (currentEdit) await currentEdit.finish(true, false);
+            if (!window.XLSX) throw new Error("Pustaka eksport Excel tidak tersedia.");
+
+            const exportColumns = columns.filter((_, index) => visible[index]);
+            const worksheetData = [
+                exportColumns.map(([, label]) => label),
+                ...filtered.map(row => exportColumns.map(([key]) => value(row, key)))
+            ];
+            const worksheet = window.XLSX.utils.aoa_to_sheet(worksheetData);
+            const workbook = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(workbook, worksheet, "Penerima Bantuan");
+            window.XLSX.writeFile(
+                workbook,
+                `penerima-bantuan-${new Date().toISOString().slice(0, 10)}.xlsx`
+            );
+        } catch (e) {
+            error(e);
+        }
     }
     function deleteAction() {
         deleteMode = !deleteMode;
@@ -823,17 +1014,30 @@
     }
     async function saveChanges() {
         const save = $("recipientSaveButton");
+        const savedChangeCount = pendingChanges.size;
+        if (!savedChangeCount) return;
+        savingChanges = true;
         if (save) {
             save.disabled = true;
             save.title = "Menyimpan...";
             save.setAttribute("aria-label", save.title);
+            save.classList.add("is-saving");
+            save.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         }
         try {
             for (const { row, key, next } of pendingChanges.values()) {
                 await api("PUT", { record: { datasetId: row.datasetId, rowIndex: row.rowIndex }, changes: { [key]: next } });
             }
-            pendingChanges.clear(); render();
-        } catch (e) { error(e); render(); }
+            pendingChanges.clear();
+            render();
+            showSaveConfirmation();
+        } catch (e) {
+            render();
+            error(e);
+        } finally {
+            savingChanges = false;
+            render();
+        }
     }
     function paginate(name) {
         const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -851,11 +1055,19 @@
             label.textContent = `${first}-${last} daripada ${filtered.length} baris`;
         }
     }
-    document.addEventListener("DOMContentLoaded", init);
-    document.addEventListener("app:page-loaded", init);
-    window.addEventListener("beforeunload", event => {
-        if (!pendingChanges.size) return;
-        event.preventDefault();
-        event.returnValue = "";
+    document.addEventListener("DOMContentLoaded", () => {
+        window.registerAppPageLoadTask(init());
+    });
+    document.addEventListener("app:page-loaded", () => {
+        const pathname = typeof window.appPathname === "function"
+            ? window.appPathname(window.location.pathname)
+            : window.location.pathname;
+        if (pathname === "/penerima-bantuan") {
+            window.registerAppPageLoadTask(init());
+            return;
+        }
+        closeAdd();
+        const addForm = $("recipientAddForm");
+        if (addForm?.parentElement === document.body) addForm.remove();
     });
 })();
