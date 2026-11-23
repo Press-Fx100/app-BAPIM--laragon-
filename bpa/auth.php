@@ -75,16 +75,33 @@ function require_admin() {
 function require_bpa_page_access(string $page): void
 {
     require_login();
-    $pdo = $GLOBALS['pdo'] ?? null;
-    if ($pdo instanceof PDO && function_exists('currentUser') && function_exists('canAccessUserPage')) {
-        $user = currentUser($pdo);
-        if ($user && canAccessUserPage($user, $page)) {
+    try {
+        $config = require __DIR__ . '/../config/database.php';
+        $dsn = sprintf(
+            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+            $config['host'],
+            $config['port'],
+            $config['database']
+        );
+        $bapimPdo = new PDO($dsn, $config['username'], $config['password'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+        $username = trim((string)($_SESSION['username'] ?? ''));
+        $statement = $bapimPdo->prepare(
+            'SELECT id, username, display_name, email, unit, active, access_level, page_permissions FROM users WHERE username = ? AND active = 1'
+        );
+        $statement->execute([$username]);
+        $user = $statement->fetch() ?: null;
+        if ($user && function_exists('canAccessUserPage') && canAccessUserPage($user, $page)) {
             return;
         }
-        http_response_code(403);
-        exit('Anda tidak mempunyai kebenaran untuk mengakses halaman ini.');
+    } catch (Throwable $error) {
+        error_log('BAPIM authorization lookup failed: ' . $error->getMessage());
     }
-    require_admin();
+    http_response_code(403);
+    exit('Anda tidak mempunyai kebenaran untuk mengakses halaman ini.');
 }
 
 function has_bpa_unit_view_permission(string $unit): bool {

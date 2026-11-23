@@ -5,6 +5,9 @@ require_login();
 $name = htmlspecialchars($_SESSION['user']['user_nama'] ?? 'User');
 $role = $_SESSION['user']['role'] ?? '';
 $unit_id_session = $_SESSION['user']['unit_id'] ?? null;
+$canManageUnitProgram = isset($bpaCanEdit)
+    ? (bool)$bpaCanEdit
+    : in_array($role, ['admin', 'editor'], true);
 
 // ===== Dapatkan unit_id UPA =====
 $stmtU = $pdo->prepare("SELECT unit_id FROM unit WHERE nama_unit='UPA' LIMIT 1");
@@ -39,7 +42,7 @@ $msg = $_GET['msg'] ?? '';
 // ===== Delete (admin/editor sahaja) =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
 
-    if (!in_array($role, ['admin','editor'], true)) {
+    if (!$canManageUnitProgram) {
         header("Location: program_list.php?msg=" . urlencode("Anda tidak dibenarkan delete."));
         exit;
     }
@@ -172,7 +175,7 @@ if ($role === 'admin') {
       <small class="text-muted">Paparan ringkas (klik View untuk detail penuh)</small>
     </div>
     <div class="budget-page-actions" aria-label="Tindakan senarai program">
-      <?php if (in_array($role, ['admin','editor'], true)): ?>
+      <?php if ($canManageUnitProgram): ?>
         <a href="/bpa/upa/program_add.php" class="budget-list-action budget-list-action--primary">
           <span class="budget-list-action-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
           <span>Tambah</span>
@@ -294,7 +297,7 @@ if ($role === 'admin') {
                         </a>
                       <?php endif; ?>
 
-                      <?php if (in_array($role, ['admin','editor'], true)): ?>
+                      <?php if ($canManageUnitProgram): ?>
                         <form method="post" data-bpa-confirm-title="Padam program?"
                               data-bpa-confirm-message="Adakah anda pasti mahu memadam program ini?"
                               data-bpa-confirm-text="Padam">

@@ -5,8 +5,11 @@ require_login();
 $name = htmlspecialchars($_SESSION['user']['user_nama'] ?? 'User');
 $role = $_SESSION['user']['role'] ?? '';
 $unit_id_session = $_SESSION['user']['unit_id'] ?? null;
+$canManageUnitProgram = isset($bpaCanEdit)
+    ? (bool)$bpaCanEdit
+    : in_array($role, ['admin', 'editor'], true);
 
-if ($role === 'staff') {
+if (!$canManageUnitProgram) {
     header("Location: /bpa/ulk/program_list.php?msg=" . urlencode("Staff tidak dibenarkan tambah program."));
     exit;
 }

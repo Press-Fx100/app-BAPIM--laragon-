@@ -1,6 +1,14 @@
 <?php
 require_once __DIR__ . '/../init.php';
-require_admin();
+require_login();
+$canManageSku = isset($bpaCanEdit)
+    ? (bool)$bpaCanEdit
+    : (strtolower((string)($_SESSION['user']['role'] ?? '')) === 'admin'
+        || (int)($_SESSION['user']['access_level'] ?? 0) <= 1);
+if (!$canManageSku) {
+    http_response_code(403);
+    exit('Anda tidak mempunyai kebenaran untuk mengurus SKU.');
+}
 
 $name = htmlspecialchars($_SESSION['user']['user_nama'] ?? 'Admin');
 

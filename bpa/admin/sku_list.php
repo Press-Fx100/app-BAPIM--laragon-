@@ -6,6 +6,9 @@ $user = $_SESSION['user'] ?? [];
 $role = $user['role'] ?? 'staff';
 $unitIdLogin = $user['unit_id'] ?? null;
 $name = htmlspecialchars($user['user_nama'] ?? 'User');
+$canManageSku = isset($bpaCanEdit)
+    ? (bool)$bpaCanEdit
+    : (strtolower((string)($user['role'] ?? '')) === 'admin');
 
 $units = $pdo->query("SELECT unit_id, nama_unit FROM unit ORDER BY nama_unit")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -19,7 +22,12 @@ if (!in_array($scope, ['ALL','BPA','UNIT'], true)) $scope = 'ALL';
 
 $bulanSemasa = (int)date('n');
 
-if ($role === 'admin' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
+    if (!$canManageSku) {
+        http_response_code(403);
+        echo 'Anda tidak mempunyai kebenaran untuk mengurus SKU.';
+        exit;
+    }
     $deleteId = filter_var($_POST['delete_id'], FILTER_VALIDATE_INT);
     $isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
 
@@ -455,7 +463,7 @@ function kiraPeratusSemasa(array $r) {
       </small>
     </div>
     <div class="sku-page-actions" aria-label="Tindakan senarai SKU">
-      <?php if ($role === 'admin'): ?>
+      <?php if ($canManageSku): ?>
         <a href="/bpa/admin/sku_add.php" class="sku-list-action sku-list-action--primary">
           <span class="sku-list-action-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
           <span>Tambah</span>
@@ -474,7 +482,7 @@ function kiraPeratusSemasa(array $r) {
         <span>PDF</span>
       </a>
 
-      <?php if ($role === 'admin'): ?>
+      <?php if ($canManageSku): ?>
         <a href="/bpa/admin/dashboard_admin.php" data-app-navigation class="sku-list-action">
           <span class="sku-list-action-icon"><i class="bi bi-grid-1x2" aria-hidden="true"></i></span>
           <span>Dashboard</span>

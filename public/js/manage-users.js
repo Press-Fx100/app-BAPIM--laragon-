@@ -578,7 +578,10 @@ function initializeUserManagement() {
 
     function createAccessRow(page, level) {
         const permission = draftPermissions[page.key];
-        const canConfigureEdits = level > 0 && level <= 2;
+        const assignedUnitCode = String(accessTarget?.unit || unitInput.value || "").toUpperCase();
+        const canConfigureEdits =
+            level > 0 && level <= 2
+            || (level === 3 && page.key === `bpaPrograms${assignedUnitCode}`);
         const row = document.createElement("div");
         row.className = "managed-user-access-row";
 
@@ -591,7 +594,7 @@ function initializeUserManagement() {
         checkbox.addEventListener("change", () => {
             permission.access = checkbox.checked;
             row.classList.toggle("is-disabled", !permission.access);
-            if (actionSwitch) actionSwitch.disabled = !page.editable || !permission.access || level === 0;
+            if (actionSwitch) actionSwitch.disabled = !page.editable || !permission.access || !canConfigureEdits;
             syncBpaPermissionParents();
         });
         const checkboxText = document.createElement("span");
@@ -697,7 +700,12 @@ function initializeUserManagement() {
                     draftPermissions[group.children[index].key].access = checkbox.checked;
                     row.classList.toggle("is-disabled", !checkbox.checked);
                     if (actionSwitch) {
-                        actionSwitch.disabled = !checkbox.checked || !(level > 0 && level <= 2);
+                        const child = group.children[index];
+                        const assignedUnitCode = String(accessTarget?.unit || unitInput.value || "").toUpperCase();
+                        const canConfigureEdit =
+                            level > 0 && level <= 2
+                            || (level === 3 && child.key === `bpaPrograms${assignedUnitCode}`);
+                        actionSwitch.disabled = !checkbox.checked || !canConfigureEdit;
                     }
                 });
                 sectionCheckbox.indeterminate = false;

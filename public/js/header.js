@@ -25,10 +25,6 @@ function canEditAppPage(page) {
     if (page === "recipientParticipants") {
         return canEditAppPage("recipients") && canEditAppPage("participants");
     }
-    if (Number(user.accessLevel) === 0) {
-        return ["recipients", "participants", "upload", "dataset", "account", "manageUsers"].includes(page);
-    }
-    if (Number(user.accessLevel) >= 3) return false;
     return canAccessAppPage(page) && user.permissions?.[page]?.edit === true;
 }
 

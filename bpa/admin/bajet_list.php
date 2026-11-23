@@ -4,8 +4,10 @@ require_login();
 
 $user = $_SESSION['user'] ?? [];
 $name = htmlspecialchars($user['user_nama'] ?? 'Admin');
-$canManageBudget = strtolower((string)($user['role'] ?? '')) === 'admin'
-    || (int)($user['access_level'] ?? 0) <= 1;
+$canManageBudget = isset($bpaCanEdit)
+    ? (bool)$bpaCanEdit
+    : (strtolower((string)($user['role'] ?? '')) === 'admin'
+        || (int)($user['access_level'] ?? 0) <= 1);
 
 // dropdown unit
 $units = $pdo->query("SELECT unit_id, nama_unit FROM unit ORDER BY nama_unit")
@@ -22,7 +24,11 @@ $tahunInt = (int)$tahun;
 
 // Delete action
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
-    require_admin();
+    if (!$canManageBudget) {
+        http_response_code(403);
+        echo 'Anda tidak mempunyai kebenaran untuk mengurus bajet.';
+        exit;
+    }
     $deleteId = filter_var($_POST['delete_id'], FILTER_VALIDATE_INT);
     $isAjaxRequest = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
 

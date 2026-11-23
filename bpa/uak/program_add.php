@@ -4,9 +4,12 @@ require_login();
 
 $role = $_SESSION['user']['role'] ?? '';
 $unit_id_session = $_SESSION['user']['unit_id'] ?? null;
+$canManageUnitProgram = isset($bpaCanEdit)
+    ? (bool)$bpaCanEdit
+    : in_array($role, ['admin', 'editor'], true);
 
 // staff tak boleh tambah
-if ($role === 'staff') {
+if (!$canManageUnitProgram) {
     header("Location: /bpa/uak/dashboard.php?error=" . urlencode("Staff tidak dibenarkan tambah program."));
     exit;
 }

@@ -339,8 +339,12 @@ function closeCustomSelect(wrapper) {
 function positionCustomSelectPortal(menu, button) {
     const bounds = button.getBoundingClientRect();
     const menuHeight = Math.min(260, menu.children.length * 34 + 12);
-    const availableBelow = Math.max(0, window.innerHeight - bounds.bottom - 8);
-    const availableAbove = Math.max(0, bounds.top - 8);
+    const dialog = button.closest("dialog");
+    const dialogBounds = dialog?.getBoundingClientRect();
+    const viewportBottom = Math.min(window.innerHeight, dialogBounds?.bottom ?? window.innerHeight);
+    const viewportTop = Math.max(0, dialogBounds?.top ?? 0);
+    const availableBelow = Math.max(0, viewportBottom - bounds.bottom - 8);
+    const availableAbove = Math.max(0, bounds.top - viewportTop - 8);
     const dropUp = availableBelow < menuHeight && availableAbove > availableBelow;
     const available = dropUp ? availableAbove : availableBelow;
     menu.style.left = `${bounds.left}px`;
@@ -353,6 +357,24 @@ function positionCustomSelectPortal(menu, button) {
 function initializeCustomSelects() {
 
     document.querySelectorAll("select").forEach(select => {
+        if (
+            select.id === "uploadUnitInCharge" ||
+            select.id === "datasetEditUnit"
+        ) {
+            const units = [
+                { value: "", label: select.id === "datasetEditUnit" ? "Tiada unit ditetapkan" : "Pilih unit" },
+                { value: "UPP", label: "UPP" },
+                { value: "UPU", label: "UPU" },
+                { value: "ULK", label: "ULK" },
+                { value: "UAK", label: "UAK" },
+                { value: "UPA", label: "UPA" }
+            ];
+            units.forEach(unit => {
+                if (![...select.options].some(option => option.value === unit.value)) {
+                    select.add(new Option(unit.label, unit.value));
+                }
+            });
+        }
         if (
             select.dataset.customSelectInitialized === "true" ||
             select.dataset.customSelectSkip === "true"
@@ -449,7 +471,7 @@ function initializeCustomSelects() {
             wrapper.classList.add("show");
             button.setAttribute("aria-expanded", "true");
             const modalRoot = wrapper.closest("#recipientAddForm, .bpa-create-dialog");
-            if (modalRoot) {
+            if (modalRoot && modalRoot.id !== "datasetEditOverlay") {
                 menu.classList.add("custom-select-menu-portal");
                 if (modalRoot.id === "recipientAddForm") {
                     menu.classList.add("recipient-add-select-menu");

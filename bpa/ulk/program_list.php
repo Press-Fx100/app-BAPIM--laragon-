@@ -5,6 +5,9 @@ require_login();
 $name = htmlspecialchars($_SESSION['user']['user_nama'] ?? 'User');
 $role = $_SESSION['user']['role'] ?? 'staff';
 $unit_id_session = $_SESSION['user']['unit_id'] ?? null;
+$canManageUnitProgram = isset($bpaCanEdit)
+    ? (bool)$bpaCanEdit
+    : in_array($role, ['admin', 'editor'], true);
 
 $isEditor = ($role === 'editor' || $role === 'admin');
 $isStaffOnly = !$isEditor;
@@ -34,7 +37,7 @@ $msg = $_GET['msg'] ?? '';
 // Delete (admin/editor sahaja)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
 
-    if (!$isEditor) {
+    if (!$canManageUnitProgram) {
         header("Location: program_list.php?msg=" . urlencode("Staff tidak dibenarkan delete."));
         exit;
     }
@@ -200,7 +203,7 @@ if ($role === 'editor') {
       <small class="text-muted">Paparan ringkas (klik View untuk detail penuh)</small>
     </div>
     <div class="budget-page-actions" aria-label="Tindakan senarai program">
-      <?php if ($isEditor): ?>
+      <?php if ($canManageUnitProgram): ?>
         <a href="/bpa/ulk/program_add.php" class="budget-list-action budget-list-action--primary">
           <span class="budget-list-action-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
           <span>Tambah</span>
@@ -330,7 +333,7 @@ if ($role === 'editor') {
                         </a>
                       <?php endif; ?>
 
-                      <?php if ($isEditor): ?>
+                      <?php if ($canManageUnitProgram): ?>
                         <form method="post" data-bpa-confirm-title="Padam program?"
                               data-bpa-confirm-message="Adakah anda pasti mahu memadam program ini?"
                               data-bpa-confirm-text="Padam">
