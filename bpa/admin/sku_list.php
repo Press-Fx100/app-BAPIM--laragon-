@@ -109,13 +109,11 @@ SELECT
   u.nama_unit,
   s.bil,
   s.nama_aktiviti,
-  s.peruntukan_paparan_rm,
   s.jenis_sasaran,
   s.cara_kira_pencapaian,
   s.sasaran_nilai,
   s.sasaran_unit,
   s.sasaran_rm,
-  s.anggaran_akhir_tahun,
   s.manual_semasa_nilai,
   s.catatan,
 
@@ -356,17 +354,15 @@ function kiraPeratusSemasa(array $r) {
     }
 
     .sku-table:not(.sku-table--actions) .w-bil{ width:5%; }
-    .sku-table:not(.sku-table--actions) .w-aktiviti{ width:35%; }
-    .sku-table:not(.sku-table--actions) .w-peruntukan{ width:16%; }
+    .sku-table:not(.sku-table--actions) .w-aktiviti{ width:34%; }
     .sku-table:not(.sku-table--actions) .w-sasaran{ width:13%; }
     .sku-table:not(.sku-table--actions) .w-pencapaian{ width:19%; }
-    .sku-table:not(.sku-table--actions) .w-anggaran{ width:12%; }
+    .sku-table:not(.sku-table--actions) .w-catatan{ width:29%; }
     .sku-table--actions .w-bil{ width:5%; }
-    .sku-table--actions .w-aktiviti{ width:28%; }
-    .sku-table--actions .w-peruntukan{ width:15%; }
+    .sku-table--actions .w-aktiviti{ width:24%; }
     .sku-table--actions .w-sasaran{ width:12%; }
-    .sku-table--actions .w-pencapaian{ width:17%; }
-    .sku-table--actions .w-anggaran{ width:9%; }
+    .sku-table--actions .w-pencapaian{ width:16%; }
+    .sku-table--actions .w-catatan{ width:29%; }
     .sku-table--actions .w-tindakan{ width:14%; }
     .sku-table .w-tindakan .budget-row-actions{
       display:flex;
@@ -571,10 +567,9 @@ function kiraPeratusSemasa(array $r) {
           <tr>
             <th class="w-bil">BIL.</th>
             <th class="w-aktiviti">AKTIVITI</th>
-            <th class="w-peruntukan">PERUNTUKAN (RM)</th>
             <th class="w-sasaran">SASARAN</th>
             <th class="w-pencapaian th-purple">PENCAPAIAN SEMASA</th>
-            <th class="w-anggaran">ANGGARAN</th>
+            <th class="w-catatan">CATATAN</th>
             <?php if ($showSkuActions): ?>
               <th class="w-tindakan" aria-label="Tindakan"></th>
             <?php endif; ?>
@@ -583,7 +578,7 @@ function kiraPeratusSemasa(array $r) {
         <tbody>
           <?php if (!$rows): ?>
             <tr>
-              <td colspan="<?= $showSkuActions ? 7 : 6 ?>" class="text-center text-muted py-4">Tiada data SKU.</td>
+              <td colspan="<?= $showSkuActions ? 6 : 5 ?>" class="text-center text-muted py-4">Tiada data SKU.</td>
             </tr>
           <?php else: ?>
             <?php foreach ($rows as $r): ?>
@@ -639,10 +634,6 @@ function kiraPeratusSemasa(array $r) {
                   </div>
                 </td>
 
-                <td class="money w-peruntukan">
-                  <?= ($r['peruntukan_paparan_rm'] !== null) ? number_format((float)$r['peruntukan_paparan_rm'], 2) : '-' ?>
-                </td>
-
                 <td class="center w-sasaran">
                   <?php
                     $sasaranNilaiTxt = formatSasaranNombor($r['sasaran_nilai']);
@@ -679,23 +670,15 @@ function kiraPeratusSemasa(array $r) {
                   ?>
                 </td>
 
-                <td class="center w-anggaran">
-                  <?= ($r['anggaran_akhir_tahun'] !== null) ? number_format((float)$r['anggaran_akhir_tahun'], 2) : '-' ?>
+                <td class="w-catatan">
+                  <?= trim((string)($r['catatan'] ?? '')) !== ''
+                    ? nl2br(htmlspecialchars((string)$r['catatan']))
+                    : '-' ?>
                 </td>
 
                 <?php if ($showSkuActions): ?>
                   <td class="center w-tindakan">
                     <div class="budget-row-actions">
-                  <?php $catatan = trim((string)($r['catatan'] ?? '')); ?>
-                  <?php if ($catatan !== ''): ?>
-                    <?php $noteDialogId = 'sku-note-dialog-' . (int)$r['sku_aktiviti_id']; ?>
-                    <button type="button" class="budget-row-action sku-note-action"
-                            aria-label="Lihat catatan SKU" title="Lihat catatan"
-                            data-sku-note-open="<?= htmlspecialchars($noteDialogId) ?>">
-                      <i class="bi bi-three-dots" aria-hidden="true"></i>
-                    </button>
-                  <?php endif; ?>
-
                     <?php if ($canManageSku): ?>
                       <a class="budget-row-action" aria-label="Edit SKU" title="Edit"
                          data-app-navigation
@@ -710,24 +693,6 @@ function kiraPeratusSemasa(array $r) {
                           <i class="bi bi-trash3" aria-hidden="true"></i>
                         </button>
                       </form>
-                    <?php endif; ?>
-
-                    <?php if ($catatan !== ''): ?>
-                      <dialog class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--note bpa-note-dialog"
-                              id="<?= htmlspecialchars($noteDialogId) ?>"
-                              aria-labelledby="<?= htmlspecialchars($noteDialogId) ?>-title">
-                        <header class="bpa-create-dialog__header">
-                          <div class="bpa-create-dialog__heading">
-                            <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan SKU</h2>
-                            <p class="bpa-create-dialog__subtitle">Catatan berkaitan dengan SKU ini.</p>
-                          </div>
-                          <button type="button" class="bpa-create-dialog__close"
-                                  aria-label="Tutup catatan" data-sku-note-close>&times;</button>
-                        </header>
-                        <div class="bpa-create-dialog__body bpa-note-dialog__body">
-                          <p><?= nl2br(htmlspecialchars($catatan)) ?></p>
-                        </div>
-                      </dialog>
                     <?php endif; ?>
                     </div>
                   </td>

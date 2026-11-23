@@ -1013,6 +1013,31 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         unset($managedUser);
         jsonResponse(['success' => true, 'users' => $users]);
     }
+    if ($path === '/api/admin/user-activity' && $method === 'GET') {
+        requirePageCapability($pdo, 'manageUsers');
+        $limit = min(max((int)($query['limit'] ?? 1000), 1), 1000);
+        $statement = $pdo->prepare(
+            "SELECT activity.id,
+                COALESCE(
+                    (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1),
+                    (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1),
+                    activity.username
+                ) AS username,
+                activity.action,
+                activity.dataset_name,
+                activity.column_name,
+                activity.old_value,
+                activity.new_value,
+                activity.created_at
+            FROM user_activity AS activity
+            WHERE LOWER(TRIM(activity.action)) IN ('user_add', 'user_update', 'user_delete')
+            ORDER BY activity.created_at DESC, activity.id DESC
+            LIMIT ?"
+        );
+        $statement->bindValue(1, $limit, PDO::PARAM_INT);
+        $statement->execute();
+        jsonResponse(['success' => true, 'activities' => $statement->fetchAll()]);
+    }
     if ($path === '/api/admin/users' && $method === 'POST') {
         $manager = requirePageCapability($pdo, 'manageUsers', true);
         requireCsrfToken($payload);
@@ -1392,7 +1417,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         );
         $progressStatement->execute([$activityUsername, $account['username']]);
         $progressChange = (int)$progressStatement->fetchColumn();
-        $statement = $pdo->prepare("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, dataset.dataset_type, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id WHERE LOWER(TRIM(activity.username)) IN (LOWER(TRIM(?)), LOWER(TRIM(?))) ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
+        $statement = $pdo->prepare("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, dataset.dataset_type, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id WHERE LOWER(TRIM(activity.username)) IN (LOWER(TRIM(?)), LOWER(TRIM(?))) AND LOWER(TRIM(activity.action)) NOT IN ('user_add', 'user_update', 'user_delete') ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
         $statement->bindValue(1, $account['username'], PDO::PARAM_STR);
         $statement->bindValue(2, $activityUsername, PDO::PARAM_STR);
         $statement->bindValue(3, $limit, PDO::PARAM_INT);

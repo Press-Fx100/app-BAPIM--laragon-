@@ -22,6 +22,10 @@ function initializeUserManagement() {
     const accessFilterOptions = document.querySelectorAll('input[name="managedUserAccessFilter"]');
     const filterButton = document.getElementById("managedUserFilterButton");
     const filterMenu = document.getElementById("managedUserFilterMenu");
+    const userActivityBody = document.getElementById("managedUserActivityBody");
+    const userActivitySearch = document.getElementById("managedUserActivitySearch");
+    const userActivityPaginationInfo = document.getElementById("managedUserActivityPaginationInfo");
+    const userActivityPageNumbers = document.getElementById("managedUserActivityPageNumbers");
     const manageUsersPage = form.closest(".manage-users-page");
     const manageUsersLayout = form.closest(".manage-users-layout");
     const manageUsersCard = form.closest(".manage-users-card");
@@ -117,6 +121,9 @@ function initializeUserManagement() {
     let draftPermissions = defaultPermissions(Number(accessLevelInput.value));
     let originalModalPermissions = null;
     let isSyncingDerivedAccessLevel = false;
+    let userActivities = [];
+    let userActivityPage = 1;
+    const userActivityRowsPerPage = 10;
 
     function syncManagedUsersListHeight() {
         if (!manageUsersLayout || !manageUsersCard) return;
@@ -546,6 +553,186 @@ function initializeUserManagement() {
         return data;
     }
 
+    function escapeActivityHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function getManagedActivityAction(action) {
+        return ({
+            user_add: { label: "Pengguna ditambah", className: "add" },
+            user_update: { label: "Pengguna dikemas kini", className: "update" },
+            user_delete: { label: "Akaun dinyahaktifkan", className: "delete" }
+        })[String(action ?? "").trim().toLowerCase()] || {
+            label: String(action ?? ""),
+            className: ""
+        };
+    }
+
+    function getManagedActivityUserBadgeStyle(username) {
+        if (typeof window.getInverseTextAverageColor !== "function") return "";
+        const color = window.getInverseTextAverageColor(username);
+        const background = `#${[1, 3, 5].map(offset => {
+            const channel = parseInt(color.slice(offset, offset + 2), 16);
+            return Math.round(channel + (255 - channel) * 0.85)
+                .toString(16)
+                .padStart(2, "0");
+        }).join("").toUpperCase()}`;
+        const textColor = `#${[1, 3, 5].map(offset =>
+            Math.round(parseInt(color.slice(offset, offset + 2), 16) * 0.72)
+                .toString(16)
+                .padStart(2, "0")
+        ).join("").toUpperCase()}`;
+        return `background:${background};color:${textColor}`;
+    }
+
+    function renderManagedUserActivity() {
+        if (!userActivityBody || !userActivityPaginationInfo) return;
+
+        const query = userActivitySearch?.value.trim().toLocaleLowerCase() || "";
+        const filteredActivities = userActivities.filter(activity => [
+            activity.username,
+            getManagedActivityAction(activity.action).label,
+            activity.column_name,
+            activity.dataset_name,
+            activity.new_value,
+            activity.created_at
+        ].some(value => String(value ?? "").toLocaleLowerCase().includes(query)));
+        const total = filteredActivities.length;
+        const totalPages = Math.max(Math.ceil(total / userActivityRowsPerPage), 1);
+        userActivityPage = Math.min(userActivityPage, totalPages);
+        const start = (userActivityPage - 1) * userActivityRowsPerPage;
+        const pageRows = filteredActivities.slice(start, start + userActivityRowsPerPage);
+
+        userActivityBody.replaceChildren();
+        if (!pageRows.length) {
+            const row = document.createElement("tr");
+            row.innerHTML = `<td colspan="6" class="audit-empty">${query
+                ? "Tiada tindakan sepadan"
+                : "Tiada tindakan pengurusan pengguna"}</td>`;
+            userActivityBody.appendChild(row);
+        } else {
+            pageRows.forEach(activity => {
+                const row = document.createElement("tr");
+                const username = String(activity.username ?? "");
+                const action = getManagedActivityAction(activity.action);
+                const oldValue = String(activity.old_value || "—");
+                const newValue = String(activity.new_value || activity.dataset_name || "—");
+                const createdAt = String(activity.created_at ?? "").trim();
+                const dateTime = createdAt.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
+                const badgeStyle = getManagedActivityUserBadgeStyle(username);
+                const targetName = escapeActivityHtml(activity.new_value || activity.dataset_name || "—");
+
+                row.innerHTML = `
+                    <td class="audit-user audit-user-cell">
+                        <span class="audit-user-badge" style="${badgeStyle}">${escapeActivityHtml(username)}</span>
+                    </td>
+                    <td><span class="audit-action ${action.className}">${escapeActivityHtml(action.label) || "—"}</span></td>
+                    <td class="audit-location-cell">
+                        <div class="audit-location-values">
+                            <span class="audit-location-badge"><span class="audit-location-text">${escapeActivityHtml(activity.column_name || "Pengurusan Pengguna")}</span></span>
+                        </div>
+                    </td>
+                    <td class="audit-change-cell">
+                        <div class="audit-change-values">
+                            <span class="audit-value-badge old" title="${escapeActivityHtml(oldValue)}"><span class="audit-value-text">${escapeActivityHtml(oldValue)}</span></span>
+                            <span class="audit-value-transition" aria-hidden="true">&gt;</span>
+                            <span class="audit-value-badge new" title="${targetName}"><span class="audit-value-text">${targetName}</span></span>
+                        </div>
+                    </td>
+                    <td><span class="audit-dataset-cell">—</span></td>
+                    <td>${escapeActivityHtml(dateTime ? `${dateTime[1]} ${dateTime[2]}` : createdAt || "—")}</td>`;
+                userActivityBody.appendChild(row);
+            });
+        }
+
+        const firstItem = total ? start + 1 : 0;
+        const lastItem = Math.min(start + userActivityRowsPerPage, total);
+        userActivityPaginationInfo.textContent = total
+            ? `${firstItem}–${lastItem} daripada ${total} tindakan`
+            : "0 tindakan";
+        if (userActivityPageNumbers) {
+            const firstPage = Math.max(1, Math.min(userActivityPage - 2, totalPages - 4));
+            const lastPage = Math.min(totalPages, firstPage + 4);
+            userActivityPageNumbers.replaceChildren();
+            for (let page = firstPage; page <= lastPage; page += 1) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = `page-button${page === userActivityPage ? " active" : ""}`;
+                button.textContent = String(page);
+                button.setAttribute("aria-label", `Halaman ${page}`);
+                button.setAttribute("aria-current", page === userActivityPage ? "page" : "false");
+                button.addEventListener("click", () => {
+                    userActivityPage = page;
+                    renderManagedUserActivity();
+                });
+                userActivityPageNumbers.appendChild(button);
+            }
+        }
+
+        [
+            ["managedUserActivityFirstPage", userActivityPage === 1],
+            ["managedUserActivityPreviousPage", userActivityPage === 1],
+            ["managedUserActivityNextPage", userActivityPage === totalPages],
+            ["managedUserActivityLastPage", userActivityPage === totalPages]
+        ].forEach(([id, disabled]) => {
+            const button = document.getElementById(id);
+            if (button) button.disabled = disabled;
+        });
+    }
+
+    async function loadManagedUserActivity() {
+        if (!userActivityBody) return;
+        userActivityBody.innerHTML = '<tr><td colspan="6" class="audit-empty">Memuatkan tindakan pengguna...</td></tr>';
+        try {
+            const data = await request("/api/admin/user-activity?limit=1000");
+            userActivities = Array.isArray(data.activities) ? data.activities : [];
+            userActivityPage = 1;
+            renderManagedUserActivity();
+        } catch (error) {
+            console.error("User management activity loading error:", error);
+            userActivities = [];
+            userActivityBody.innerHTML = `<tr><td colspan="6" class="audit-empty">${escapeActivityHtml(error.message)}</td></tr>`;
+            if (userActivityPaginationInfo) userActivityPaginationInfo.textContent = "Gagal memuatkan tindakan";
+        }
+    }
+
+    function initializeManagedUserActivityControls() {
+        if (!userActivityBody) return;
+        if (userActivitySearch && userActivitySearch.dataset.bound !== "true") {
+            userActivitySearch.dataset.bound = "true";
+            userActivitySearch.addEventListener("input", () => {
+                userActivityPage = 1;
+                renderManagedUserActivity();
+            });
+        }
+        [
+            ["managedUserActivityFirstPage", () => { userActivityPage = 1; }],
+            ["managedUserActivityPreviousPage", () => { userActivityPage = Math.max(1, userActivityPage - 1); }],
+            ["managedUserActivityNextPage", () => {
+                userActivityPage = Math.min(
+                    Math.max(1, Math.ceil(userActivities.length / userActivityRowsPerPage)),
+                    userActivityPage + 1
+                );
+            }],
+            ["managedUserActivityLastPage", () => {
+                userActivityPage = Math.max(1, Math.ceil(userActivities.length / userActivityRowsPerPage));
+            }]
+        ].forEach(([id, updatePage]) => {
+            const button = document.getElementById(id);
+            if (!button || button.dataset.bound === "true") return;
+            button.dataset.bound = "true";
+            button.addEventListener("click", () => {
+                updatePage();
+                renderManagedUserActivity();
+            });
+        });
+    }
+
     async function loadUsers() {
         usersBody.innerHTML = '<div class="managed-user-list-empty">Memuatkan pengguna...</div>';
         try {
@@ -560,6 +747,7 @@ function initializeUserManagement() {
             empty.textContent = error.message;
             usersBody.appendChild(empty);
         }
+        await loadManagedUserActivity();
     }
 
     function syncBpaPermissionParents() {
@@ -1037,6 +1225,7 @@ function initializeUserManagement() {
         }
     });
 
+    initializeManagedUserActivityControls();
     document.getElementById("managedUserAccessError").hidden = true;
     const pageLoadTask = request("/api/auth/me").then(data => {
         window.appCurrentUser = {

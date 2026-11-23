@@ -5592,60 +5592,65 @@ table th {
 }
 
 #auditTable th,
-#auditTable td {
+#auditTable td,
+.audit-history-table th,
+.audit-history-table td {
     text-align: center;
     vertical-align: middle;
 }
 
-.audit-page #auditTable {
+.audit-page .audit-history-table {
     width: 100%;
     min-width: 1000px;
     table-layout: fixed;
 }
 
 #auditTable th,
-#auditTable td {
+#auditTable td,
+.audit-history-table th,
+.audit-history-table td {
     min-width: 0;
     max-width: none;
 }
 
-.audit-page #auditTable th:nth-child(1),
-.audit-page #auditTable td:nth-child(1) {
+.audit-page .audit-history-table th:nth-child(1),
+.audit-page .audit-history-table td:nth-child(1) {
     width: 10%;
     min-width: 105px;
 }
 
-.audit-page #auditTable th:nth-child(2),
-.audit-page #auditTable td:nth-child(2) {
+.audit-page .audit-history-table th:nth-child(2),
+.audit-page .audit-history-table td:nth-child(2) {
     width: 12%;
     min-width: 120px;
 }
 
-.audit-page #auditTable th:nth-child(3),
-.audit-page #auditTable td:nth-child(3) {
+.audit-page .audit-history-table th:nth-child(3),
+.audit-page .audit-history-table td:nth-child(3) {
     width: 17%;
     min-width: 160px;
 }
 
-.audit-page #auditTable th:nth-child(4),
-.audit-page #auditTable td:nth-child(4) {
+.audit-page .audit-history-table th:nth-child(4),
+.audit-page .audit-history-table td:nth-child(4) {
     width: 27%;
     min-width: 270px;
 }
 
-.audit-page #auditTable th:nth-child(5),
-.audit-page #auditTable td:nth-child(5) {
+.audit-page .audit-history-table th:nth-child(5),
+.audit-page .audit-history-table td:nth-child(5) {
     width: 18%;
     min-width: 180px;
 }
 
-.audit-page #auditTable th:nth-child(6),
-.audit-page #auditTable td:nth-child(6) {
+.audit-page .audit-history-table th:nth-child(6),
+.audit-page .audit-history-table td:nth-child(6) {
     width: 16%;
     min-width: 170px;
 }
 
-#auditTable td {
+#auditTable td,
+.audit-history-table td {
     height: auto;
     max-height: none;
     padding: 12px 10px;
@@ -5654,18 +5659,18 @@ table th {
     overflow-wrap: anywhere;
 }
 
-.audit-page #auditTable thead th {
+.audit-page .audit-history-table thead th {
     padding: 12px 10px;
     background: #f0f4fb;
     color: #526078;
     text-align: center;
 }
 
-.audit-page #auditTable tbody tr:nth-child(even) td {
+.audit-page .audit-history-table tbody tr:nth-child(even) td {
     background: #f8faff;
 }
 
-.audit-page #auditTable tbody tr:hover td {
+.audit-page .audit-history-table tbody tr:hover td {
     background: #eef4ff;
 }
 
@@ -5897,7 +5902,9 @@ table th {
 }
 
 #auditTableWrapper,
-#auditTable {
+#auditTable,
+.managed-user-audit-card .table-wrapper,
+.managed-user-audit-card .audit-history-table {
     border-radius: 0 !important;
 }
 
@@ -8308,14 +8315,19 @@ body {
     background: #f2f5fb;
 }
 
-#auditTable thead th {
+#auditTable thead th,
+.audit-history-table thead th {
     border-radius: 0 !important;
 }
 
 #auditTable thead th:first-child,
 #auditTable thead th:last-child,
 #auditTable thead tr:first-child th:first-child,
-#auditTable thead tr:first-child th:last-child {
+#auditTable thead tr:first-child th:last-child,
+.audit-history-table thead th:first-child,
+.audit-history-table thead th:last-child,
+.audit-history-table thead tr:first-child th:first-child,
+.audit-history-table thead tr:first-child th:last-child {
     border-radius: 0 !important;
 }
 

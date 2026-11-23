@@ -143,6 +143,65 @@
             </div>
         </section>
         </div>
+
+        <div class="audit-page managed-user-audit-page">
+            <section class="content-card audit-history-card managed-user-audit-card">
+                <div class="card-header-custom audit-history-header">
+                    <div>
+                        <h5>Sejarah Tindakan Pengguna</h5>
+                        <span>Rekod penambahan, kemas kini dan penyahaktifan akaun</span>
+                    </div>
+                    <div class="audit-history-controls">
+                        <div class="search-toolbar-group">
+                            <div class="search-box">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                                <input type="search" id="managedUserActivitySearch"
+                                    placeholder="Cari tindakan pengguna..." autocomplete="off">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table id="managedUserActivityTable" class="dataset-table audit-history-table">
+                        <thead>
+                            <tr>
+                                <th><span>Pengguna</span></th>
+                                <th><span>Tindakan</span></th>
+                                <th><span>Pada</span></th>
+                                <th><span>Perubahan</span></th>
+                                <th><span>Set Data</span></th>
+                                <th><span>Masa</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="managedUserActivityBody"></tbody>
+                    </table>
+                </div>
+                <div class="pagination-bar">
+                    <div class="pagination-info-group">
+                        <div id="managedUserActivityPaginationInfo" class="pagination-info">Memuatkan tindakan...</div>
+                    </div>
+                    <div class="pagination-controls">
+                        <button type="button" id="managedUserActivityFirstPage" class="page-button"
+                            aria-label="Halaman pertama">
+                            <i class="bi bi-chevron-double-left" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" id="managedUserActivityPreviousPage" class="page-button"
+                            aria-label="Halaman sebelumnya">
+                            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <div id="managedUserActivityPageNumbers" class="pagination-controls"></div>
+                        <button type="button" id="managedUserActivityNextPage" class="page-button"
+                            aria-label="Halaman seterusnya">
+                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" id="managedUserActivityLastPage" class="page-button"
+                            aria-label="Halaman terakhir">
+                            <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
     </div>
 
     <dialog class="bpa-create-dialog managed-user-access-modal" id="managedUserAccessModal"
