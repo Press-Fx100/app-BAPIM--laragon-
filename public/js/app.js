@@ -1997,7 +1997,7 @@ function prepareBpaSkuModal(dialog) {
     const exampleWindow = layout?.querySelector(".bpa-sku-example-window");
     const footer = dialog.querySelector(".bpa-sku-modal-footer");
     const header = dialog.querySelector(".bpa-create-dialog__header");
-    if (!body || !page || !layout || !formWindow || !exampleWindow || !footer || !header) return;
+    if (!body || !page || !layout || !formWindow || !footer || !header) return;
 
     let headerActions = header.querySelector(".bpa-create-dialog__header-actions");
     if (!headerActions) {
@@ -2006,31 +2006,37 @@ function prepareBpaSkuModal(dialog) {
 
         headerActions = document.createElement("div");
         headerActions.className = "bpa-create-dialog__header-actions";
-        const exampleToggle = document.createElement("button");
-        exampleToggle.type = "button";
-        exampleToggle.className = "bpa-sku-example-toggle";
-        exampleToggle.setAttribute("aria-label", "Tunjukkan contoh");
-        exampleToggle.setAttribute("aria-expanded", "false");
-        exampleToggle.setAttribute("aria-controls", "bpa-sku-example-window");
-        exampleToggle.innerHTML = '<i class="bi bi-lightbulb" aria-hidden="true"></i>';
         closeButton.replaceWith(headerActions);
-        headerActions.append(exampleToggle, closeButton);
+        if (exampleWindow) {
+            const exampleToggle = document.createElement("button");
+            exampleToggle.type = "button";
+            exampleToggle.className = "bpa-sku-example-toggle";
+            exampleToggle.setAttribute("aria-label", "Tunjukkan contoh");
+            exampleToggle.setAttribute("aria-expanded", "false");
+            exampleToggle.setAttribute("aria-controls", "bpa-sku-example-window");
+            exampleToggle.innerHTML = '<i class="bi bi-lightbulb" aria-hidden="true"></i>';
+            headerActions.append(exampleToggle);
+        }
+        headerActions.append(closeButton);
     }
-    exampleWindow.id = "bpa-sku-example-window";
+    if (exampleWindow) exampleWindow.id = "bpa-sku-example-window";
 
     const content = [...formWindow.childNodes];
     body.replaceChildren(...content);
     body.classList.add("bpa-sku-form-body");
     formWindow.replaceChildren(header, body, footer);
-    dialog.replaceChildren(formWindow, exampleWindow);
+    dialog.replaceChildren(formWindow);
+    if (exampleWindow) dialog.append(exampleWindow);
     dialog.classList.add(
         "bpa-create-dialog--sku-split",
         "bpa-create-dialog--sku-example-collapsed"
     );
     const exampleToggle = dialog.querySelector(".bpa-sku-example-toggle");
-    exampleToggle.setAttribute("aria-label", "Tunjukkan contoh");
-    exampleToggle.setAttribute("aria-expanded", "false");
-    exampleToggle.innerHTML = '<i class="bi bi-lightbulb" aria-hidden="true"></i>';
+    if (exampleToggle) {
+        exampleToggle.setAttribute("aria-label", "Tunjukkan contoh");
+        exampleToggle.setAttribute("aria-expanded", "false");
+        exampleToggle.innerHTML = '<i class="bi bi-lightbulb" aria-hidden="true"></i>';
+    }
 }
 
 function prepareBpaSkuEditModal(dialog) {

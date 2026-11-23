@@ -691,7 +691,7 @@ function renderTable() {
                 "tr"
             );
 
-        row.innerHTML = `<td colspan="6" class="audit-empty">Tiada aktiviti sepadan</td>`;
+        row.innerHTML = `<td colspan="5" class="audit-empty">Tiada aktiviti sepadan</td>`;
 
         tbody.appendChild(row);
     } else {
@@ -707,11 +707,7 @@ function renderTable() {
                 );
 
             const actionText = getActivityActionLabel(activity.action);
-            const actionClass = {
-                DATASET_CREATE: "dataset-add",
-                DATASET_UPDATE: "dataset-update",
-                DATASET_DELETE: "dataset-delete"
-            }[activity.action] || actionText.toLowerCase().replaceAll(" ", "-");
+            const actionClass = getActivityActionBadgeClass(activity.action);
             const action = escapeHTML(actionText);
             const user = escapeHTML(activity.username);
             const userBadgeStyle = getUserBadgeStyle(activity.username);
@@ -763,10 +759,6 @@ function renderTable() {
                 </td>
 
                 <td>
-                    <span class="audit-dataset-cell" title="${escapeHTML(activity.dataset || "—")}">${escapeHTML(activity.dataset || "—")}</span>
-                </td>
-
-                <td>
                     ${escapeHTML([dateTime.date, dateTime.time].filter(Boolean).join(" ") || "—")}
                 </td>
             `;
@@ -804,13 +796,43 @@ function renderTable() {
 }
 
 function getActivityActionLabel(action) {
+    const normalizedAction = String(action ?? "").trim().toUpperCase();
     return ({
         EDIT: "UPDATE",
         STATUS_CHANGE: "UPDATE",
         DATASET_CREATE: "DATASET ADD",
         DATASET_UPDATE: "DATASET UPDATE",
         DATASET_DELETE: "DATASET DELETE"
-    })[action] || action;
+    })[normalizedAction] || normalizedAction.replace(/_+/g, " ");
+}
+
+function getActivityActionBadgeClass(action) {
+    const normalizedAction = String(action ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+    const datasetBadgeClasses = {
+        DATASET_CREATE: "dataset-add",
+        DATASET_ADD: "dataset-add",
+        DATASET_UPDATE: "dataset-update",
+        DATASET_DELETE: "dataset-delete"
+    };
+    if (datasetBadgeClasses[normalizedAction]) {
+        return datasetBadgeClasses[normalizedAction];
+    }
+
+    if (normalizedAction === "STATUS_CHANGE") {
+        return "update";
+    }
+
+    const verb = normalizedAction.split("_").pop();
+    if (["ADD", "ADDED", "CREATE", "CREATED", "INSERT", "INSERTED"].includes(verb)) {
+        return "add";
+    }
+    if (["DELETE", "DELETED", "REMOVE", "REMOVED"].includes(verb)) {
+        return "delete";
+    }
+    if (["CHANGE", "CHANGED", "EDIT", "EDITED", "UPDATE", "UPDATED"].includes(verb)) {
+        return "update";
+    }
+    return "other";
 }
 
 function populateActivityFilters() {

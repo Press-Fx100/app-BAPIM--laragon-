@@ -21,6 +21,20 @@ if (!ctype_digit((string)$tahun)) $tahun = date('Y');
 if (!in_array($scope, ['ALL','BPA','UNIT'], true)) $scope = 'ALL';
 
 $bulanSemasa = (int)date('n');
+$namaBulan = [
+    1 => 'JANUARI',
+    2 => 'FEBRUARI',
+    3 => 'MAC',
+    4 => 'APRIL',
+    5 => 'MEI',
+    6 => 'JUN',
+    7 => 'JULAI',
+    8 => 'OGOS',
+    9 => 'SEPTEMBER',
+    10 => 'OKTOBER',
+    11 => 'NOVEMBER',
+    12 => 'DISEMBER',
+][$bulanSemasa];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     if (!$canManageSku) {
@@ -41,12 +55,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
         $msg = "Rekod SKU tidak sah.";
     } else {
         try {
+            $skuInfo = $pdo->prepare("
+                SELECT tahun, scope_type, unit_id, bil
+                FROM sku_aktiviti
+                WHERE sku_aktiviti_id = ?
+                LIMIT 1
+            ");
+            $skuInfo->execute([$deleteId]);
+            $deletedSku = $skuInfo->fetch(PDO::FETCH_ASSOC) ?: [];
+
             $delete = $pdo->prepare("DELETE FROM sku_aktiviti WHERE sku_aktiviti_id=?");
             $delete->execute([$deleteId]);
             $deleted = $delete->rowCount() > 0;
             $msg = $deleted ? "SKU berjaya dipadam." : "Rekod SKU tidak ditemui.";
             if ($deleted) {
-                record_bapim_action($pdo, 'sku_delete', 'SKU', 'SKU #' . $deleteId);
+                record_bapim_action($pdo, 'sku_delete', 'SKU', 'SKU #' . $deleteId, null, [
+                    'scope_type' => $deletedSku['scope_type'] ?? '',
+                    'unit_id' => $deletedSku['unit_id'] ?? null,
+                    'bil' => $deletedSku['bil'] ?? '',
+                    'year' => $deletedSku['tahun'] ?? '',
+                ]);
             }
 
             if ($isAjaxRequest) {
@@ -113,6 +141,7 @@ SELECT
   s.cara_kira_pencapaian,
   s.sasaran_nilai,
   s.sasaran_unit,
+  s.sasaran_unit_position,
   s.sasaran_rm,
   s.manual_semasa_nilai,
   s.catatan,
@@ -269,6 +298,18 @@ function formatSasaranNombor($nilai) {
     return rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
 }
 
+function formatSasaranDenganUnit($nilai, string $unit, string $position): string {
+    if ($nilai === null) return '';
+    $formattedValue = strtoupper($unit) === 'RM'
+        ? number_format((float)$nilai, 2, '.', ',')
+        : formatSasaranNombor($nilai);
+    if ($unit === '') return $formattedValue;
+    if ($unit === '%' && $position !== 'prefix') return $formattedValue . '%';
+    return $position === 'prefix'
+        ? $unit . ' ' . $formattedValue
+        : $formattedValue . ' ' . $unit;
+}
+
 function formatPercent($v) {
     if ($v === null) return '-';
     if (abs($v - round($v)) < 0.00001) return (string)intval(round($v)) . '%';
@@ -354,16 +395,18 @@ function kiraPeratusSemasa(array $r) {
     }
 
     .sku-table:not(.sku-table--actions) .w-bil{ width:5%; }
-    .sku-table:not(.sku-table--actions) .w-aktiviti{ width:34%; }
-    .sku-table:not(.sku-table--actions) .w-sasaran{ width:13%; }
-    .sku-table:not(.sku-table--actions) .w-pencapaian{ width:19%; }
-    .sku-table:not(.sku-table--actions) .w-catatan{ width:29%; }
+    .sku-table:not(.sku-table--actions) .w-aktiviti{ width:21%; }
+    .sku-table:not(.sku-table--actions) .w-sasaran{ width:10%; }
+    .sku-table:not(.sku-table--actions) .w-pencapaian{ width:14%; }
+    .sku-table:not(.sku-table--actions) .w-nilai-semasa{ width:12%; }
+    .sku-table:not(.sku-table--actions) .w-catatan{ width:38%; }
     .sku-table--actions .w-bil{ width:5%; }
-    .sku-table--actions .w-aktiviti{ width:24%; }
-    .sku-table--actions .w-sasaran{ width:12%; }
-    .sku-table--actions .w-pencapaian{ width:16%; }
-    .sku-table--actions .w-catatan{ width:29%; }
-    .sku-table--actions .w-tindakan{ width:14%; }
+    .sku-table--actions .w-aktiviti{ width:18%; }
+    .sku-table--actions .w-sasaran{ width:10%; }
+    .sku-table--actions .w-pencapaian{ width:13%; }
+    .sku-table--actions .w-nilai-semasa{ width:10%; }
+    .sku-table--actions .w-catatan{ width:35%; }
+    .sku-table--actions .w-tindakan{ width:9%; }
     .sku-table .w-tindakan .budget-row-actions{
       display:flex;
       justify-content:flex-end;
@@ -411,6 +454,10 @@ function kiraPeratusSemasa(array $r) {
     .scope-mini.scope-mini--badge.bpa-dashboard-card--yellow{
       background:#fff7df !important;
       color:#d39a10 !important;
+    }
+    .scope-mini.scope-mini--badge.sku-achievement-badge{
+      background:#e6ddff !important;
+      color:#5b3fa3 !important;
     }
     .sub-mini{ font-size:11px; color:#6c757d; margin-top:3px; }
 
@@ -563,12 +610,24 @@ function kiraPeratusSemasa(array $r) {
 
       <div class="table-responsive sku-table-wrapper">
       <table class="table sku-table<?= $showSkuActions ? ' sku-table--actions' : '' ?> mb-0">
+        <colgroup>
+          <col class="w-bil">
+          <col class="w-aktiviti">
+          <col class="w-sasaran">
+          <col class="w-pencapaian">
+          <col class="w-nilai-semasa">
+          <col class="w-catatan">
+          <?php if ($showSkuActions): ?>
+            <col class="w-tindakan">
+          <?php endif; ?>
+        </colgroup>
         <thead>
           <tr>
             <th class="w-bil">BIL.</th>
             <th class="w-aktiviti">AKTIVITI</th>
             <th class="w-sasaran">SASARAN</th>
-            <th class="w-pencapaian th-purple">PENCAPAIAN SEMASA</th>
+            <th class="w-pencapaian th-purple">PENCAPAIAN SEHINGGA<br><?= $namaBulan ?> <?= (int)$tahun ?></th>
+            <th class="w-nilai-semasa">JUMLAH BELANJA/<br>ASNAF/<br>PROGRAM</th>
             <th class="w-catatan">CATATAN</th>
             <?php if ($showSkuActions): ?>
               <th class="w-tindakan" aria-label="Tindakan"></th>
@@ -578,36 +637,21 @@ function kiraPeratusSemasa(array $r) {
         <tbody>
           <?php if (!$rows): ?>
             <tr>
-              <td colspan="<?= $showSkuActions ? 6 : 5 ?>" class="text-center text-muted py-4">Tiada data SKU.</td>
+              <td colspan="<?= $showSkuActions ? 7 : 6 ?>" class="text-center text-muted py-4">Tiada data SKU.</td>
             </tr>
           <?php else: ?>
             <?php foreach ($rows as $r): ?>
               <?php
                 $semasa = getSemasaNilai($r);
                 $peratus = kiraPeratusSemasa($r);
-
-                $jumlahPaparan = '-';
-                $cara = $r['cara_kira_pencapaian'] ?? 'COUNT_PROGRAM';
-                $unitSasaran = trim((string)($r['sasaran_unit'] ?? ''));
                 $jenis = $r['jenis_sasaran'] ?? '';
-
-                if ($jenis === 'PERATUS_BAJET') {
-                    $val = getSemasaNilai($r);
-                    $jumlahPaparan = ($val === null) ? '-' : 'RM ' . number_format((float)$val, 2);
-                } elseif ($cara === 'SUM_RM') {
-                    $jumlahPaparan = 'RM ' . number_format((float)($r['semasa_sum_rm'] ?? 0), 2);
-                } elseif ($cara === 'SUM_PESERTA') {
-                    $jumlahPaparan = (string)intval((float)($r['semasa_sum_peserta'] ?? 0)) . ($unitSasaran ? " " . htmlspecialchars($unitSasaran) : '');
-                } elseif ($cara === 'COUNT_PROGRAM') {
-                    $jumlahPaparan = (string)intval((float)($r['semasa_count_program'] ?? 0)) . ($unitSasaran ? " " . htmlspecialchars($unitSasaran) : '');
-                  } elseif ($cara === 'SUM_PESERTA_10K') {
-                    $jumlahPaparan = (string)intval((float)($r['semasa_sum_peserta_10k'] ?? 0)) . ($unitSasaran ? " " . htmlspecialchars($unitSasaran) : '');
-
-                } elseif ($cara === 'SUM_PESERTA_ZAKAT') {
-                    $jumlahPaparan = (string)intval((float)($r['semasa_sum_peserta_zakat'] ?? 0)) . ($unitSasaran ? " " . htmlspecialchars($unitSasaran) : '');
-
-                  } elseif ($cara === 'MANUAL') {
-                    $jumlahPaparan = ($semasa === null) ? '-' : (formatSasaranNombor($semasa) . ($unitSasaran ? " " . htmlspecialchars($unitSasaran) : ''));
+                $sasaranUnitTxt = trim((string)($r['sasaran_unit'] ?? ''));
+                $sasaranUnitPosition = ($r['sasaran_unit_position'] ?? 'suffix') === 'prefix' ? 'prefix' : 'suffix';
+                $jumlahText = '-';
+                if ($semasa !== null) {
+                    $jumlahText = $jenis === 'PERATUS_BAJET'
+                        ? 'RM ' . number_format((float)$semasa, 2, '.', ',')
+                        : formatSasaranDenganUnit($semasa, $sasaranUnitTxt, $sasaranUnitPosition);
                 }
               ?>
               <tr>
@@ -636,10 +680,7 @@ function kiraPeratusSemasa(array $r) {
 
                 <td class="center w-sasaran">
                   <?php
-                    $sasaranNilaiTxt = formatSasaranNombor($r['sasaran_nilai']);
-                    $sasaranUnitTxt = trim((string)($r['sasaran_unit'] ?? ''));
-                    $sasaranIsPercent = $sasaranUnitTxt === '%';
-                    echo htmlspecialchars($sasaranNilaiTxt . ($sasaranIsPercent ? '%' : ($sasaranUnitTxt ? " " . $sasaranUnitTxt : '')));
+                    echo htmlspecialchars(formatSasaranDenganUnit($r['sasaran_nilai'], $sasaranUnitTxt, $sasaranUnitPosition));
 
                     if (($r['jenis_sasaran'] ?? '') === 'PERATUS_BAJET' && !empty($r['sasaran_rm'])) {
                       echo "<div class='sub-mini sku-sasaran-rm'>RM " . number_format((float)$r['sasaran_rm'], 2) . "</div>";
@@ -652,22 +693,13 @@ function kiraPeratusSemasa(array $r) {
                     if ($peratus === null) {
                       echo '-';
                     } else {
-                      echo "<span class='sku-achievement-badge'>" . htmlspecialchars(formatPercent($peratus)) . "</span>";
-                    }
-
-                    if ($semasa !== null && ($r['jenis_sasaran'] ?? '') !== 'PERATUS_BAJET') {
-                      echo "<div class='sub-mini'>Semasa:</div>";
-                    }
-
-                    if (($r['jenis_sasaran'] ?? '') === 'PERATUS_BAJET') {
-                      $rmNow = getSemasaNilai($r);
-                      echo "<div class='sub-mini'>Belanja:</div>";
-                      echo "<div class='sub-mini sku-current-total'>RM " . number_format((float)$rmNow, 2) . "</div>";
-                    }
-                    if (($r['jenis_sasaran'] ?? '') !== 'PERATUS_BAJET') {
-                      echo "<div class='sub-mini sku-current-total'>" . $jumlahPaparan . "</div>";
+                      echo "<span class='scope-mini scope-mini--badge sku-achievement-badge'>" . htmlspecialchars(formatPercent($peratus)) . "</span>";
                     }
                   ?>
+                </td>
+
+                <td class="center w-nilai-semasa">
+                  <?= htmlspecialchars($jumlahText) ?>
                 </td>
 
                 <td class="w-catatan">

@@ -45,11 +45,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     $deleteId = (int)$_POST['delete_id'];
 
     try {
+        $programInfo = $pdo->prepare("SELECT nama_program, tahun FROM program WHERE program_id = ? AND unit_id = ? LIMIT 1");
+        $programInfo->execute([$deleteId, $ulk_id]);
+        $deletedProgram = $programInfo->fetch(PDO::FETCH_ASSOC) ?: [];
+
         // pastikan delete hanya program ULK
         $stmt = $pdo->prepare("DELETE FROM program WHERE program_id=? AND unit_id=?");
         $stmt->execute([$deleteId, $ulk_id]);
         if ($stmt->rowCount() > 0) {
-            record_bapim_action($pdo, 'program_delete', 'Program ULK', 'Program #' . $deleteId);
+            record_bapim_action($pdo, 'program_delete', 'Program ULK', 'Program #' . $deleteId, null, [
+                'unit' => 'ULK',
+                'program' => $deletedProgram['nama_program'] ?? '',
+                'year' => $deletedProgram['tahun'] ?? '',
+            ]);
         }
         $msg = "Program berjaya dipadam.";
     } catch (Throwable $e) {

@@ -137,7 +137,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':status' => $status,
                 ':catatan' => ($catatan === '' ? null : $catatan),
             ]);
-            record_bapim_action($pdo, 'program_add', 'Program UAK', $nama_program);
+            record_bapim_action($pdo, 'program_add', 'Program UAK', $nama_program, null, [
+                'unit' => 'UAK',
+                'program' => $nama_program,
+                'year' => $tahun,
+            ]);
 
             if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
                 header('Content-Type: application/json; charset=utf-8');

@@ -134,7 +134,23 @@ if (!BPA_RENDER_IN_APP_SHELL) {
 require_once APP_ROOT . '/db_connect.php';
 require_once APP_ROOT . '/auth.php';
 
-function record_bapim_action(PDO $pdo, string $action, string $module, string $target, ?string $oldValue = null): void
+function ensureBpaSkuUnitPositionSchema(PDO $pdo): void
+{
+    if (!$pdo->query("SHOW COLUMNS FROM sku_aktiviti LIKE 'sasaran_unit_position'")->fetch()) {
+        $pdo->exec("ALTER TABLE sku_aktiviti ADD COLUMN sasaran_unit_position VARCHAR(8) NOT NULL DEFAULT 'suffix' AFTER sasaran_unit");
+    }
+}
+
+ensureBpaSkuUnitPositionSchema($pdo);
+
+function record_bapim_action(
+    PDO $pdo,
+    string $action,
+    string $module,
+    string $target,
+    ?string $oldValue = null,
+    array $context = []
+): void
 {
     $username = trim((string)($_SESSION['username'] ?? 'unknown'));
     try {
@@ -150,12 +166,46 @@ function record_bapim_action(PDO $pdo, string $action, string $module, string $t
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
+        $rowId = null;
+        $columnName = $module;
+        $year = trim((string)($context['year'] ?? ''));
+
+        if ($module === 'Bajet' && array_key_exists('unit_id', $context)) {
+            $unitId = $context['unit_id'];
+            $unitName = 'BPA';
+            if ($unitId !== null && $unitId !== '') {
+                $unitStatement = $bapimPdo->prepare('SELECT nama_unit FROM unit WHERE unit_id = ? LIMIT 1');
+                $unitStatement->execute([(int)$unitId]);
+                $unitName = (string)($unitStatement->fetchColumn() ?: 'Unit #' . (int)$unitId);
+            }
+            $rowId = trim($unitName . ' ' . $year);
+            $columnName = 'Tahun Bajet';
+        } elseif ($module === 'SKU' && array_key_exists('scope_type', $context)) {
+            $unitName = 'BPA';
+            if (($context['scope_type'] ?? '') === 'UNIT') {
+                $unitId = $context['unit_id'] ?? null;
+                if ($unitId !== null && $unitId !== '') {
+                    $unitStatement = $bapimPdo->prepare('SELECT nama_unit FROM unit WHERE unit_id = ? LIMIT 1');
+                    $unitStatement->execute([(int)$unitId]);
+                    $unitName = (string)($unitStatement->fetchColumn() ?: 'Unit #' . (int)$unitId);
+                }
+            }
+            $bil = trim((string)($context['bil'] ?? ''));
+            $rowId = trim('BIL ' . $bil . ' ' . $unitName . ' ' . $year);
+            $columnName = 'Nama Aktiviti';
+        } elseif (preg_match('/^Program ([A-Z]+)$/', $module, $matches) && isset($context['program'])) {
+            $unitName = trim((string)($context['unit'] ?? $matches[1]));
+            $programName = trim((string)$context['program']);
+            $rowId = trim($unitName . ' ' . $programName . ' ' . $year);
+            $columnName = 'Nama Program';
+        }
+
         $statement = $bapimPdo->prepare(
             'INSERT INTO user_activity
                 (username, dataset_id, dataset_name, action, row_id, column_name, old_value, new_value, progress_change)
-             VALUES (?, NULL, ?, ?, NULL, ?, ?, ?, 0)'
+             VALUES (?, NULL, ?, ?, ?, ?, ?, ?, 0)'
         );
-        $statement->execute([$username, $target, $action, $module, $oldValue, $target]);
+        $statement->execute([$username, $target, $action, $rowId, $columnName, $oldValue, $target]);
     } catch (Throwable $error) {
         error_log('BAPIM action log failed: ' . $error->getMessage());
     }

@@ -44,16 +44,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     }
 
     try {
-        $yearStmt = $pdo->prepare("SELECT tahun FROM bajet WHERE bajet_id = ?");
+        $yearStmt = $pdo->prepare("SELECT tahun, unit_id FROM bajet WHERE bajet_id = ?");
         $yearStmt->execute([$deleteId]);
-        $deletedYear = $yearStmt->fetchColumn();
+        $deletedBudget = $yearStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $deletedYear = $deletedBudget['tahun'] ?? false;
 
         $delete = $pdo->prepare("DELETE FROM bajet WHERE bajet_id=?");
         $delete->execute([$deleteId]);
         $deleted = $delete->rowCount() > 0;
         $msg = $deleted ? "Bajet berjaya dipadam." : "Rekod bajet tidak ditemui.";
         if ($deleted) {
-            record_bapim_action($pdo, 'bajet_delete', 'Bajet', 'Bajet #' . $deleteId . ($deletedYear !== false ? ' tahun ' . $deletedYear : ''));
+            record_bapim_action(
+                $pdo,
+                'bajet_delete',
+                'Bajet',
+                'Bajet #' . $deleteId . ($deletedYear !== false ? ' tahun ' . $deletedYear : ''),
+                null,
+                ['unit_id' => $deletedBudget['unit_id'] ?? null, 'year' => $deletedYear]
+            );
         }
 
         if ($isAjaxRequest) {

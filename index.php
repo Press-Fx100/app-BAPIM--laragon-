@@ -4087,21 +4087,6 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         white-space: nowrap;
         font-size: 11px;
     }
-    .bpa-shell-page [data-bpa-list-page="sku"] .sku-achievement-badge {
-        display: inline-flex;
-        min-height: 24px;
-        align-items: center;
-        justify-content: center;
-        padding: 3px 9px;
-        border-radius: 999px;
-        background: #e6ddff;
-        color: #5b3fa3;
-        font-size: 11px;
-        font-weight: 700;
-        line-height: 1.2;
-        white-space: nowrap;
-    }
-
     .bpa-shell-page [data-bpa-list-page="sku"] .scope-mini,
     .bpa-shell-page [data-bpa-list-page="sku"] .sub-mini {
         color: #7b8494;
