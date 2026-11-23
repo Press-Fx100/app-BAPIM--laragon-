@@ -43,6 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
         // pastikan delete hanya program UPU
         $stmt = $pdo->prepare("DELETE FROM program WHERE program_id=? AND unit_id=?");
         $stmt->execute([$deleteId, $UPU_UNIT_ID]);
+        if ($stmt->rowCount() > 0) {
+            record_bapim_action($pdo, 'program_delete', 'Program UPU', 'Program #' . $deleteId);
+        }
 
         $msg = "Program berjaya dipadam.";
     } catch (Throwable $e) {
@@ -286,11 +289,12 @@ if ($role === 'admin') {
                       <?php endif; ?>
 
                       <?php if (in_array($role, ['admin','editor'], true)): ?>
-                        <form method="post">
+                        <form method="post" data-bpa-confirm-title="Padam program?"
+                              data-bpa-confirm-message="Adakah anda pasti mahu memadam program ini?"
+                              data-bpa-confirm-text="Padam">
                           <input type="hidden" name="delete_id" value="<?= (int)$r['program_id'] ?>">
                           <button type="submit" class="budget-row-action budget-row-action--delete"
-                                  title="Delete" aria-label="Delete program"
-                                  onclick="return confirm('Padam program ini?')">
+                                  title="Delete" aria-label="Delete program">
                             <i class="bi bi-trash3" aria-hidden="true"></i>
                           </button>
                         </form>

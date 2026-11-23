@@ -133,6 +133,33 @@ if (!BPA_RENDER_IN_APP_SHELL) {
 
 require_once APP_ROOT . '/db_connect.php';
 require_once APP_ROOT . '/auth.php';
+
+function record_bapim_action(PDO $pdo, string $action, string $module, string $target, ?string $oldValue = null): void
+{
+    $username = trim((string)($_SESSION['username'] ?? 'unknown'));
+    try {
+        $config = require __DIR__ . '/../config/database.php';
+        $dsn = sprintf(
+            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+            $config['host'],
+            $config['port'],
+            $config['database']
+        );
+        $bapimPdo = new PDO($dsn, $config['username'], $config['password'], [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+        $statement = $bapimPdo->prepare(
+            'INSERT INTO user_activity
+                (username, dataset_id, dataset_name, action, row_id, column_name, old_value, new_value, progress_change)
+             VALUES (?, NULL, ?, ?, NULL, ?, ?, ?, 0)'
+        );
+        $statement->execute([$username, $target, $action, $module, $oldValue, $target]);
+    } catch (Throwable $error) {
+        error_log('BAPIM action log failed: ' . $error->getMessage());
+    }
+}
 if (!BPA_RENDER_IN_APP_SHELL) {
     apply_bapim_theme();
 }

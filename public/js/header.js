@@ -13,12 +13,18 @@ function canAccessAppPage(page) {
     const user = window.appCurrentUser;
     if (!user) return false;
     if (Number(user.accessLevel) === 0) return true;
+    if (page === "recipientParticipants") {
+        return canAccessAppPage("recipients") && canAccessAppPage("participants");
+    }
     return user.permissions?.[page]?.access === true;
 }
 
 function canEditAppPage(page) {
     const user = window.appCurrentUser;
     if (!user) return false;
+    if (page === "recipientParticipants") {
+        return canEditAppPage("recipients") && canEditAppPage("participants");
+    }
     if (Number(user.accessLevel) === 0) {
         return ["recipients", "participants", "upload", "dataset", "account", "manageUsers"].includes(page);
     }
@@ -28,13 +34,14 @@ function canEditAppPage(page) {
 
 function pagePermissionForPath(path) {
     if (path === "/") return "dashboard";
+    if (path === "/upp-dashboard") return "bpaDashboardUPP";
+    if (path === "/penerima-peserta") return "recipientParticipants";
     if (path === "/penerima-bantuan") return "recipients";
     if (path === "/peserta-program") return "participants";
     if (path === "/muat-naik") return "upload";
     if (path === "/set-data" || path.startsWith("/set-data/")) return "dataset";
     if (path === "/aktiviti-pengguna") return "activity";
     if (path === "/akaun-pengguna") return "account";
-    if (path === "/log-perisian") return "updates";
     if (path === "/pengurusan-pengguna") return "manageUsers";
     return null;
 }
@@ -205,7 +212,9 @@ function updatePageInfo() {
     let breadcrumb = "SISTEM PENGURUSAN DATA";
 
     if (path === "/") {
-        title = "Papan Pemuka";
+        title = "Dashboard";
+    } else if (path === "/upp-dashboard") {
+        title = "Dashboard UPP";
     } else if (path === "/muat-naik") {
         title = "Muat Naik";
     } else if (path === "/set-data") {
@@ -218,8 +227,8 @@ function updatePageInfo() {
         title = "Profil Pengguna";
     } else if (path === "/pengurusan-pengguna") {
         title = "Pengurusan Pengguna";
-    } else if (path === "/log-perisian") {
-        title = "Log Perisian";
+    } else if (path === "/penerima-peserta") {
+        title = "Penerima Bantuan & Peserta Program";
     } else if (path === "/peserta-program") {
         title = "Peserta Program";
     } else if (path === "/penerima-bantuan") {
@@ -293,6 +302,7 @@ function typeHeaderTitle(element, text) {
     typeNextCharacter();
 }
 
+window.typeHeaderTitle = typeHeaderTitle;
 
 function getUserColorBackground(color) {
     return `#${[1, 3, 5].map(offset => {
@@ -328,9 +338,6 @@ function setupUserDropdown() {
 
     const manageUsersButton =
         document.getElementById("manageUsersButton");
-
-    const updatesButton =
-        document.getElementById("updatesButton");
 
     const logoutButton =
         document.getElementById("logoutButton");
@@ -399,18 +406,6 @@ function setupUserDropdown() {
         });
     }
 
-    if (updatesButton) {
-        updatesButton.addEventListener("click", () => {
-            closeDropdown();
-            const updatesUrl = typeof window.appUrl === "function" ? window.appUrl("/log-perisian") : "/log-perisian";
-            if (typeof window.appUrl === "function") {
-                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: updatesUrl } }));
-            } else {
-                window.location.assign(updatesUrl);
-            }
-        });
-    }
-
     if (logoutButton) {
         logoutButton.addEventListener("click", () => {
             closeDropdown();
@@ -444,6 +439,12 @@ async function logout() {
 
     localStorage.removeItem("loggedInUser");
     localStorage.removeItem("displayName");
+
+    document.body.classList.add("auth-logout-transition");
+    await window.animateAuthPageTransition?.(
+        document.querySelector(".app-wrapper"),
+        "exit"
+    );
 
     window.location.href = typeof window.appUrl === "function"
         ? window.appUrl("/log-masuk")

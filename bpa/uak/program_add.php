@@ -134,6 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':status' => $status,
                 ':catatan' => ($catatan === '' ? null : $catatan),
             ]);
+            record_bapim_action($pdo, 'program_add', 'Program UAK', $nama_program);
+
+            if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => true, 'message' => 'Program berjaya ditambah.', 'programId' => (int)$pdo->lastInsertId()]);
+                exit;
+            }
 
             $ok = "Program UPK berjaya ditambah!";
             $_POST = [];

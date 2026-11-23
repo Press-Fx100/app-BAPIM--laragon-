@@ -64,6 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':wakalah' => $jumlah_dana_wakalah_rm,
                 ':catatan' => ($catatan === '' ? null : $catatan),
             ]);
+            record_bapim_action($pdo, 'bajet_add', 'Bajet', 'Bajet tahun ' . $tahun);
 
             if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
                 header('Content-Type: application/json; charset=utf-8');

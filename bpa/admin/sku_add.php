@@ -167,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':cara_kira' => $cara_kira,
                 ':manual_semasa' => ($cara_kira === 'MANUAL' ? $manual_semasa_nilai : null),
             ]);
+            record_bapim_action($pdo, 'sku_add', 'SKU', $nama_aktiviti);
 
             if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
                 header('Content-Type: application/json; charset=utf-8');

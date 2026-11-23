@@ -3,6 +3,10 @@
         ["nama", "NAMA"],
         ["kadPengenalan", "KAD PENGENALAN"],
         ["ketegori", "KATEGORI"],
+        ["incomeBefore", "PENDAPATAN AWAL/SEBELUM"],
+        ["incomeAfter", "PENDAPATAN SEMASA/SELEPAS"],
+        ["status", "STATUS"],
+        ["catatan", "CATATAN"],
         ["jumlahProgram", "PROGRAM"],
         ["programs", "PROGRAM"],
         ["unit", "UNIT"],
@@ -13,7 +17,7 @@
     let rows = [];
     let filteredRows = [];
     let visibleColumns = columns.map(([key]) => key !== "unit" && key !== "sourceFile");
-    let columnWidths = [45, ...columns.map(() => 160)];
+    let columnWidths = [45, ...columns.map(() => 160), 84];
     let currentPage = 1;
     let sortColumn = -1;
     let sortDirection = "asc";
@@ -22,7 +26,6 @@
     let selectionAnchor = null;
     let selectionRange = null;
     let mouseSelecting = false;
-    let deleteMode = false;
     let editingCell = null;
     let pendingChanges = new Map(), pendingDeleteRow = null;
     let savingChanges = false;
@@ -30,14 +33,17 @@
     let undoStack = [];
     let redoStack = [];
     let documentEventsBound = false;
-    let categorySuggestionState = null;
+    let suggestionState = null;
 
     const rowKey = row => `${row.kadPengenalan}:${(row.sourceRecords || [])
         .map(record => `${record.datasetId}:${record.rowIndex}`).join(",")}`;
     const cellValue = (row, key) => key === "programs"
         ? (row.programs || []).join(", ")
         : row[key] ?? "";
-    const editable = key => ["nama", "kadPengenalan", "ketegori", "programs"].includes(key);
+    const editable = key => [
+        "nama", "kadPengenalan", "ketegori", "incomeBefore",
+        "incomeAfter", "status", "catatan", "programs"
+    ].includes(key);
     const escapeHtml = value => String(value ?? "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
         .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -64,7 +70,7 @@
         const body = $("participantTableBody");
         if (!body || body.dataset.ready === "true") return;
         body.dataset.ready = "true";
-        ["participantAddForm", "participantProgramsOverlay"].forEach(id => {
+        ["participantAddForm", "participantProgramsDialog"].forEach(id => {
             const overlay = $(id);
             if (overlay && overlay.parentElement !== document.body) {
                 document.body.appendChild(overlay);
@@ -73,7 +79,7 @@
         rows = [];
         filteredRows = [];
         visibleColumns = columns.map(([key]) => key !== "unit" && key !== "sourceFile");
-        columnWidths = [45, ...columns.map(() => 160)];
+        columnWidths = [45, ...columns.map(() => 160), 84];
         currentPage = 1;
         sortColumn = -1;
         sortDirection = "asc";
@@ -87,13 +93,11 @@
         selectionAnchor = null;
         selectionRange = null;
         mouseSelecting = false;
-        deleteMode = false;
         editingCell = null;
         pendingChanges.clear();
         pendingDeleteRow = null;
         undoStack = [];
         redoStack = [];
-        deleteButtonStyles(false);
         window.hasUnsavedTableChanges = () =>
             pendingChanges.size > 0 ||
             Boolean(editingCell && editingCell.cell.querySelector(".inline-edit-input")?.value !== editingCell.oldValue);
@@ -103,8 +107,6 @@
             selectedCell = null;
             selectionAnchor = null;
             selectionRange = null;
-            deleteMode = false;
-            deleteButtonStyles(false);
         };
         $("participantSearch").addEventListener("input", applyFilters);
         $("participantAddButton").addEventListener("click", openAddForm);
@@ -113,13 +115,19 @@
         $("participantCancelDelete").addEventListener("click", closeDeleteConfirmation);
         $("participantConfirmDelete").addEventListener("click", confirmDelete);
         $("participantDeleteOverlay").addEventListener("click", closeDeleteConfirmation);
-        $("participantCancelAdd").addEventListener("click", closeAddForm);
         $("participantCloseAdd").addEventListener("click", closeAddForm);
         $("participantAddForm").addEventListener("click", event => {
-            if (event.target === $("participantAddForm")) closeAddForm();
+            const dialog = $("participantAddForm");
+            if (event.target !== dialog) return;
+            const bounds = dialog.getBoundingClientRect();
+            if (event.clientX < bounds.left || event.clientX > bounds.right
+                || event.clientY < bounds.top || event.clientY > bounds.bottom) closeAddForm();
+        });
+        $("participantAddForm").addEventListener("cancel", event => {
+            event.preventDefault();
+            closeAddForm();
         });
         $("participantConfirmAdd").addEventListener("click", addRecord);
-        $("participantDeleteButton").addEventListener("click", toggleDeleteMode);
         $("participantColumnButton").addEventListener("click", event => toggleMenu(event, "participantColumnMenu", "participantFilterMenu"));
         $("participantFilterButton").addEventListener("click", event => toggleMenu(event, "participantFilterMenu", "participantColumnMenu"));
         $("participantSelectAllColumns").addEventListener("click", toggleAllColumns);
@@ -127,12 +135,22 @@
             $(`participant${name}Page`).addEventListener("click", () => changePage(name))
         );
         $("closeParticipantPrograms")?.addEventListener("click", closeProgramsModal);
-        $("closeParticipantProgramsFooter")?.addEventListener("click", closeProgramsModal);
-        $("participantProgramsOverlay")?.addEventListener("click", event => {
-            if (event.target === $("participantProgramsOverlay")) closeProgramsModal();
+        $("participantProgramsDialog")?.addEventListener("cancel", event => {
+            event.preventDefault();
+            closeProgramsModal();
+        });
+        $("participantProgramsDialog")?.addEventListener("click", event => {
+            const dialog = $("participantProgramsDialog");
+            if (event.target !== dialog) return;
+            const bounds = dialog.getBoundingClientRect();
+            if (event.clientX < bounds.left || event.clientX > bounds.right
+                || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+                closeProgramsModal();
+            }
         });
         if (!documentEventsBound) {
             document.addEventListener("click", closeMenus);
+            document.addEventListener("click", clearCellSelectionOnOutsideClick);
             document.addEventListener("keydown", handleKeyboard);
             document.addEventListener("copy", copyClipboard);
             document.addEventListener("cut", cutClipboard);
@@ -149,10 +167,13 @@
         const pathname = typeof window.appPathname === "function"
             ? window.appPathname(window.location.pathname)
             : window.location.pathname;
-        if (pathname === "/peserta-program") return;
+        if (
+            pathname === "/peserta-program" ||
+            (pathname === "/penerima-peserta" && $("participantTableBody"))
+        ) return;
         closeAddForm();
         closeProgramsModal();
-        ["participantAddForm", "participantProgramsOverlay"].forEach(id => {
+        ["participantAddForm", "participantProgramsDialog"].forEach(id => {
             const overlay = $(id);
             if (overlay?.parentElement === document.body) overlay.remove();
         });
@@ -172,7 +193,9 @@
             applyFilters();
         } catch (error) {
             console.error(error);
-            $("participantLoading").textContent = "Gagal memuatkan peserta.";
+            const loading = $("participantLoading");
+            loading.textContent = "Gagal memuatkan peserta.";
+            loading.classList.add("recipient-participant-data-error");
         }
     }
 
@@ -293,6 +316,7 @@
         $("participantEmpty").style.display = rows.length ? "none" : "block";
         $("participantNoResults").style.display = rows.length && !filteredRows.length ? "block" : "none";
         $("participantTableWrapper").style.display = filteredRows.length ? "block" : "none";
+        $("participantRecordCount").textContent = `${filteredRows.length.toLocaleString()} rekod`;
         const head = table.tHead;
         head.innerHTML = "";
         const headerRow = head.insertRow();
@@ -301,6 +325,11 @@
             if (key === "programs") return;
             if (visibleColumns[index]) appendHeader(headerRow, label, index);
         });
+        const actionHeader = document.createElement("th");
+        actionHeader.className = "row-action-column";
+        actionHeader.setAttribute("aria-label", "Tindakan");
+        applyWidth(actionHeader, columns.length + 1);
+        headerRow.appendChild(actionHeader);
         const body = $("participantTableBody");
         body.innerHTML = "";
         const start = (currentPage - 1) * pageSize;
@@ -309,7 +338,53 @@
             const tr = document.createElement("tr");
             const numberCell = document.createElement("td");
             numberCell.className = "row-select-cell";
-            if (deleteMode) {
+            numberCell.innerHTML = `<span class="row-number">${start + offset + 1}</span>`;
+            tr.appendChild(numberCell);
+            columns.forEach(([key], columnIndex) => {
+                if (key === "programs") return;
+                if (!visibleColumns[columnIndex]) return;
+                const td = document.createElement("td");
+                td.className = "excel-cell";
+                if (key === "jumlahProgram") {
+                    td.textContent = `${cellValue(row, key)} Program`;
+                } else {
+                    td.textContent = cellValue(row, key);
+                }
+                td.title = td.textContent;
+                td.tabIndex = 0;
+                td.dataset.rowIndex = String(actualIndex);
+                td.dataset.columnIndex = String(columnIndex);
+                td.addEventListener("mousedown", event => beginCellSelection(event, td));
+                td.addEventListener("mouseenter", () => {
+                    if (mouseSelecting) selectRange(actualIndex, columnIndex);
+                });
+                td.addEventListener("dblclick", () => startEditing(td, row, key));
+                td.addEventListener("keydown", event => handleCellKey(event, td, row, key, columnIndex));
+                applyWidth(td, columnIndex + 1);
+                tr.appendChild(td);
+            });
+            const actionCell = document.createElement("td");
+            actionCell.className = "row-action-cell";
+            applyWidth(actionCell, columns.length + 1);
+            const actionButtons = document.createElement("div");
+            actionButtons.className = "participant-row-actions";
+            const programsButton = document.createElement("button");
+            programsButton.type = "button";
+            programsButton.className = "budget-row-action";
+            programsButton.setAttribute(
+                "aria-label",
+                `Lihat senarai program untuk ${row.nama || row.kadPengenalan || "peserta"}`
+            );
+            programsButton.title = "Lihat senarai program";
+            programsButton.innerHTML = '<i class="bi bi-three-dots" aria-hidden="true"></i>';
+            programsButton.addEventListener("mousedown", event => event.stopPropagation());
+            programsButton.addEventListener("dblclick", event => event.stopPropagation());
+            programsButton.addEventListener("click", event => {
+                event.stopPropagation();
+                openProgramsModal(row);
+            });
+            actionButtons.appendChild(programsButton);
+            if (typeof window.canEditAppPage === "function" && window.canEditAppPage("participants")) {
                 const deleteButton = document.createElement("button");
                 deleteButton.type = "button";
                 deleteButton.className = "row-delete-button";
@@ -318,68 +393,15 @@
                     `Padam rekod ${row.nama || row.kadPengenalan}`
                 );
                 deleteButton.title = "Padam rekod";
-                deleteButton.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+                deleteButton.innerHTML = '<i class="bi bi-trash3" aria-hidden="true"></i>';
                 deleteButton.addEventListener("click", event => {
                     event.stopPropagation();
                     openDeleteConfirmation(row);
                 });
-                numberCell.appendChild(deleteButton);
-            } else {
-                numberCell.innerHTML = `<span class="row-number">${start + offset + 1}</span>`;
+                actionButtons.appendChild(deleteButton);
             }
-            tr.appendChild(numberCell);
-            columns.forEach(([key], columnIndex) => {
-                if (key === "programs") return;
-                if (!visibleColumns[columnIndex]) return;
-                const td = document.createElement("td");
-                td.className = "excel-cell";
-                if (key === "jumlahProgram") {
-                    const programCell = document.createElement("div");
-                    programCell.className = "participant-program-cell";
-                    const count = document.createElement("span");
-                    count.textContent = `${cellValue(row, key)} Program`;
-                    programCell.appendChild(count);
-                    const programButton = document.createElement("button");
-                    programButton.type = "button";
-                    programButton.className = "participant-programs-button";
-                    programButton.setAttribute(
-                        "aria-label",
-                        `Lihat senarai program untuk ${row.nama || row.kadPengenalan || "peserta"}`
-                    );
-                    programButton.title = "Lihat senarai program";
-                    programButton.innerHTML = '<i class="bi bi-three-dots" aria-hidden="true"></i>';
-                    programButton.addEventListener("mousedown", event => event.stopPropagation());
-                    programButton.addEventListener("dblclick", event => event.stopPropagation());
-                    programButton.addEventListener("click", event => {
-                        event.stopPropagation();
-                        openProgramsModal(row);
-                    });
-                    programCell.appendChild(programButton);
-                    td.appendChild(programCell);
-                } else {
-                    td.textContent = cellValue(row, key);
-                    td.title = td.textContent;
-                }
-                td.tabIndex = 0;
-                td.dataset.rowIndex = String(actualIndex);
-                td.dataset.columnIndex = String(columnIndex);
-                td.addEventListener("mousedown", event => {
-                    if (deleteMode) {
-                        event.preventDefault();
-                        return;
-                    }
-                    beginCellSelection(event, td);
-                });
-                td.addEventListener("mouseenter", () => {
-                    if (mouseSelecting) selectRange(actualIndex, columnIndex);
-                });
-                td.addEventListener("dblclick", () => {
-                    if (!deleteMode) startEditing(td, row, key);
-                });
-                td.addEventListener("keydown", event => handleCellKey(event, td, row, key, columnIndex));
-                applyWidth(td, columnIndex + 1);
-                tr.appendChild(td);
-            });
+            actionCell.appendChild(actionButtons);
+            tr.appendChild(actionCell);
             body.appendChild(tr);
         });
         applyWidth(numberCellForHeader(headerRow), 0);
@@ -403,14 +425,15 @@
     }
 
     function openProgramsModal(row) {
-        const overlay = $("participantProgramsOverlay");
-        const card = $("participantProgramsCard");
+        const dialog = $("participantProgramsDialog");
         const title = $("participantProgramsTitle");
+        const subtitle = $("participantProgramsSubtitle");
         const list = $("participantProgramsList");
-        if (!overlay || !card || !title || !list) return;
+        if (!dialog || !title || !subtitle || !list) return;
 
         const programs = Array.isArray(row.programs) ? row.programs : [];
-        title.textContent = `Program — ${row.nama || row.kadPengenalan || "Peserta"}`;
+        title.textContent = "Program Disertai";
+        subtitle.textContent = `${row.nama || row.kadPengenalan || "Peserta"} · ${programs.length} program`;
         list.replaceChildren();
         if (programs.length) {
             programs.forEach(program => {
@@ -425,25 +448,37 @@
             list.appendChild(item);
         }
 
-        overlay.classList.add("show");
-        card.classList.add("show");
-        overlay.setAttribute("aria-hidden", "false");
-        card.setAttribute("aria-hidden", "false");
+        dialog.classList.remove("is-closing");
+        if (!dialog.open) dialog.showModal();
         $("closeParticipantPrograms")?.focus();
     }
 
     function closeProgramsModal() {
-        const overlay = $("participantProgramsOverlay");
-        const card = $("participantProgramsCard");
-        if (!overlay || !card) return;
-        overlay.classList.remove("show");
-        card.classList.remove("show");
-        overlay.setAttribute("aria-hidden", "true");
-        card.setAttribute("aria-hidden", "true");
+        const dialog = $("participantProgramsDialog");
+        if (!dialog?.open || dialog.classList.contains("is-closing")) return;
+
+        dialog.classList.add("is-closing");
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeout);
+            dialog.removeEventListener("animationend", onAnimationEnd);
+            if (dialog.open) dialog.close();
+            dialog.classList.remove("is-closing");
+        };
+        const onAnimationEnd = event => {
+            if (event.target === dialog && event.animationName === "bpa-create-dialog-exit") {
+                finish();
+            }
+        };
+        const timeout = window.setTimeout(finish, 250);
+        dialog.addEventListener("animationend", onAnimationEnd);
     }
 
     function appendHeader(row, label, columnIndex) {
         const th = document.createElement("th");
+        if (columnIndex >= 0) th.dataset.columnIndex = String(columnIndex);
         const content = document.createElement("span");
         content.className = "header-content";
         const labelNode = document.createElement("span");
@@ -466,7 +501,7 @@
             });
         }
         th.appendChild(content);
-        if (columnIndex !== 0) {
+        if (columnIndex >= 0) {
             const handle = document.createElement("span");
             handle.className = "column-resize-handle";
             handle.addEventListener("mousedown", event => beginResize(event, columnIndex + 1));
@@ -484,8 +519,9 @@
             return;
         }
         if (index > 0) {
-            element.style.width = "auto";
-            element.style.minWidth = `${columnWidths[index] || 160}px`;
+            const width = `${columnWidths[index] || 160}px`;
+            element.style.width = width;
+            element.style.minWidth = width;
             element.style.maxWidth = "none";
             return;
         }
@@ -497,12 +533,17 @@
         const startX = event.clientX;
         const initialWidth = columnWidths[index];
         const move = moveEvent => {
-            columnWidths[index] = Math.max(80, Math.min(600, initialWidth + moveEvent.clientX - startX));
-            document.querySelectorAll(`[data-column-index="${index - 1}"]`).forEach(cell => applyWidth(cell, index));
-            document.querySelectorAll("#participantTable thead th").forEach((cell, cellIndex) => {
-                if (cellIndex === index) applyWidth(cell, index);
+            const width = Math.max(80, Math.min(600, initialWidth + moveEvent.clientX - startX));
+            const widthIndexes = index === 4 || index === 5 ? [4, 5] : [index];
+            const body = $("participantTableBody");
+            const table = body.closest("table");
+            widthIndexes.forEach(widthIndex => {
+                columnWidths[widthIndex] = width;
+                body.querySelectorAll(`[data-column-index="${widthIndex - 1}"]`)
+                    .forEach(cell => applyWidth(cell, widthIndex));
+                const header = table.tHead.querySelector(`[data-column-index="${widthIndex - 1}"]`);
+                if (header) applyWidth(header, widthIndex);
             });
-            render();
         };
         const stop = () => {
             document.body.classList.remove("resizing-column");
@@ -515,7 +556,6 @@
     }
 
     function beginCellSelection(event, cell) {
-        if (deleteMode) return;
         if (event.button !== 0) return;
         const position = {
             rowIndex: Number(cell.dataset.rowIndex),
@@ -549,27 +589,47 @@
 
     function displayedRowPosition(rowIndex) {
         const cell = document.querySelector(`#participantTableBody td[data-row-index="${rowIndex}"]`);
-        return cell ? [...document.querySelectorAll("#participantTableBody tr")].indexOf(cell.parentElement) : -1;
+        const table = cell?.closest("table");
+        return cell
+            ? cell.parentElement.rowIndex - (table?.tHead?.rows.length || 0)
+            : -1;
     }
 
     function updateSelection() {
-        document.querySelectorAll("#participantTableBody .selected-cell, #participantTableBody .active-cell")
+        const body = $("participantTableBody");
+        body.querySelectorAll(".selected-cell, .active-cell")
             .forEach(cell => cell.classList.remove("selected-cell", "active-cell"));
         if (!selectionRange) return;
         const minRow = Math.min(selectionRange.displayRow, selectionRange.endDisplayRow);
         const maxRow = Math.max(selectionRange.displayRow, selectionRange.endDisplayRow);
         const minColumn = Math.min(selectionRange.columnIndex, selectionRange.endColumn);
         const maxColumn = Math.max(selectionRange.columnIndex, selectionRange.endColumn);
-        document.querySelectorAll("#participantTableBody .excel-cell").forEach(cell => {
-            const row = [...document.querySelectorAll("#participantTableBody tr")].indexOf(cell.parentElement);
+        const table = body.closest("table");
+        const headerRowCount = table?.tHead?.rows.length || 0;
+        const activeRowPosition = selectedCell
+            ? displayedRowPosition(selectedCell.rowIndex)
+            : -1;
+        body.querySelectorAll(".excel-cell").forEach(cell => {
+            const row = cell.parentElement.rowIndex - headerRowCount;
             const column = Number(cell.dataset.columnIndex);
             if (row >= minRow && row <= maxRow && column >= minColumn && column <= maxColumn) {
                 cell.classList.add("selected-cell");
             }
-            if (selectedCell && row === displayedRowPosition(selectedCell.rowIndex) && column === selectedCell.columnIndex) {
+            if (selectedCell && row === activeRowPosition && column === selectedCell.columnIndex) {
                 cell.classList.add("active-cell");
             }
         });
+        updateSelectionInfo();
+    }
+
+    function clearCellSelectionOnOutsideClick(event) {
+        const body = $("participantTableBody");
+        const target = event.target;
+        if (!body || !(target instanceof Element) || body.closest("table")?.contains(target)) return;
+        selectedCell = null;
+        selectionAnchor = null;
+        selectionRange = null;
+        updateSelection();
         updateSelectionInfo();
     }
 
@@ -655,7 +715,7 @@
         }
     }
 
-    function openCategorySuggestions(cell, row, input) {
+    function openFieldSuggestions(cell, row, input, key) {
         const popup = document.createElement("div");
         popup.className = "recipient-cell-suggestions";
         popup.setAttribute("role", "listbox");
@@ -672,18 +732,23 @@
             popup.style.display = "none";
         };
         tableWrapper?.addEventListener("scroll", hideOnScroll, { passive: true });
-        categorySuggestionState = { cell, row, input, popup, options: [], activeIndex: -1, tableWrapper, hideOnScroll };
-        input.addEventListener("input", updateCategorySuggestions);
-        updateCategorySuggestions();
+        suggestionState = { cell, row, input, popup, key, options: [], activeIndex: -1, tableWrapper, hideOnScroll };
+        input.addEventListener("input", updateFieldSuggestions);
+        updateFieldSuggestions();
     }
 
-    function updateCategorySuggestions() {
-        const state = categorySuggestionState;
+    function updateFieldSuggestions() {
+        const state = suggestionState;
         if (!state) return;
         const currentValue = state.input.value.trim();
         const query = currentValue.toLocaleLowerCase();
         const values = new Set(
-            rows.map(item => String(item.kategori ?? item.ketegori ?? "").trim()).filter(Boolean)
+            rows.map(item => {
+                const value = state.key === "ketegori"
+                    ? item.kategori ?? item.ketegori
+                    : item[state.key];
+                return String(value ?? "").trim();
+            }).filter(Boolean)
         );
         if (currentValue) values.add(currentValue);
         state.options = [
@@ -718,13 +783,13 @@
         state.popup.style.width = `${rect.width}px`;
     }
 
-    function closeCategorySuggestions() {
-        if (!categorySuggestionState) return;
-        const { input, popup, tableWrapper, hideOnScroll } = categorySuggestionState;
-        input.removeEventListener("input", updateCategorySuggestions);
+    function closeFieldSuggestions() {
+        if (!suggestionState) return;
+        const { input, popup, tableWrapper, hideOnScroll } = suggestionState;
+        input.removeEventListener("input", updateFieldSuggestions);
         tableWrapper?.removeEventListener("scroll", hideOnScroll);
         popup.remove();
-        categorySuggestionState = null;
+        suggestionState = null;
     }
 
     function startEditing(cell, row, key, initialCharacter = null) {
@@ -738,12 +803,13 @@
         input.value = initialCharacter ?? editingCell.oldValue;
         cell.textContent = "";
         cell.appendChild(input);
-        if (key === "ketegori") openCategorySuggestions(cell, row, input);
+        const hasSuggestions = key === "ketegori" || key === "status";
+        if (hasSuggestions) openFieldSuggestions(cell, row, input, key);
         input.focus();
         if (initialCharacter === null) input.select();
         const handleEditKey = event => {
-            if (key === "ketegori" && categorySuggestionState?.input === input) {
-                const state = categorySuggestionState;
+            if (hasSuggestions && suggestionState?.input === input) {
+                const state = suggestionState;
                 if (["ArrowDown", "ArrowUp"].includes(event.key) && state.options.length) {
                     event.preventDefault();
                     event.stopPropagation();
@@ -798,7 +864,7 @@
     async function finishEditing(save) {
         if (!editingCell) return;
         const state = editingCell;
-        closeCategorySuggestions();
+        closeFieldSuggestions();
         editingCell = null;
         state.cell.classList.remove("editing-cell");
         const input = state.cell.querySelector(".inline-edit-input");
@@ -869,10 +935,13 @@
     }
 
     function handleKeyboard(event) {
-        if (event.key === "Escape" && $("participantProgramsOverlay")?.classList.contains("show")) {
+        const programsDialog = $("participantProgramsDialog");
+        if (event.key === "Escape" && programsDialog?.open) {
+            event.preventDefault();
             closeProgramsModal();
             return;
         }
+        if (programsDialog?.open) return;
         if (!$("participantTableBody")) return;
         const modifier = event.ctrlKey || event.metaKey;
         if (modifier && event.key.toLowerCase() === "s") {
@@ -884,9 +953,14 @@
             }
             return;
         }
-        if (event.key === "Escape" && $("participantAddForm")?.classList.contains("show")) {
+        if (event.key === "Escape" && $("participantAddForm")?.open) {
             event.preventDefault();
             closeAddForm();
+            return;
+        }
+        if (event.key === "Escape" && $("participantDeleteConfirmation")?.classList.contains("show")) {
+            event.preventDefault();
+            closeDeleteConfirmation();
             return;
         }
         const target = event.target;
@@ -897,13 +971,9 @@
         } else if (modifier && (event.key.toLowerCase() === "y" || (event.shiftKey && event.key.toLowerCase() === "z")) && !typing) {
             event.preventDefault();
             redo();
-        } else if (event.key === "Delete" && !typing && !deleteMode) {
+        } else if (event.key === "Delete" && !typing) {
             event.preventDefault();
             clearSelection();
-        } else if (event.key === "Escape" && deleteMode) {
-            deleteMode = false;
-            deleteButtonStyles(false);
-            render();
         }
     }
 
@@ -1083,23 +1153,14 @@
 
     function openAddForm() {
         const form = $("participantAddForm");
-        const card = $("participantAddCard");
-        if (!form || !card) return;
-        form.classList.add("show");
-        card.classList.add("show");
-        form.setAttribute("aria-hidden", "false");
-        card.setAttribute("aria-hidden", "false");
+        if (!form || form.open) return;
+        form.showModal();
         $("participantAddNama")?.focus();
     }
 
     function closeAddForm() {
         const form = $("participantAddForm");
-        const card = $("participantAddCard");
-        if (!form || !card) return;
-        form.classList.remove("show");
-        card.classList.remove("show");
-        form.setAttribute("aria-hidden", "true");
-        card.setAttribute("aria-hidden", "true");
+        if (form?.open) window.closeBpaCreateDialog(form);
     }
 
     async function addRecord() {
@@ -1124,35 +1185,19 @@
         }
     }
 
-    function toggleDeleteMode() {
-        deleteMode = !deleteMode;
-        deleteButtonStyles(deleteMode);
-        selectionRange = null;
-        render();
-    }
-
-    function deleteButtonStyles(active) {
-        const button = $("participantDeleteButton");
-        button.classList.toggle("active", active);
-        button.style.backgroundColor = active ? "#dc2626" : "";
-        button.style.borderColor = active ? "#dc2626" : "";
-        button.style.color = active ? "#fff" : "";
-        button.setAttribute("aria-pressed", String(active));
-        button.title = active ? "Keluar mod padam" : "Padam Rekod";
-        button.setAttribute("aria-label", button.title);
-    }
-
     function openDeleteConfirmation(row) {
         pendingDeleteRow = row;
         $("participantDeleteMessage").textContent =
             `Adakah anda pasti mahu memadam rekod "${row.nama || row.kadPengenalan}"? Tindakan ini tidak boleh dibuat asal.`;
         $("participantDeleteOverlay").classList.add("show");
+        $("participantDeleteOverlay").setAttribute("aria-hidden", "false");
         $("participantDeleteConfirmation").classList.add("show");
         $("participantDeleteConfirmation").setAttribute("aria-hidden", "false");
     }
 
     function closeDeleteConfirmation() {
         $("participantDeleteOverlay").classList.remove("show");
+        $("participantDeleteOverlay").setAttribute("aria-hidden", "true");
         $("participantDeleteConfirmation").classList.remove("show");
         $("participantDeleteConfirmation").setAttribute("aria-hidden", "true");
         pendingDeleteRow = null;

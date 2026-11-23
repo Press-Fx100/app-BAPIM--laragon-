@@ -1,0 +1,42 @@
+<main class="main-content">
+    <div class="dashboard-content recipient-participant-shell">
+        <div class="bpa-dashboard-selector recipient-participant-switcher" role="group" aria-label="Pilih senarai">
+            <button type="button" class="bpa-dashboard-card bpa-dashboard-card--blue"
+                data-recipient-participant-view="recipients"
+                aria-controls="recipientParticipantRecipients" aria-pressed="true">
+                <span class="bpa-dashboard-card__accent" aria-hidden="true"></span>
+                <span class="bpa-dashboard-card__copy">
+                    <strong>Penerima Bantuan</strong>
+                    <small>Senarai dan maklumat penerima bantuan</small>
+                </span>
+                <i class="bi bi-person-heart" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="bpa-dashboard-card bpa-dashboard-card--purple"
+                data-recipient-participant-view="participants"
+                aria-controls="recipientParticipantParticipants" aria-pressed="false">
+                <span class="bpa-dashboard-card__accent" aria-hidden="true"></span>
+                <span class="bpa-dashboard-card__copy">
+                    <strong>Peserta Program</strong>
+                    <small>Senarai peserta dan program yang disertai</small>
+                </span>
+                <i class="bi bi-people" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <header class="recipient-participant-title">
+            <div class="recipient-participant-title-copy">
+                <h4 id="recipientParticipantPageTitle">Penerima Bantuan</h4>
+                <p id="recipientParticipantPageDescription">Senarai penerima bantuan.</p>
+            </div>
+            <div id="recipientParticipantTitleActions" class="recipient-participant-title-actions"
+                aria-label="Tindakan senarai"></div>
+        </header>
+
+        <section id="recipientParticipantRecipients" class="recipient-participant-view" aria-label="Penerima Bantuan">
+            <p class="recipient-participant-loading" data-view-status role="status">Memuatkan senarai penerima...</p>
+        </section>
+        <section id="recipientParticipantParticipants" class="recipient-participant-view" aria-label="Peserta Program" hidden>
+            <p class="recipient-participant-loading" data-view-status role="status">Memuatkan senarai peserta...</p>
+        </section>
+    </div>
+</main>

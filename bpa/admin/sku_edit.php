@@ -192,6 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':manual_semasa' => ($cara_kira === 'MANUAL' ? $manual_semasa_nilai : null),
                 ':id' => $sku_id,
             ]);
+            record_bapim_action($pdo, 'sku_update', 'SKU', $nama_aktiviti, (string)($sku['nama_aktiviti'] ?? ''));
 
             if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
                 header('Content-Type: application/json; charset=utf-8');

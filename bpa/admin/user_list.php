@@ -211,17 +211,18 @@ $rows = $stmt->fetchAll();
                        Edit
                     </a>
 
-                    <form method="post" style="display:inline;">
+                    <form method="post" style="display:inline;"
+                          data-bpa-confirm-title="<?= $r['status_acc'] === 'active' ? 'Nyahaktif user?' : 'Aktifkan semula user?' ?>"
+                          data-bpa-confirm-message="<?= $r['status_acc'] === 'active' ? 'User ini akan dinyahaktifkan. Teruskan?' : 'User ini akan diaktifkan semula. Teruskan?' ?>"
+                          data-bpa-confirm-text="<?= $r['status_acc'] === 'active' ? 'Nyahaktif' : 'Aktifkan' ?>">
                       <input type="hidden" name="toggle_user_id" value="<?= (int)$r['user_id'] ?>">
 
                       <?php if ($r['status_acc'] === 'active'): ?>
-                        <button class="btn btn-sm btn-outline-danger mb-1"
-                                onclick="return confirm('Nyahaktif user ini?')">
+                        <button class="btn btn-sm btn-outline-danger mb-1">
                           Nyahaktif
                         </button>
                       <?php else: ?>
-                        <button class="btn btn-sm btn-outline-success mb-1"
-                                onclick="return confirm('Aktifkan semula user ini?')">
+                        <button class="btn btn-sm btn-outline-success mb-1">
                           Aktifkan
                         </button>
                       <?php endif; ?>

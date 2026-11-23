@@ -18,7 +18,7 @@ let initialPageTasks = [];
 let pageLoadTasks = initialPageTasks;
 let tableHeaderDrag = null;
 let suppressTableHeaderClick = null;
-let leaveConfirmationResolver = null;
+let leaveConfirmationPending = false;
 let bpaAddModal = null;
 let programFilterTimer = null;
 const customSelectPortalMenus = new WeakMap();
@@ -104,87 +104,19 @@ function showBpaSaveConfirmation(message = "Disimpan") {
 }
 
 function confirmLeavingWithUnsavedChanges() {
-    let overlay = document.getElementById("unsaved-navigation-overlay");
-    let dialog = document.getElementById("unsaved-navigation-confirmation");
-    if (!overlay || !dialog) {
-        overlay = document.createElement("div");
-        overlay.id = "unsaved-navigation-overlay";
-        overlay.className = "delete-confirmation-overlay";
-
-        dialog = document.createElement("div");
-        dialog.id = "unsaved-navigation-confirmation";
-        dialog.className = "delete-confirmation unsaved-navigation-confirmation";
-        dialog.setAttribute("role", "alertdialog");
-        dialog.setAttribute("aria-modal", "true");
-        dialog.setAttribute("aria-labelledby", "unsaved-navigation-title");
-        dialog.setAttribute("aria-describedby", "unsaved-navigation-message");
-
-        const icon = document.createElement("div");
-        icon.className = "delete-confirmation-icon";
-        icon.textContent = "!";
-
-        const content = document.createElement("div");
-        content.className = "delete-confirmation-content";
-
-        const title = document.createElement("h6");
-        title.id = "unsaved-navigation-title";
-        title.textContent = "Perubahan belum disimpan";
-
-        const message = document.createElement("p");
-        message.id = "unsaved-navigation-message";
-
-        const actions = document.createElement("div");
-        actions.className = "delete-confirmation-actions";
-
-        const cancel = document.createElement("button");
-        cancel.type = "button";
-        cancel.className = "cancel-delete";
-        cancel.textContent = "Batal";
-
-        const leave = document.createElement("button");
-        leave.type = "button";
-        leave.className = "confirm-delete";
-        leave.textContent = "Teruskan";
-
-        actions.append(cancel, leave);
-        content.append(title, message, actions);
-        dialog.append(icon, content);
-        document.body.append(overlay, dialog);
-
-        const close = proceed => {
-            overlay.classList.remove("show");
-            dialog.classList.remove("show");
-            dialog.setAttribute("aria-hidden", "true");
-            const resolve = leaveConfirmationResolver;
-            leaveConfirmationResolver = null;
-            resolve?.(proceed);
-        };
-
-        cancel.addEventListener("click", () => close(false));
-        leave.addEventListener("click", () => close(true));
-        overlay.addEventListener("click", () => close(false));
-        dialog.addEventListener("keydown", event => {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                close(false);
-            }
-        });
-    }
-
-    const message = document.getElementById("unsaved-navigation-message");
+    if (leaveConfirmationPending) return Promise.resolve(false);
+    leaveConfirmationPending = true;
     const isSaving = typeof window.isSavingTableChanges === "function" &&
         window.isSavingTableChanges();
-    message.textContent = isSaving
+    const messageText = isSaving
         ? "Penyimpanan sedang berlangsung. Meninggalkan halaman sekarang mungkin menyebabkan perubahan tidak tersimpan. Teruskan?"
         : "Terdapat perubahan yang belum disimpan. Jika meneruskan, perubahan ini akan hilang. Teruskan?";
-
-    overlay.classList.add("show");
-    dialog.classList.add("show");
-    dialog.setAttribute("aria-hidden", "false");
-    dialog.querySelector(".cancel-delete").focus();
-
-    return new Promise(resolve => {
-        leaveConfirmationResolver = resolve;
+    return window.confirmBpaAction({
+        titleText: "Perubahan belum disimpan",
+        messageText,
+        confirmText: "Teruskan"
+    }).finally(() => {
+        leaveConfirmationPending = false;
     });
 }
 
@@ -200,24 +132,32 @@ window.addEventListener("beforeunload", event => {
     event.returnValue = "";
 });
 
-function closeNoteDialog(dialog) {
-    if (!(dialog instanceof HTMLDialogElement) || !dialog.open || dialog.classList.contains("is-closing")) return;
+function closeBpaCreateDialog(dialog) {
+    if (!(dialog instanceof HTMLDialogElement) || !dialog.open || dialog.classList.contains("is-closing")) {
+        return Promise.resolve();
+    }
+
     dialog.classList.add("is-closing");
-    let finished = false;
-    const finish = () => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(timeout);
-        dialog.removeEventListener("animationend", onAnimationEnd);
-        dialog.close();
-        dialog.classList.remove("is-closing");
-    };
-    const onAnimationEnd = event => {
-        if (event.target === dialog && event.animationName === "sku-note-dialog-exit") finish();
-    };
-    const timeout = setTimeout(finish, 250);
-    dialog.addEventListener("animationend", onAnimationEnd);
+    return new Promise(resolve => {
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeout);
+            dialog.removeEventListener("animationend", onAnimationEnd);
+            dialog.close();
+            dialog.classList.remove("is-closing");
+            resolve();
+        };
+        const onAnimationEnd = event => {
+            if (event.target === dialog && event.animationName === "bpa-create-dialog-exit") finish();
+        };
+        const timeout = setTimeout(finish, 250);
+        dialog.addEventListener("animationend", onAnimationEnd);
+    });
 }
+
+window.closeBpaCreateDialog = closeBpaCreateDialog;
 
 document.addEventListener("click", event => {
     const noteTrigger = event.target instanceof Element
@@ -231,7 +171,12 @@ document.addEventListener("click", event => {
             if (dialog.dataset.noteCancelHandler !== "true") {
                 dialog.addEventListener("cancel", cancelEvent => {
                     cancelEvent.preventDefault();
-                    closeNoteDialog(dialog);
+                    closeBpaCreateDialog(dialog);
+                });
+                dialog.addEventListener("keydown", keydownEvent => {
+                    if (keydownEvent.key !== "Escape") return;
+                    keydownEvent.preventDefault();
+                    closeBpaCreateDialog(dialog);
                 });
                 dialog.dataset.noteCancelHandler = "true";
             }
@@ -241,12 +186,12 @@ document.addEventListener("click", event => {
     }
 
     if (event.target instanceof HTMLDialogElement
-        && event.target.matches(".sku-note-dialog")
+        && event.target.matches(".bpa-note-dialog")
         && event.target.open) {
         const bounds = event.target.getBoundingClientRect();
         if (event.clientX < bounds.left || event.clientX > bounds.right
             || event.clientY < bounds.top || event.clientY > bounds.bottom) {
-            closeNoteDialog(event.target);
+            closeBpaCreateDialog(event.target);
         }
         return;
     }
@@ -256,7 +201,7 @@ document.addEventListener("click", event => {
         : null;
     if (noteClose) {
         const dialog = noteClose.closest("dialog");
-        closeNoteDialog(dialog);
+        closeBpaCreateDialog(dialog);
         return;
     }
 
@@ -302,7 +247,7 @@ document.addEventListener("pointerdown", event => {
         !wrapper ||
         (event.pointerType === "touch" && header.closest(".program-unit-table")) ||
         wrapper.scrollWidth <= wrapper.clientWidth ||
-        event.target.closest("button, input, select, textarea, a")
+        event.target.closest("button, input, select, textarea, a, .column-resize-handle")
     ) {
         return;
     }
@@ -432,6 +377,9 @@ function initializeCustomSelects() {
 
         const syncButton = () => {
             const option = select.options[select.selectedIndex];
+            const optionLabel = option?.value === "" && select.dataset.emptyLabel
+                ? select.dataset.emptyLabel
+                : option?.textContent || "";
             const iconClass = option?.dataset.icon || select.dataset.icon;
             if (iconClass) {
                 const icon = document.createElement("i");
@@ -446,11 +394,11 @@ function initializeCustomSelects() {
                     );
                 } else {
                     const label = document.createElement("span");
-                    label.textContent = option?.textContent || "";
+                    label.textContent = optionLabel;
                     button.replaceChildren(icon, label);
                 }
             } else {
-                button.textContent = option?.textContent || "";
+                button.textContent = optionLabel;
             }
             button.disabled = select.disabled;
             button.setAttribute("aria-disabled", String(select.disabled));
@@ -500,9 +448,13 @@ function initializeCustomSelects() {
             }
             wrapper.classList.add("show");
             button.setAttribute("aria-expanded", "true");
-            if (wrapper.closest("#recipientAddCard")) {
-                menu.classList.add("custom-select-menu-portal", "recipient-add-select-menu");
-                document.body.appendChild(menu);
+            const modalRoot = wrapper.closest("#recipientAddForm, .bpa-create-dialog");
+            if (modalRoot) {
+                menu.classList.add("custom-select-menu-portal");
+                if (modalRoot.id === "recipientAddForm") {
+                    menu.classList.add("recipient-add-select-menu");
+                }
+                modalRoot.appendChild(menu);
                 customSelectPortalMenus.set(wrapper, menu);
                 positionCustomSelectPortal(menu, button);
                 const reposition = () => {
@@ -633,6 +585,7 @@ async function finishPageLoading(initial = false) {
         pageContent.offsetWidth;
         pageContent.style.removeProperty("transition");
         refreshBpaDashboardCharts(pageContent, { animate: true });
+        document.dispatchEvent(new Event("app:initial-page-ready"));
         return;
     }
 
@@ -771,17 +724,15 @@ function updateActiveNavigation(pathname) {
         const page =
             pathname === "/"
                 ? "dashboard"
-                : pathname.startsWith("/set-data")
-                    ? "upload"
-                    : pathname === "/muat-naik"
-                        ? "upload"
-                        : pathname === "/peserta-program"
-                            ? "peserta-program"
-                            : pathname === "/penerima-bantuan"
-                                ? "penerima-bantuan"
-                            : pathname === "/aktiviti-pengguna"
-                            ? "user"
-                            : "";
+                : pathname === "/muat-naik" ||
+                    pathname.startsWith("/set-data") ||
+                    pathname === "/penerima-peserta" ||
+                    pathname === "/peserta-program" ||
+                    pathname === "/penerima-bantuan"
+                    ? "penerima-peserta"
+                    : pathname === "/aktiviti-pengguna"
+                        ? "user"
+                        : "";
 
         item.classList.toggle(
             "active",
@@ -875,6 +826,13 @@ function executeBpaInlineScripts(scripts) {
 
 const bpaDashboardCards = [
     { id: "BPA", label: "BPA", detail: "Bahagian Pembangunan Asnaf", icon: "bi-diagram-3", color: "red" },
+    {
+        id: "UPP",
+        label: "UPP",
+        detail: "Unit Pentadbiran dan Permantauan",
+        icon: "bi-clipboard2-check",
+        color: "teal"
+    },
     { id: "UPU", label: "UPU", detail: "Usahawan", icon: "bi-briefcase", color: "blue" },
     { id: "ULK", label: "ULK", detail: "Latihan Kerjaya", icon: "bi-mortarboard", color: "purple" },
     { id: "UAK", label: "UAK", detail: "Agama Islam", icon: "bi-moon-stars", color: "green" },
@@ -893,7 +851,9 @@ let bpaDashboardScripts = [];
 
 function getBpaCardsForAccess(cards, permissionPrefix) {
     const permissions = window.appCurrentUser?.permissions || {};
-    return cards.filter(card => permissions[`${permissionPrefix}${card.id}`]?.access === true);
+    return cards.filter(card =>
+        permissions[`${permissionPrefix}${card.id}`]?.access === true
+    );
 }
 
 function formatProgramDateKey(dateKey) {
@@ -1516,7 +1476,7 @@ function initializeBpaDashboardSwitcher() {
     const inlineDashboardScripts = [...document.querySelectorAll("script[data-bpa-page-script]")]
         .filter(script => !script.src);
     bpaDashboardScripts = inlineDashboardScripts.map(script => script.cloneNode(true));
-    bpaDashboardCache = new Map([[initialUnit, {
+    bpaDashboardCache = new Map([[initialUnit === "UPP" ? "BPA" : initialUnit, {
         markup: root.innerHTML,
         styles: bpaDashboardStyles,
         scripts: bpaDashboardScripts
@@ -1536,8 +1496,20 @@ function initializeBpaDashboardSwitcher() {
             <i class="bi ${card.icon}" aria-hidden="true"></i>
         </button>
     `).join("").trim();
+    toolbar.querySelectorAll("[data-bpa-dashboard-unit]").forEach(button => {
+        const card = allowedCards.find(item => item.id === button.dataset.bpaDashboardUnit);
+        if (!card) return;
+        button.title = card.detail;
+        button.setAttribute("aria-label", `${card.label} - ${card.detail}`);
+    });
     toolbar.hidden = allowedCards.length <= 1;
     root.before(toolbar);
+    if (initialUnit === "UPP") {
+        selectBpaDashboard(initialUnit, toolbar, root).catch(error => {
+            console.error("UPP dashboard load error:", error);
+            showBpaDashboardError(root, error);
+        });
+    }
 }
 
 function showBpaDashboardError(root, error) {
@@ -1553,7 +1525,9 @@ async function loadBpaDashboard(unit) {
     const cached = bpaDashboardCache.get(unit);
     if (cached) return cached;
 
-    const url = unit === "BPA"
+    const url = unit === "UPP"
+        ? window.appUrl("/upp-dashboard")
+        : unit === "BPA"
         ? window.appUrl("/bpa/dashboard?unit=BPA")
         : window.appUrl(`/bpa/${unit.toLowerCase()}/dashboard`);
     const response = await fetch(url, {
@@ -1564,7 +1538,9 @@ async function loadBpaDashboard(unit) {
     }
 
     const parsedPage = new DOMParser().parseFromString(await response.text(), "text/html");
-    const dashboard = parsedPage.querySelector("main.main-content .bpa-shell-page");
+    const dashboard = unit === "UPP"
+        ? parsedPage.querySelector("main.main-content .dashboard-page")
+        : parsedPage.querySelector("main.main-content .bpa-shell-page");
     if (!dashboard) {
         throw new Error(`Kandungan papan pemuka ${unit} tiada dalam respons.`);
     }
@@ -1639,6 +1615,54 @@ function animateBpaDashboardSections(root) {
     });
 }
 
+function animateUppDashboardSections(root) {
+    const sections = [...root.children].filter(
+        section => section.id !== "chartsSection" && section.id !== "statsSection"
+    );
+    const statCards = [...root.querySelectorAll(
+        "#statsSection .stat-card:not(.dashboard-legend-card)"
+    )].filter(card => card.getClientRects().length > 0);
+    const legendCard = root.querySelector("#statsSection .dashboard-legend-card");
+    const chartCards = [...root.querySelectorAll("#chartsSection .chart-card")]
+        .filter(card => card.getClientRects().length > 0);
+    const firstSections = sections.slice(0, 1);
+    const targets = [
+        ...firstSections,
+        ...statCards,
+        ...(legendCard && legendCard.getClientRects().length > 0 ? [legendCard] : []),
+        ...chartCards,
+        ...sections.slice(firstSections.length)
+    ];
+
+    targets.forEach((element, index) => {
+        element.classList.remove("bpa-upp-dashboard-enter");
+        const delay = index * 55;
+        element.style.setProperty("--bpa-upp-enter-delay", `${delay}ms`);
+        void element.offsetWidth;
+        element.classList.add("bpa-upp-dashboard-enter");
+        const finishAnimation = () => {
+            element.classList.remove("bpa-upp-dashboard-enter");
+            element.style.removeProperty("--bpa-upp-enter-delay");
+        };
+        element.addEventListener("animationend", event => {
+            if (event.target !== element || event.animationName !== "bpa-upp-fade-in-up") return;
+            finishAnimation();
+        }, { once: true });
+        window.setTimeout(finishAnimation, delay + 700);
+    });
+}
+
+function animateUppPieChart(root) {
+    const canvas = root.querySelector("#pieChart");
+    const chart = canvas && window.Chart?.getChart(canvas);
+    if (!chart || !canvas.isConnected) {
+        return;
+    }
+
+    chart.reset();
+    chart.update();
+}
+
 function animateBpaDashboardTitle(root) {
     const container = root.querySelector(":scope > .container, :scope > .container-fluid");
     const titleCard = container?.querySelector(":scope > .d-flex.justify-content-between.align-items-center.mb-3");
@@ -1673,6 +1697,9 @@ async function selectBpaDashboard(unit, toolbar, root) {
     const card = bpaDashboardCards.find(item => item.id === unit);
     if (!card || !toolbar.isConnected || !root.isConnected) return;
     const previousUnit = root.dataset.dashboardUnit || "BPA";
+    const isNonUppUnitTransition =
+        previousUnit !== unit && previousUnit !== "UPP" && unit !== "UPP";
+    toolbar.classList.toggle("bpa-dashboard-selector--instant-unit-switch", isNonUppUnitTransition);
 
     toolbar.querySelectorAll("[data-bpa-dashboard-unit]").forEach(button => {
         button.setAttribute("aria-pressed", String(button.dataset.bpaDashboardUnit === unit));
@@ -1697,21 +1724,150 @@ async function selectBpaDashboard(unit, toolbar, root) {
         result.styles.forEach(style => document.head.append(style.cloneNode(true)));
         root.innerHTML = result.markup;
         root.dataset.dashboardUnit = unit;
+        root.classList.toggle("dashboard-page", unit === "UPP");
+        root.classList.remove("bpa-upp-dashboard-no-preload");
+        root.classList.toggle("bpa-upp-dashboard-preloading", unit === "UPP");
+        root.classList.toggle("bpa-dashboard-content", unit !== "UPP");
+        const dashboardTitle = `Dashboard ${unit}`;
+        const pageTitle = document.getElementById("pageTitle");
+        if (pageTitle) {
+            if (previousUnit !== unit) {
+                window.typeHeaderTitle(pageTitle, dashboardTitle.toUpperCase());
+            }
+        }
+        document.title = dashboardTitle;
+        if (unit === "UPP") {
+            if (typeof window.initializeDashboard !== "function") {
+                throw new Error("Dashboard BAPIM tidak dapat dimulakan.");
+            }
+            const existingModeTitle = document.getElementById("dashboardDataTitle");
+            const picControl = root.querySelector(".pic-control");
+            const title = document.createElement("header");
+            title.className = "bpa-upp-dashboard-title";
+            const titleCopy = document.createElement("div");
+            titleCopy.className = "bpa-upp-dashboard-title-copy";
+            const heading = document.createElement("h4");
+            heading.append("Dashboard UPP (");
+            const modeTitle = document.createElement("span");
+            modeTitle.id = "dashboardDataTitle";
+            modeTitle.textContent = existingModeTitle?.textContent.trim() || "Penerima Bantuan";
+            heading.append(modeTitle, ")");
+            const subtitle = document.createElement("p");
+            subtitle.textContent = "Ringkasan penerima bantuan dan peserta program.";
+            titleCopy.append(heading, subtitle);
+            title.append(titleCopy);
+            if (existingModeTitle) existingModeTitle.remove();
+
+            const unitAction = document.createElement("div");
+            unitAction.className = "bpa-admin-action bpa-upp-unit-action";
+            unitAction.setAttribute("aria-label", "Tapis carta mengikut unit");
+            const unitIcon = document.createElement("span");
+            unitIcon.className = "bpa-admin-action-icon";
+            unitIcon.setAttribute("aria-hidden", "true");
+            unitIcon.innerHTML = '<i class="bi bi-diagram-3" aria-hidden="true"></i>';
+            const unitSelect = document.createElement("select");
+            unitSelect.id = "participantUnitSelect";
+            unitSelect.className = "form-select";
+            unitSelect.dataset.emptyLabel = "Unit";
+            unitSelect.setAttribute("aria-label", "Tapis carta mengikut unit");
+            [["", "Semua"], ["__NO_UNIT__", "Tiada"]].forEach(([value, label]) => {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = label;
+                unitSelect.appendChild(option);
+            });
+            unitAction.append(unitIcon, unitSelect);
+
+            const yearAction = document.createElement("div");
+            yearAction.className = "bpa-admin-action bpa-upp-year-action";
+            yearAction.setAttribute("aria-label", "Tapis carta mengikut tahun");
+            const yearIcon = document.createElement("span");
+            yearIcon.className = "bpa-admin-action-icon";
+            yearIcon.setAttribute("aria-hidden", "true");
+            yearIcon.innerHTML = '<i class="bi bi-calendar3" aria-hidden="true"></i>';
+            const yearSelect = document.createElement("select");
+            yearSelect.id = "participantYearSelect";
+            yearSelect.className = "form-select";
+            yearSelect.dataset.emptyLabel = "Tahun";
+            yearSelect.setAttribute("aria-label", "Tapis carta mengikut tahun");
+            const allYearsOption = document.createElement("option");
+            allYearsOption.value = "";
+            allYearsOption.textContent = "Semua";
+            yearSelect.appendChild(allYearsOption);
+            const currentYearOption = document.createElement("option");
+            currentYearOption.value = String(new Date().getFullYear());
+            currentYearOption.textContent = currentYearOption.value;
+            yearSelect.appendChild(currentYearOption);
+            yearSelect.value = currentYearOption.value;
+            yearAction.append(yearIcon, yearSelect);
+
+            const isParticipantsMode = Boolean(root.querySelector(
+                '.stat-card.is-selected[data-dashboard-mode="participants"]'
+            ));
+            unitAction.style.display = isParticipantsMode ? "" : "none";
+            yearAction.style.display = isParticipantsMode ? "" : "none";
+
+            const actions = document.createElement("div");
+            actions.className = "bpa-upp-dashboard-actions";
+            actions.append(unitAction, yearAction);
+
+            if (picControl) {
+                const action = document.createElement("div");
+                action.className = "bpa-admin-action bpa-upp-pic-action";
+                action.setAttribute("aria-label", "Tapis mengikut PIC");
+                const picSelect = picControl.querySelector("select");
+                if (picSelect) {
+                    picSelect.dataset.emptyLabel = "PIC";
+                    const picButton = picControl.querySelector(".custom-select-button");
+                    if (picButton && picSelect.value === "") {
+                        picButton.textContent = "PIC";
+                    }
+                }
+                const icon = document.createElement("span");
+                icon.className = "bpa-admin-action-icon";
+                icon.setAttribute("aria-hidden", "true");
+                icon.innerHTML = '<i class="bi bi-person-badge" aria-hidden="true"></i>';
+                const label = document.createElement("span");
+                label.className = "bpa-upp-pic-label";
+                label.textContent = "PIC";
+                action.append(icon, label, picControl);
+                action.style.display = isParticipantsMode ? "none" : "";
+                actions.append(action);
+            }
+            title.append(actions);
+
+            root.querySelector(".dashboard-filter-card")?.remove();
+            root.prepend(title);
+            const dashboardInitialization = window.initializeDashboard(true, true);
+            pageContent?.classList.add("is-ready", "is-visible");
+            document.body.classList.remove("app-page-loading");
+            animateUppDashboardSections(root);
+            await dashboardInitialization;
+            root.classList.remove("bpa-upp-dashboard-preloading");
+            await new Promise(resolve => {
+                window.requestAnimationFrame(() => {
+                    window.requestAnimationFrame(resolve);
+                });
+            });
+            animateUppPieChart(root);
+        } else if (previousUnit === "UPP" && typeof window.initializeDashboard === "function") {
+            await window.initializeDashboard();
+        }
         animateBpaDashboardKpiNumbers(root);
         if (result.scripts.length) executeBpaInlineScripts(result.scripts);
         refreshBpaDashboardCharts(root, { animate: true });
-        if (previousUnit !== unit) {
+        if (unit !== "UPP" && previousUnit !== unit) {
             animateBpaDashboardTitle(root);
         }
-        if ((previousUnit === "BPA") !== (unit === "BPA")) {
+        if (previousUnit !== unit && !isNonUppUnitTransition) {
             animateBpaDashboardToolbarControls(root);
         }
-        if ((previousUnit === "BPA") !== (unit === "BPA")) {
+        if (previousUnit !== unit && unit !== "UPP" && !isNonUppUnitTransition) {
             animateBpaDashboardSections(root);
         }
         const skuProgressHeading = [...root.querySelectorAll("h1, h2, h3, h4, h5, h6")]
             .find(heading => heading.textContent.includes("Progress SKU"));
-        if (previousUnit !== "BPA" && unit !== "BPA") {
+        if (!isNonUppUnitTransition && previousUnit !== "BPA" && unit !== "BPA") {
             skuProgressHeading?.closest(".card")?.classList.add("bpa-dashboard-sku-enter");
         }
 
@@ -1726,6 +1882,7 @@ async function selectBpaDashboard(unit, toolbar, root) {
         toolbar.querySelectorAll("[data-bpa-dashboard-unit]").forEach(button => {
             button.disabled = false;
         });
+        toolbar.classList.remove("bpa-dashboard-selector--instant-unit-switch");
     }
 }
 
@@ -2460,12 +2617,12 @@ async function navigateTo(url, replace = false) {
         targetPathname === "/set-data" ||
         targetPathname.startsWith("/set-data/") ||
         targetPathname === "/muat-naik" ||
+        targetPathname === "/penerima-peserta" ||
         targetPathname === "/peserta-program" ||
         targetPathname === "/penerima-bantuan" ||
         targetPathname === "/aktiviti-pengguna" ||
         targetPathname === "/akaun-pengguna" ||
-        targetPathname === "/pengurusan-pengguna" ||
-        targetPathname === "/log-perisian";
+        targetPathname === "/pengurusan-pengguna";
     const isBpaPage = targetPathname.startsWith("/bpa/");
 
     if (
@@ -2478,7 +2635,7 @@ async function navigateTo(url, replace = false) {
 
     const pageChanged = displayedPagePath !== targetPathname;
 
-    if (leaveConfirmationResolver) return;
+    if (leaveConfirmationPending) return;
 
     const hasUnsavedChanges = typeof window.hasUnsavedTableChanges === "function" &&
         window.hasUnsavedTableChanges();
@@ -2892,81 +3049,18 @@ async function updateBudgetFilterResults(target, { updateAddress = true, replace
     }
 }
 
-function confirmBpaDelete({ titleText, messageText, variant }) {
-    return new Promise(resolve => {
-        const overlay = document.createElement("div");
-        overlay.className = "delete-confirmation-overlay";
-        overlay.setAttribute("aria-hidden", "false");
-
-        const dialog = document.createElement("div");
-        const titleId = `${variant}-delete-title`;
-        const messageId = `${variant}-delete-message`;
-        dialog.className = `delete-confirmation ${variant}-delete-confirmation`;
-        dialog.setAttribute("role", "alertdialog");
-        dialog.setAttribute("aria-modal", "true");
-        dialog.setAttribute("aria-labelledby", titleId);
-        dialog.setAttribute("aria-describedby", messageId);
-        dialog.setAttribute("aria-hidden", "false");
-
-        const icon = document.createElement("div");
-        icon.className = "delete-confirmation-icon";
-        icon.textContent = "!";
-
-        const content = document.createElement("div");
-        content.className = "delete-confirmation-content";
-
-        const title = document.createElement("h6");
-        title.id = titleId;
-        title.textContent = titleText;
-
-        const message = document.createElement("p");
-        message.id = messageId;
-        message.textContent = messageText;
-
-        const actions = document.createElement("div");
-        actions.className = "delete-confirmation-actions";
-
-        const cancel = document.createElement("button");
-        cancel.type = "button";
-        cancel.className = "cancel-delete";
-        cancel.textContent = "Batal";
-
-        const confirm = document.createElement("button");
-        confirm.type = "button";
-        confirm.className = "confirm-delete";
-        confirm.textContent = "Padam";
-
-        actions.append(cancel, confirm);
-        content.append(title, message, actions);
-        dialog.append(icon, content);
-        document.body.append(overlay, dialog);
-
-        const finish = shouldDelete => {
-            overlay.remove();
-            dialog.remove();
-            resolve(shouldDelete);
-        };
-        cancel.addEventListener("click", () => finish(false));
-        confirm.addEventListener("click", () => finish(true));
-        overlay.addEventListener("click", () => finish(false));
-        dialog.addEventListener("keydown", event => {
-            if (event.key !== "Escape") return;
-            event.preventDefault();
-            finish(false);
-        });
-        window.requestAnimationFrame(() => {
-            overlay.classList.add("show");
-            dialog.classList.add("show");
-            cancel.focus();
-        });
+function confirmBpaDelete({ titleText, messageText }) {
+    return window.confirmBpaAction({
+        titleText,
+        messageText,
+        confirmText: "Padam"
     });
 }
 
 async function deleteBudget(form) {
     if (!await confirmBpaDelete({
         titleText: "Padam bajet?",
-        messageText: "Adakah anda pasti mahu memadam bajet ini? Tindakan ini tidak boleh dibuat asal.",
-        variant: "budget"
+        messageText: "Adakah anda pasti mahu memadam bajet ini? Tindakan ini tidak boleh dibuat asal."
     })) return;
 
     const submitButton = form.querySelector('button[type="submit"]');
@@ -3012,8 +3106,7 @@ async function deleteBudget(form) {
 async function deleteSku(form) {
     if (!await confirmBpaDelete({
         titleText: "Padam SKU?",
-        messageText: "Adakah anda pasti mahu memadam SKU ini? Tindakan ini tidak boleh dibuat asal.",
-        variant: "sku"
+        messageText: "Adakah anda pasti mahu memadam SKU ini? Tindakan ini tidak boleh dibuat asal."
     })) return;
 
     const submitButton = form.querySelector('button[type="submit"]');

@@ -2,10 +2,36 @@
 
     <div class="dashboard-content upload-page">
 
-        <div class="content-card mb-4 dataset-page-header upload-page-header">
-            <div>
+        <header class="recipient-participant-title upload-page-title">
+            <div class="recipient-participant-title-copy">
                 <h4>Muat Naik Set Data</h4>
-                <p>Lihat, cari dan urus set data yang dimuat naik</p>
+                <p>Urus dan cari set data yang dimuat naik.</p>
+            </div>
+            <div class="recipient-participant-title-actions">
+                <a href="/penerima-peserta" data-app-navigation
+                    class="recipient-participant-title-action recipient-participant-title-action--back"
+                    title="Kembali ke Penerima &amp; Peserta" aria-label="Kembali ke Penerima &amp; Peserta">
+                    <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                        <i class="bi bi-arrow-left"></i>
+                    </span>
+                    <span>Kembali</span>
+                </a>
+                <button type="button" id="openUploadButton"
+                    class="recipient-participant-title-action recipient-participant-title-action--upload"
+                    data-permission-upload="upload"
+                    title="Muat naik set data" aria-label="Muat naik set data">
+                    <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                    </span>
+                    <span>Muat Naik</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="content-card mb-4 dataset-page-header upload-page-header sku-search-card-standard">
+            <div>
+                <h4>Carian Set Data</h4>
+                <p>Cari dan tapis set data yang telah dimuat naik.</p>
             </div>
             <div class="dataset-header-controls">
                 <div class="search-toolbar-group">
@@ -14,11 +40,6 @@
                         <input type="text" id="datasetSearch" placeholder="Cari set data..." autocomplete="off">
                     </div>
                     <div class="toolbar-group toolbar-filter">
-                        <button type="button" id="openUploadButton" class="toolbar-button icon-button"
-                            data-permission-upload="upload"
-                            title="Muat naik set data" aria-label="Muat naik set data">
-                            <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
-                        </button>
                         <button type="button" id="toggleDatasetFilterButton" class="toolbar-button icon-button"
                             title="Tapis set data" aria-label="Tapis set data"
                             aria-controls="datasetTypeFilterMenu" aria-expanded="false">
@@ -34,23 +55,23 @@
                                 data-dataset-type="peserta" role="menuitem">Peserta Program</button>
                         </div>
                     </div>
-                    <button type="button" id="toggleDatasetDeleteButton"
-                        data-permission-upload="upload"
-                        class="toolbar-button icon-button toolbar-button-danger"
-                        title="Padam set data" aria-label="Padam set data">
-                        <i class="bi bi-trash3" aria-hidden="true"></i>
-                    </button>
                 </div>
             </div>
         </div>
 
         <div id="uploadOverlay" class="dataset-upload-overlay" aria-hidden="true">
-        <div id="uploadFloatingCard" class="dataset-upload-card" data-permission-upload="upload" aria-hidden="true">
+        <div id="uploadFloatingCard" class="dataset-upload-card bpa-upload-dialog" data-permission-upload="upload"
+            role="dialog" aria-modal="true" aria-labelledby="uploadModalTitle" aria-hidden="true">
 
             <div class="dataset-upload-header">
-                <div>
-                    <h5>Muat Naik Set Data</h5>
-                    <p>Pilih fail CSV atau Excel untuk pratonton dan import.</p>
+                <div class="dataset-upload-heading">
+                    <span class="dataset-upload-heading-icon" aria-hidden="true">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                    </span>
+                    <div>
+                        <h5 id="uploadModalTitle">Muat Naik Set Data</h5>
+                        <p>Pilih fail CSV atau Excel untuk pratonton dan import.</p>
+                    </div>
                 </div>
                 <button type="button" id="closeUploadButton" class="dataset-upload-close" aria-label="Tutup muat naik">
                     <i class="bi bi-x-lg" aria-hidden="true"></i>
@@ -63,8 +84,10 @@
                     <div class="dataset-upload-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></div>
                     <h6>Lepaskan fail di sini</h6>
                     <p>atau pilih fail daripada komputer anda</p>
-                    <button type="button" id="browseUploadButton" data-permission-upload="upload" class="btn btn-primary">
-                        Pilih Fail
+                    <button type="button" id="browseUploadButton" data-permission-upload="upload"
+                        class="budget-list-action bpa-budget-save-button dataset-upload-action-button dataset-upload-browse-button">
+                        <span class="budget-list-action-icon"><i class="bi bi-folder2-open" aria-hidden="true"></i></span>
+                        <span>Pilih Fail</span>
                     </button>
                     <span class="dataset-upload-supported">CSV, XLSX atau XLS</span>
                     <input type="file" id="datasetFileInput" accept=".csv,.xlsx,.xls" hidden>
@@ -83,12 +106,14 @@
                                 class="bi bi-x-lg" aria-hidden="true"></i></button>
                     </div>
 
-                    <div class="dataset-upload-fields">
+                    <div class="dataset-upload-fields dataset-upload-name-row">
                         <div>
                             <label for="uploadDatasetName">Nama set data</label>
                             <input type="text" id="uploadDatasetName" class="form-control"
                                 placeholder="Masukkan nama set data">
                         </div>
+                    </div>
+                    <div class="dataset-upload-fields dataset-upload-type-row">
                         <div>
                             <label for="uploadDatasetType">Jenis set data</label>
                             <select id="uploadDatasetType" class="form-select">
@@ -96,15 +121,15 @@
                                 <option value="peserta">PESERTA PROGRAM</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div id="participantImportOptions" class="dataset-upload-fields participant-import-options"
-                        style="display:none;">
                         <div>
-                            <label for="participantImportMethod">Kaedah import peserta</label>
-                            <select id="participantImportMethod" class="form-select">
-                                <option value="color">Padankan mengikut warna sel</option>
-                                <option value="column">Padankan mengikut lajur</option>
+                            <label for="uploadUnitInCharge">Unit <span class="required">*</span></label>
+                            <select id="uploadUnitInCharge" class="form-select" required>
+                                <option value="">Pilih unit</option>
+                                <option value="UPP">UPP</option>
+                                <option value="UPU">UPU</option>
+                                <option value="ULK">ULK</option>
+                                <option value="UAK">UAK</option>
+                                <option value="UPA">UPA</option>
                             </select>
                         </div>
                     </div>
@@ -129,9 +154,25 @@
                                 <label for="participantCategoryHeader">KATEGORI</label>
                                 <select id="participantCategoryHeader" class="form-select"></select>
                             </div>
-                            <div id="participantProgramHeaderField" style="display:none;">
-                                <label for="participantProgramHeader">PROGRAM <span id="participantProgramRequired" class="required">*</span></label>
+                            <div>
+                                <label for="participantIncomeBeforeHeader">PENDAPATAN AWAL/SEBELUM</label>
+                                <select id="participantIncomeBeforeHeader" class="form-select"></select>
+                            </div>
+                            <div>
+                                <label for="participantIncomeAfterHeader">PENDAPATAN SEMASA/SELEPAS</label>
+                                <select id="participantIncomeAfterHeader" class="form-select"></select>
+                            </div>
+                            <div>
+                                <label for="participantStatusHeader">STATUS</label>
+                                <select id="participantStatusHeader" class="form-select"></select>
+                            </div>
+                            <div id="participantProgramHeaderField">
+                                <label for="participantProgramHeader">PROGRAM <span class="required">*</span></label>
                                 <select id="participantProgramHeader" class="form-select"></select>
+                            </div>
+                            <div>
+                                <label for="participantNotesHeader">CATATAN</label>
+                                <select id="participantNotesHeader" class="form-select"></select>
                             </div>
                         </div>
                     </div>
@@ -190,11 +231,10 @@
             </div>
 
             <div id="uploadCardFooter" class="dataset-upload-footer" style="display:none;">
-                <button type="button" id="cancelUploadButton" class="btn btn-light">
-                    Batal
-                </button>
-                <button type="button" id="importUploadButton" data-permission-upload="upload" class="btn btn-primary">
-                    Import Data
+                <button type="button" id="importUploadButton" data-permission-upload="upload"
+                    class="budget-list-action budget-list-action--primary bpa-budget-save-button dataset-upload-action-button dataset-upload-import-button">
+                    <span class="budget-list-action-icon"><i class="bi bi-check-lg" aria-hidden="true"></i></span>
+                    <span class="dataset-upload-action-label">Import Data</span>
                 </button>
             </div>
 
@@ -227,9 +267,11 @@
 
         </div>
 
-        <div id="datasetListDeleteOverlay" class="delete-confirmation-overlay"></div>
+        <div id="datasetListDeleteOverlay" class="delete-confirmation-overlay" aria-hidden="true"></div>
 
-        <div id="datasetListDeleteConfirmation" class="delete-confirmation" aria-hidden="true">
+        <div id="datasetListDeleteConfirmation" class="delete-confirmation sku-delete-confirmation"
+            role="alertdialog" aria-modal="true" aria-labelledby="datasetListDeleteConfirmationTitle"
+            aria-describedby="datasetListDeleteConfirmationMessage" aria-hidden="true">
             <div class="delete-confirmation-icon">!</div>
             <div class="delete-confirmation-content">
                 <h6 id="datasetListDeleteConfirmationTitle">Padam set data?</h6>
@@ -246,6 +288,58 @@
                 </div>
             </div>
         </div>
+
+        <dialog id="datasetEditOverlay" class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--dataset-edit"
+            aria-labelledby="datasetEditTitle" aria-describedby="datasetEditDescription">
+            <header class="bpa-create-dialog__header">
+                <div class="bpa-create-dialog__heading">
+                    <h2 id="datasetEditTitle">Ubah Maklumat Set Data</h2>
+                    <p id="datasetEditDescription" class="bpa-create-dialog__subtitle">Kemas kini nama, jenis dan unit set data.</p>
+                </div>
+                <button type="button" id="datasetEditCloseButton" class="bpa-create-dialog__close"
+                    aria-label="Tutup suntingan set data">&times;</button>
+            </header>
+            <form id="datasetEditForm" class="bpa-create-dialog__body dataset-edit-form">
+                <div class="dataset-upload-fields dataset-edit-fields">
+                    <div class="dataset-edit-field dataset-edit-field--full">
+                        <label for="datasetEditName">Nama set data</label>
+                        <input type="text" id="datasetEditName" class="form-control" maxlength="255" required>
+                    </div>
+                    <div class="dataset-edit-field">
+                        <label for="datasetEditType">Jenis set data</label>
+                        <select id="datasetEditType" class="form-select" required>
+                            <option value="penerima">PENERIMA BANTUAN</option>
+                            <option value="peserta">PESERTA PROGRAM</option>
+                        </select>
+                    </div>
+                    <div class="dataset-edit-field">
+                        <label for="datasetEditUnit">Unit</label>
+                        <select id="datasetEditUnit" class="form-select">
+                            <option value="">Tiada unit ditetapkan</option>
+                            <option value="UPP">UPP</option>
+                            <option value="UPU">UPU</option>
+                            <option value="ULK">ULK</option>
+                            <option value="UAK">UAK</option>
+                            <option value="UPA">UPA</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="datasetEditDetails" class="dataset-edit-details" aria-label="Maklumat fail">
+                    <div><span>Fail sumber</span><strong id="datasetEditFilename">-</strong></div>
+                    <div><span>Baris</span><strong id="datasetEditRows">-</strong></div>
+                    <div><span>Saiz</span><strong id="datasetEditSize">-</strong></div>
+                    <div><span>Dimuat naik</span><strong id="datasetEditDate">-</strong></div>
+                </div>
+                <div id="datasetEditError" class="dataset-upload-status error" role="alert" style="display:none;"></div>
+            </form>
+            <footer class="bpa-budget-modal-footer">
+                <button type="submit" form="datasetEditForm" id="datasetEditSaveButton"
+                    class="budget-list-action bpa-budget-save-button dataset-edit-save-button">
+                    <span class="budget-list-action-icon"><i class="bi bi-check-lg" aria-hidden="true"></i></span>
+                    <span>Simpan perubahan</span>
+                </button>
+            </footer>
+        </dialog>
 
     </div>
 

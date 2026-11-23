@@ -37,6 +37,9 @@ if ($role === 'admin' && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['
             $delete->execute([$deleteId]);
             $deleted = $delete->rowCount() > 0;
             $msg = $deleted ? "SKU berjaya dipadam." : "Rekod SKU tidak ditemui.";
+            if ($deleted) {
+                record_bapim_action($pdo, 'sku_delete', 'SKU', 'SKU #' . $deleteId);
+            }
 
             if ($isAjaxRequest) {
                 if (!$deleted) http_response_code(404);
@@ -431,56 +434,6 @@ function kiraPeratusSemasa(array $r) {
     .action-del{ border-color:#f5c2c7; }
     .action-del:hover{ background:#f8d7da; }
 
-    .sku-note-dialog{
-      width:min(560px,calc(100vw - 32px));
-      max-width:none;
-      max-height:calc(100dvh - 40px);
-      padding:0;
-      overflow:hidden;
-      border:1px solid #e2e8f0;
-      border-radius:14px;
-      color:#202632;
-      background:#f5f7fb;
-      box-shadow:0 24px 80px rgba(15,23,42,.24);
-    }
-    .sku-note-dialog::backdrop{ background:rgba(15,23,42,.52); backdrop-filter:blur(2px); }
-    .sku-note-dialog__header{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:16px;
-      padding:16px 20px;
-      border-bottom:1px solid #e6e9ef;
-      background:#fbfcff;
-    }
-    .sku-note-dialog__header h2{ margin:0; color:#202632; font-size:16px; font-weight:700; }
-    .sku-note-dialog__close{
-      display:grid;
-      width:32px;
-      height:32px;
-      flex:0 0 auto;
-      place-items:center;
-      border:1px solid #e6e9ef;
-      border-radius:8px;
-      color:#7b8494;
-      background:#fff;
-      font-size:20px;
-      line-height:1;
-    }
-    .sku-note-dialog__close:hover{ color:#202632; background:#f1f5f9; }
-    .sku-note-dialog__body{
-      max-height:calc(100dvh - 140px);
-      overflow:auto;
-      padding:20px;
-      color:#526078;
-      text-align:left;
-      font-size:13px;
-      line-height:1.6;
-      white-space:normal;
-      overflow-wrap:anywhere;
-    }
-    .sku-note-dialog__body p{ margin:0; }
-
     .container{ max-width: 1400px; }
 
     .th-purple{
@@ -752,14 +705,18 @@ function kiraPeratusSemasa(array $r) {
                     <?php endif; ?>
 
                     <?php if ($catatan !== ''): ?>
-                      <dialog class="sku-note-dialog" id="<?= htmlspecialchars($noteDialogId) ?>"
+                      <dialog class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--note bpa-note-dialog"
+                              id="<?= htmlspecialchars($noteDialogId) ?>"
                               aria-labelledby="<?= htmlspecialchars($noteDialogId) ?>-title">
-                        <header class="sku-note-dialog__header">
-                          <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan SKU</h2>
-                          <button type="button" class="sku-note-dialog__close"
+                        <header class="bpa-create-dialog__header">
+                          <div class="bpa-create-dialog__heading">
+                            <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan SKU</h2>
+                            <p class="bpa-create-dialog__subtitle">Catatan berkaitan dengan SKU ini.</p>
+                          </div>
+                          <button type="button" class="bpa-create-dialog__close"
                                   aria-label="Tutup catatan" data-sku-note-close>&times;</button>
                         </header>
-                        <div class="sku-note-dialog__body">
+                        <div class="bpa-create-dialog__body bpa-note-dialog__body">
                           <p><?= nl2br(htmlspecialchars($catatan)) ?></p>
                         </div>
                       </dialog>

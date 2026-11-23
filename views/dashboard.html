@@ -15,7 +15,7 @@
     </style>
     <link rel="stylesheet" href="/css/bootstrap-icons.min.css">
     <link rel="stylesheet" href="/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/css/style.css?v=20261110-18">
+    <link rel="stylesheet" href="/css/style.css?v=20261120-15">
 
 </head>
 
@@ -28,6 +28,14 @@
             );
         } catch (error) {
             console.error("Could not restore sidebar state:", error);
+        }
+        try {
+            document.body.classList.toggle(
+                "auth-login-transition",
+                sessionStorage.getItem("authTransition") === "login"
+            );
+        } catch (error) {
+            console.error("Could not restore the login transition state:", error);
         }
     </script>
 
@@ -52,7 +60,7 @@
 
                                 <div class="dataset-control pic-control">
                                     <select id="picSelect" class="form-select pic-select">
-                                        <option value="">Semua PIC</option>
+                                        <option value="">Semua</option>
                                     </select>
                                 </div>
 
@@ -69,7 +77,7 @@
                                         <div class="stat-label">PENERIMA BANTUAN</div>
                                         <div id="totalRecipients" class="stat-number">—</div>
                                     </div>
-
+                                    <span id="recipientCardPic" class="recipient-card-pic"></span>
                                     <div class="stat-icon blue"><i class="bi bi-list-ol" aria-hidden="true"></i></div>
                                 </div>
 
@@ -85,7 +93,7 @@
                                 aria-pressed="false" aria-label="Paparkan papan pemuka peserta program">
                                 <div class="stat-card-header">
                                     <div>
-                                        <div class="stat-label">JUMLAH PESERTA PROGRAM</div>
+                                        <div id="participantCardLabel" class="stat-label">JUMLAH PESERTA PROGRAM</div>
                                         <div id="totalParticipants" class="stat-number">—</div>
                                     </div>
 
@@ -95,28 +103,20 @@
 
                                 <div class="stat-footer">
                                     <span>Peserta &gt; 1 program: <strong id="multiProgramParticipants">—</strong></span>
+                                    <span class="participant-card-unit">Unit: <strong id="participantCardUnit">Semua</strong></span>
                                 </div>
                             </div>
                         </div>
 
                         <div class="col-xl-4 col-md-6">
-                            <div class="stat-card" data-dashboard-mode="unchanged" role="button" tabindex="0"
-                                aria-label="Tarikh dan waktu semasa">
+                            <div class="stat-card dashboard-legend-card" aria-label="Legenda carta">
                                 <div class="stat-card-header">
                                     <div>
-                                        <div class="stat-label">TARIKH DAN WAKTU</div>
-                                        <div id="currentDateTime" class="stat-number">
-                                            <span id="currentTime">-</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="stat-icon green"><i class="bi bi-calendar2-week" aria-hidden="true"></i>
+                                        <div id="dashboardLegendTitle" class="stat-label">PROGRAM</div>
                                     </div>
                                 </div>
-
-                                <div class="stat-footer">
-                                    <span id="currentDate">-</span>
-                                </div>
+                                <div id="dashboardLegendList" class="dashboard-legend-list" role="list"
+                                    aria-label="Kategori dan nilai dalam carta"></div>
                             </div>
                         </div>
 
@@ -244,6 +244,12 @@
                                         </span>
 
                                     </div>
+                                    <button type="button" id="programChartBackButton"
+                                        class="bpa-upp-program-chart-back-button"
+                                        aria-label="Kembali ke semua program" hidden>
+                                        <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                                        Semua program
+                                    </button>
 
                                 </div>
 
@@ -327,20 +333,23 @@
     <script src="/js/bootstrap/bootstrap.bundle.min.js"></script>
     <script src="/js/chart.umd.min.js"></script>
     <script src="/js/xlsx.js"></script>
-    <script src="/js/dataset.js?v=20261110-3"></script>
-    <script src="/js/upload.js?v=20261110-4"></script>
+    <script src="/js/confirmation-dialog.js?v=20261119-1"></script>
+    <script src="/js/dataset.js?v=20261118-13"></script>
+    <script src="/js/upload.js?v=20261111-18"></script>
     <script src="/js/upload-page.js?v=20261110-2"></script>
-    <script src="/js/peserta-program.js?v=20261012-2"></script>
-    <script src="/js/penerima-bantuan.js?v=20261009-1"></script>
+    <script src="/js/peserta-program.js?v=20261119-17"></script>
+    <script src="/js/penerima-bantuan.js?v=20261118-8"></script>
     <script src="/js/color-utils.js?v=20261008-3"></script>
-    <script src="/js/user.js?v=20261009-3"></script>
-    <script src="/js/account.js?v=20261110-3"></script>
-    <script src="/js/manage-users.js?v=20261118-12"></script>
-    <script src="/js/updates.js?v=20261110-4"></script>
-    <script src="/js/dashboard.js?v=20261103-1"></script>
-    <script src="/js/header.js?v=20261104-6"></script>
-    <script src="/js/layout.js?v=20260929-2"></script>
-    <script src="/js/app.js?v=20261118-16"></script>
+    <script src="/js/user.js?v=20261119-9"></script>
+    <script src="/js/account.js?v=20261120-10"></script>
+    <script src="/js/overlay-scrollbars.js?v=20261120-4"></script>
+    <script src="/js/manage-users.js?v=20261119-6"></script>
+    <script src="/js/dashboard.js?v=20261116-8"></script>
+    <script src="/js/auth-transition.js?v=20261119-9"></script>
+    <script src="/js/header.js?v=20261119-5"></script>
+    <script src="/js/layout.js?v=20261119-4"></script>
+    <script src="/js/app.js?v=20261119-62"></script>
+    <script src="/js/recipient-participant.js?v=20261118-9"></script>
 
 </body>
 

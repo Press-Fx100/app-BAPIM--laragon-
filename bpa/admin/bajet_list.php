@@ -46,6 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
         $delete->execute([$deleteId]);
         $deleted = $delete->rowCount() > 0;
         $msg = $deleted ? "Bajet berjaya dipadam." : "Rekod bajet tidak ditemui.";
+        if ($deleted) {
+            record_bapim_action($pdo, 'bajet_delete', 'Bajet', 'Bajet #' . $deleteId . ($deletedYear !== false ? ' tahun ' . $deletedYear : ''));
+        }
 
         if ($isAjaxRequest) {
             $fallbackYear = null;
@@ -190,55 +193,6 @@ foreach ($rows as $r) {
     .money { text-align:right; font-variant-numeric: tabular-nums; }
     .badge-soft { font-size: 12px; }
     .summary-card { border-radius: 14px; }
-    .budget-note-dialog {
-      width:min(560px,calc(100vw - 32px));
-      max-width:none;
-      max-height:calc(100dvh - 40px);
-      padding:0;
-      overflow:hidden;
-      border:1px solid #e2e8f0;
-      border-radius:14px;
-      color:#202632;
-      background:#f5f7fb;
-      box-shadow:0 24px 80px rgba(15,23,42,.24);
-    }
-    .budget-note-dialog::backdrop { background:rgba(15,23,42,.52); backdrop-filter:blur(2px); }
-    .budget-note-dialog__header {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:16px;
-      padding:16px 20px;
-      border-bottom:1px solid #e6e9ef;
-      background:#fbfcff;
-    }
-    .budget-note-dialog__header h2 { margin:0; color:#202632; font-size:16px; font-weight:700; }
-    .budget-note-dialog__close {
-      display:grid;
-      width:32px;
-      height:32px;
-      flex:0 0 auto;
-      place-items:center;
-      border:1px solid #e6e9ef;
-      border-radius:8px;
-      color:#7b8494;
-      background:#fff;
-      font-size:20px;
-      line-height:1;
-    }
-    .budget-note-dialog__close:hover { color:#202632; background:#f1f5f9; }
-    .budget-note-dialog__body {
-      max-height:calc(100dvh - 140px);
-      overflow:auto;
-      padding:20px;
-      color:#526078;
-      text-align:left;
-      font-size:13px;
-      line-height:1.6;
-      white-space:normal;
-      overflow-wrap:anywhere;
-    }
-    .budget-note-dialog__body p { margin:0; }
   </style>
 </head>
 <body>
@@ -438,14 +392,18 @@ foreach ($rows as $r) {
                       <?php endif; ?>
 
                       <?php if ($catatan !== ''): ?>
-                        <dialog class="budget-note-dialog" id="<?= htmlspecialchars($noteDialogId) ?>"
+                        <dialog class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--note bpa-note-dialog"
+                                id="<?= htmlspecialchars($noteDialogId) ?>"
                                 aria-labelledby="<?= htmlspecialchars($noteDialogId) ?>-title">
-                          <header class="budget-note-dialog__header">
-                            <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan Bajet</h2>
-                            <button type="button" class="budget-note-dialog__close"
+                          <header class="bpa-create-dialog__header">
+                            <div class="bpa-create-dialog__heading">
+                              <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan Bajet</h2>
+                              <p class="bpa-create-dialog__subtitle">Catatan berkaitan dengan bajet ini.</p>
+                            </div>
+                            <button type="button" class="bpa-create-dialog__close"
                                     aria-label="Tutup catatan" data-budget-note-close>&times;</button>
                           </header>
-                          <div class="budget-note-dialog__body">
+                          <div class="bpa-create-dialog__body bpa-note-dialog__body">
                             <p><?= nl2br(htmlspecialchars($catatan)) ?></p>
                           </div>
                         </dialog>

@@ -1,200 +1,154 @@
 <main class="main-content">
     <div class="dashboard-content audit-page">
+        <header class="recipient-participant-title audit-page-title">
+            <div class="recipient-participant-title-copy">
+                <h4>Aktiviti Pengguna</h4>
+                <p>Pantau kemajuan dan sejarah aktiviti pengguna.</p>
+            </div>
+        </header>
 
-            <!-- STATUS ACTIVITY -->
-            <div class="content-card mb-4">
-
-                <div class="card-header-custom">
-
-                    <div>
-                        <h5>Status Aktiviti</h5>
-
-                        <span>
-                            Kemajuan status terkumpul harian mengikut pengguna
-                        </span>
-                    </div>
-                    <div class="audit-month-navigation">
-                        <span id="auditMonthLabel" aria-live="polite"></span>
-                        <button type="button" id="auditPreviousMonth" class="page-button"
+        <section class="content-card chart-card audit-chart-card mb-4">
+            <div class="card-header-custom">
+                <div>
+                    <h5>Status Aktiviti</h5>
+                    <span>Kemajuan status terkumpul harian mengikut pengguna</span>
+                </div>
+                <div class="audit-month-navigation">
+                    <span id="auditMonthLabel" aria-live="polite"></span>
+                    <div class="toolbar-group">
+                        <button type="button" id="auditPreviousMonth" class="toolbar-button icon-button"
                             title="Bulan sebelumnya" aria-label="Bulan sebelumnya">
                             <i class="bi bi-chevron-left" aria-hidden="true"></i>
                         </button>
-                        <button type="button" id="auditNextMonth" class="page-button"
+                        <button type="button" id="auditNextMonth" class="toolbar-button icon-button"
                             title="Bulan seterusnya" aria-label="Bulan seterusnya">
                             <i class="bi bi-chevron-right" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
-
-                <div class="audit-chart-wrapper">
-
-                    <canvas id="auditLineChart"></canvas>
-
-                </div>
-
             </div>
+            <div class="audit-chart-wrapper">
+                <canvas id="auditLineChart"></canvas>
+            </div>
+        </section>
 
-
-            <!-- ACTIVITY HISTORY -->
-            <div class="content-card">
-
-                <div class="card-header-custom audit-history-header">
-
-                    <div>
-                        <h5>Sejarah Aktiviti</h5>
-
-                        <span>
-                            Perubahan pengguna, tindakan, tarikh dan masa
-                        </span>
-                    </div>
-                    <div class="audit-history-controls">
-                        <div class="search-toolbar-group">
-                            <div class="search-box">
-                                <i class="bi bi-search" aria-hidden="true"></i>
-                                <input type="search" id="auditSearch" placeholder="Cari aktiviti..." autocomplete="off">
-                            </div>
-                            <div class="toolbar-group toolbar-filter">
-                                <div class="filter-menu-wrapper">
-                                    <button type="button" id="auditFilterButton" class="toolbar-button icon-button"
-                                        title="Tapis" aria-label="Tapis" aria-controls="auditFilterMenu"
-                                        aria-expanded="false">
-                                        <i class="bi bi-funnel" aria-hidden="true"></i>
-                                    </button>
-                                    <button type="button" id="auditDateFilterButton" class="toolbar-button icon-button"
-                                        title="Tapis mengikut tarikh" aria-label="Tapis mengikut tarikh"
-                                        aria-haspopup="dialog" aria-controls="auditCalendarMenu" aria-expanded="false">
-                                        <i class="bi bi-calendar3" aria-hidden="true"></i>
-                                    </button>
-                                    <div id="auditCalendarMenu" class="audit-calendar-menu" role="dialog"
-                                        aria-label="Pilih tarikh aktiviti">
-                                        <div class="audit-calendar-header">
-                                            <button type="button" class="audit-calendar-nav" data-calendar-offset="-1"
-                                                aria-label="Bulan sebelumnya">
-                                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
-                                            </button>
-                                            <strong id="auditCalendarMonth"></strong>
-                                            <button type="button" class="audit-calendar-nav" data-calendar-offset="1"
-                                                aria-label="Bulan seterusnya">
-                                                <i class="bi bi-chevron-right" aria-hidden="true"></i>
-                                            </button>
-                                        </div>
-                                        <div class="audit-calendar-weekdays" aria-hidden="true">
-                                            <span>Isn</span><span>Sel</span><span>Rab</span><span>Kha</span>
-                                            <span>Jum</span><span>Sab</span><span>Aha</span>
-                                        </div>
-                                        <div id="auditCalendarDays" class="audit-calendar-days"></div>
-                                        <div class="audit-calendar-footer">
-                                            <button type="button" id="auditCalendarToday">Hari ini</button>
-                                            <button type="button" id="auditCalendarClear">Padam tarikh</button>
-                                        </div>
+        <section class="content-card audit-history-card">
+            <div class="card-header-custom audit-history-header">
+                <div>
+                    <h5>Sejarah Aktiviti</h5>
+                    <span>Perubahan pengguna, tindakan, tarikh dan masa</span>
+                </div>
+                <div class="audit-history-controls">
+                    <div class="search-toolbar-group">
+                        <div class="search-box">
+                            <i class="bi bi-search" aria-hidden="true"></i>
+                            <input type="search" id="auditSearch" placeholder="Cari aktiviti..." autocomplete="off">
+                        </div>
+                        <div class="toolbar-group toolbar-filter">
+                            <div class="filter-menu-wrapper">
+                                <button type="button" id="auditFilterButton" class="toolbar-button icon-button"
+                                    title="Tapis" aria-label="Tapis" aria-controls="auditFilterMenu"
+                                    aria-expanded="false">
+                                    <i class="bi bi-funnel" aria-hidden="true"></i>
+                                </button>
+                                <button type="button" id="auditDateFilterButton" class="toolbar-button icon-button"
+                                    title="Pilih julat tarikh" aria-label="Pilih julat tarikh"
+                                    aria-haspopup="dialog" aria-controls="auditCalendarMenu" aria-expanded="false">
+                                    <i class="bi bi-calendar3" aria-hidden="true"></i>
+                                </button>
+                                <div id="auditCalendarMenu" class="audit-calendar-menu" role="dialog"
+                                    aria-label="Pilih julat tarikh aktiviti">
+                                    <div class="audit-calendar-header">
+                                        <button type="button" class="audit-calendar-nav" data-calendar-offset="-1"
+                                            aria-label="Bulan sebelumnya">
+                                            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                                        </button>
+                                        <strong id="auditCalendarMonth"></strong>
+                                        <button type="button" class="audit-calendar-nav" data-calendar-offset="1"
+                                            aria-label="Bulan seterusnya">
+                                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                                        </button>
                                     </div>
-                                    <div id="auditFilterMenu" class="filter-menu">
-                                        <div class="filter-title">Tapis</div>
-                                        <div class="filter-field">
-                                            <label for="auditUserFilter">Pengguna</label>
-                                            <select id="auditUserFilter">
-                                                <option value="">Semua pengguna</option>
-                                            </select>
-                                        </div>
-                                        <div class="filter-field">
-                                            <label for="auditActionFilter">Tindakan</label>
-                                            <select id="auditActionFilter">
-                                                <option value="">Semua tindakan</option>
-                                            </select>
-                                        </div>
-                                        <div class="filter-field">
-                                            <label for="auditColumnFilter">Lajur (Pada)</label>
-                                            <select id="auditColumnFilter">
-                                                <option value="">Semua lajur</option>
-                                            </select>
-                                        </div>
-                                        <div class="filter-field">
-                                            <label for="auditDatasetFilter">Set Data</label>
-                                            <select id="auditDatasetFilter">
-                                                <option value="">Semua set data</option>
-                                            </select>
-                                        </div>
+                                    <div class="audit-calendar-weekdays" aria-hidden="true">
+                                        <span>Isn</span><span>Sel</span><span>Rab</span><span>Kha</span>
+                                        <span>Jum</span><span>Sab</span><span>Aha</span>
+                                    </div>
+                                    <div id="auditCalendarDays" class="audit-calendar-days"></div>
+                                    <div class="audit-calendar-footer">
+                                        <span id="auditCalendarPreview" data-date-preview></span>
+                                        <button type="button" id="auditCalendarClear"
+                                            data-date-clear>Kosongkan</button>
+                                        <button type="button" id="auditCalendarApply" data-date-apply
+                                            disabled>Pilih</button>
+                                    </div>
+                                </div>
+                                <div id="auditFilterMenu" class="filter-menu">
+                                    <div class="filter-title">Tapis</div>
+                                    <div class="filter-field">
+                                        <label for="auditUserFilter">Pengguna</label>
+                                        <select id="auditUserFilter">
+                                            <option value="">Semua pengguna</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-field">
+                                        <label for="auditActionFilter">Tindakan</label>
+                                        <select id="auditActionFilter">
+                                            <option value="">Semua tindakan</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-field">
+                                        <label for="auditColumnFilter">Lajur (Pada)</label>
+                                        <select id="auditColumnFilter">
+                                            <option value="">Semua lajur</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-field">
+                                        <label for="auditDatasetFilter">Set Data</label>
+                                        <select id="auditDatasetFilter">
+                                            <option value="">Semua set data</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-
                 </div>
-
-
-                <div class="table-card">
-
-                    <div id="auditTableWrapper" class="table-wrapper">
-
-                        <table id="auditTable" class="dataset-table">
-
-                            <thead id="auditTableHead">
-
-                                <tr>
-
-                                    <th data-column-index="0">
-                                        <span>Pengguna</span>
-                                    </th>
-
-                                    <th data-column-index="1">
-                                        <span>Tindakan</span>
-                                    </th>
-
-                                    <th data-column-index="2">
-                                        <span>Pada</span>
-                                    </th>
-
-                                    <th data-column-index="3">
-                                        <span>Perubahan</span>
-                                    </th>
-
-                                    <th data-column-index="4">
-                                        <span>Set Data</span>
-                                    </th>
-
-                                    <th data-column-index="5">
-                                        <span>Masa</span>
-                                    </th>
-
-                                </tr>
-
-                            </thead>
-
-                            <tbody id="auditTableBody"></tbody>
-
-                        </table>
-
-                    </div>
-
-                </div>
-
-
-                <div class="pagination-bar">
-                    <div class="pagination-info-group">
-                        <div id="auditPaginationInfo" class="pagination-info">
-                            0 aktiviti
-                        </div>
-                    </div>
-                    <div class="pagination-controls">
-                        <button type="button" id="auditFirstPage" class="page-button" aria-label="Halaman pertama">
-                            <i class="bi bi-chevron-double-left" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" id="auditPreviousPage" class="page-button" aria-label="Halaman sebelumnya">
-                            <i class="bi bi-chevron-left" aria-hidden="true"></i>
-                        </button>
-                        <div id="auditPageNumbers" class="pagination-controls"></div>
-                        <button type="button" id="auditNextPage" class="page-button" aria-label="Halaman seterusnya">
-                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
-                        </button>
-                        <button type="button" id="auditLastPage" class="page-button" aria-label="Halaman terakhir">
-                            <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                </div>
-
             </div>
-
+            <div id="auditTableWrapper" class="table-wrapper">
+                <table id="auditTable" class="dataset-table">
+                    <thead id="auditTableHead">
+                        <tr>
+                            <th data-column-index="0"><span>Pengguna</span></th>
+                            <th data-column-index="1"><span>Tindakan</span></th>
+                            <th data-column-index="2"><span>Pada</span></th>
+                            <th data-column-index="3"><span>Perubahan</span></th>
+                            <th data-column-index="4"><span>Set Data</span></th>
+                            <th data-column-index="5"><span>Masa</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody"></tbody>
+                </table>
+            </div>
+            <div class="pagination-bar">
+                <div class="pagination-info-group">
+                    <div id="auditPaginationInfo" class="pagination-info">0 aktiviti</div>
+                </div>
+                <div class="pagination-controls">
+                    <button type="button" id="auditFirstPage" class="page-button" aria-label="Halaman pertama">
+                        <i class="bi bi-chevron-double-left" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" id="auditPreviousPage" class="page-button" aria-label="Halaman sebelumnya">
+                        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                    </button>
+                    <div id="auditPageNumbers" class="pagination-controls"></div>
+                    <button type="button" id="auditNextPage" class="page-button" aria-label="Halaman seterusnya">
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                    <button type="button" id="auditLastPage" class="page-button" aria-label="Halaman terakhir">
+                        <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
     </div>
-
 </main>

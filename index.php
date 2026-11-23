@@ -50,6 +50,15 @@ function ensureUserAccessSchema(PDO $pdo): void
 
 ensureUserAccessSchema($pdo);
 
+function ensureDatasetUnitSchema(PDO $pdo): void
+{
+    if (!$pdo->query("SHOW COLUMNS FROM datasets LIKE 'unit_incharge'")->fetch()) {
+        $pdo->exec("ALTER TABLE datasets ADD COLUMN unit_incharge VARCHAR(32) NOT NULL DEFAULT '' AFTER dataset_type");
+    }
+}
+
+ensureDatasetUnitSchema($pdo);
+
 function jsonResponse(array $data, int $status = 200): never
 {
     http_response_code($status);
@@ -116,12 +125,13 @@ function defaultPagePermissions(int $accessLevel, string $unit = ''): array
         'bpa' => ['access' => true, 'edit' => false],
         'bpaDashboard' => ['access' => false, 'edit' => false],
         'bpaDashboardBPA' => ['access' => $accessLevel <= 1, 'edit' => false],
+        'bpaDashboardUPP' => ['access' => true, 'edit' => false],
         'bpaDashboardUAK' => ['access' => $accessLevel <= 1 || $unit === 'UAK', 'edit' => false],
         'bpaDashboardUPU' => ['access' => $accessLevel <= 1 || $unit === 'UPU', 'edit' => false],
         'bpaDashboardUPA' => ['access' => $accessLevel <= 1 || $unit === 'UPA', 'edit' => false],
         'bpaDashboardULK' => ['access' => $accessLevel <= 1 || $unit === 'ULK', 'edit' => false],
-        'bpaBudget' => ['access' => $accessLevel === 0, 'edit' => $editable],
-        'bpaSku' => ['access' => $accessLevel === 0, 'edit' => $editable],
+        'bpaBudget' => ['access' => $accessLevel <= 1, 'edit' => $editable],
+        'bpaSku' => ['access' => $accessLevel <= 1, 'edit' => $editable],
         'bpaPrograms' => ['access' => false, 'edit' => false],
         'bpaProgramsBPA' => ['access' => $accessLevel <= 1, 'edit' => false],
         'bpaProgramsUAK' => ['access' => $accessLevel <= 1 || $unit === 'UAK', 'edit' => $editable || $unit === 'UAK'],
@@ -131,6 +141,7 @@ function defaultPagePermissions(int $accessLevel, string $unit = ''): array
         'manageUsers' => ['access' => $accessLevel <= 1, 'edit' => $accessLevel <= 1],
     ];
     $permissions['bpaDashboard']['access'] = $permissions['bpaDashboardBPA']['access']
+        || $permissions['bpaDashboardUPP']['access']
         || $permissions['bpaDashboardUAK']['access']
         || $permissions['bpaDashboardUPU']['access']
         || $permissions['bpaDashboardUPA']['access']
@@ -177,9 +188,14 @@ function userPagePermissions(array $user): array
             $legacyPermission = is_array($stored[$section] ?? null)
                 ? $stored[$section]
                 : (is_array($stored['bpa'] ?? null) ? $stored['bpa'] : null);
-            $unitCodes = ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+            $unitCodes = $section === 'bpaDashboard'
+                ? ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK']
+                : ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
             foreach ($unitCodes as $unitCode) {
                 $child = $section . $unitCode;
+                if ($section === 'bpaDashboard' && $unitCode === 'UPP') {
+                    continue;
+                }
                 if (!is_array($stored[$child] ?? null)
                     && is_array($legacyPermission)
                     && array_key_exists('access', $legacyPermission)) {
@@ -193,7 +209,10 @@ function userPagePermissions(array $user): array
     }
     foreach (['bpaDashboard', 'bpaPrograms'] as $section) {
         $permissions[$section]['access'] = false;
-        foreach (['BPA', 'UAK', 'UPU', 'UPA', 'ULK'] as $unitCode) {
+        $unitCodes = $section === 'bpaDashboard'
+            ? ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK']
+            : ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+        foreach ($unitCodes as $unitCode) {
             $permissions[$section]['access'] = $permissions[$section]['access']
                 || $permissions[$section . $unitCode]['access'];
         }
@@ -228,7 +247,7 @@ function normalizeSubmittedPagePermissions(
             ? $submitted[$page]
             : ($fallback[$page] ?? []);
         if (in_array($page, [
-            'bpaDashboardBPA', 'bpaDashboardUAK', 'bpaDashboardUPU', 'bpaDashboardUPA', 'bpaDashboardULK',
+            'bpaDashboardBPA', 'bpaDashboardUPP', 'bpaDashboardUAK', 'bpaDashboardUPU', 'bpaDashboardUPA', 'bpaDashboardULK',
             'bpaProgramsBPA', 'bpaProgramsUAK', 'bpaProgramsUPU', 'bpaProgramsUPA', 'bpaProgramsULK',
         ], true) && !isset($provided['access'])) {
             $section = str_starts_with($page, 'bpaDashboard') ? 'bpaDashboard' : 'bpaPrograms';
@@ -262,7 +281,10 @@ function normalizeSubmittedPagePermissions(
     $normalized['manageUsers']['edit'] = $normalized['manageUsers']['access'];
     foreach (['bpaDashboard', 'bpaPrograms'] as $section) {
         $normalized[$section]['access'] = false;
-        foreach (['BPA', 'UAK', 'UPU', 'UPA', 'ULK'] as $unitCode) {
+        $unitCodes = $section === 'bpaDashboard'
+            ? ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK']
+            : ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+        foreach ($unitCodes as $unitCode) {
             $normalized[$section]['access'] = $normalized[$section]['access']
                 || $normalized[$section . $unitCode]['access'];
         }
@@ -316,6 +338,10 @@ function deriveAccessLevelFromPermissions(array $permissions, int $requestedLeve
 function canAccessUserPage(array $user, string $page): bool
 {
     $permissions = userPagePermissions($user);
+    if ($page === 'recipientParticipants') {
+        return (bool)($permissions['recipients']['access'] ?? false)
+            && (bool)($permissions['participants']['access'] ?? false);
+    }
     return (bool)($permissions[$page]['access'] ?? false);
 }
 
@@ -330,7 +356,7 @@ function requiredBpaPageForPath(string $path, ?PDO $pdo = null): string
     }
     if (preg_match('#^/bpa/(?:dashboard|admin/dashboard_admin)(?:\\.php)?$#i', $route)) {
         $unit = strtoupper((string)($_GET['unit'] ?? $_SERVER['HTTP_X_BPA_DASHBOARD_UNIT'] ?? ''));
-        return in_array($unit, ['UAK', 'UPU', 'UPA', 'ULK'], true)
+        return in_array($unit, ['UPP', 'UAK', 'UPU', 'UPA', 'ULK'], true)
             ? 'bpaDashboard' . $unit
             : ($unit === 'BPA' ? 'bpaDashboardBPA' : 'bpaDashboard');
     }
@@ -381,13 +407,14 @@ function requirePageCapability(PDO $pdo, string $page, bool $edit = false): arra
 function requiredPageForPath(string $path): ?string
 {
     if ($path === '/') return 'dashboard';
+    if ($path === '/upp-dashboard') return 'bpaDashboardUPP';
+    if ($path === '/penerima-peserta') return 'recipientParticipants';
     if ($path === '/penerima-bantuan') return 'recipients';
     if ($path === '/peserta-program') return 'participants';
     if ($path === '/muat-naik') return 'upload';
     if ($path === '/set-data' || preg_match('#^/set-data/\\d+$#', $path)) return 'dataset';
     if ($path === '/aktiviti-pengguna') return 'activity';
     if ($path === '/akaun-pengguna') return 'account';
-    if ($path === '/log-perisian') return 'updates';
     if ($path === '/pengurusan-pengguna') return 'manageUsers';
     return null;
 }
@@ -512,6 +539,21 @@ function recordActivity(PDO $pdo, string $username, ?int $datasetId, ?string $da
         'INSERT INTO user_activity (username, dataset_id, dataset_name, action, row_id, column_name, old_value, new_value, progress_change) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $statement->execute([$username, $datasetId, $datasetName, $action, $rowId, $column, $oldValue, $newValue, $progress]);
+}
+
+function recordAppAction(PDO $pdo, string $username, string $action, string $module, string $target): void
+{
+    recordActivity(
+        $pdo,
+        $username,
+        null,
+        $target,
+        $action,
+        null,
+        $module,
+        null,
+        $target
+    );
 }
 
 function updateCsvDataset(PDO $pdo, array $dataset, array $rows, string $username): array
@@ -653,6 +695,10 @@ function editMappedRecord(PDO $pdo, array $payload, string $username, bool $part
             if ($categoryIndex === false) {
                 $categoryIndex = array_search('KETEGORI', $headers, true);
             }
+            $incomeBeforeIndex = array_search('PENDAPATAN AWAL/SEBELUM', $headers, true);
+            $incomeAfterIndex = array_search('PENDAPATAN SEMASA/SELEPAS', $headers, true);
+            $statusIndex = array_search('STATUS', $headers, true);
+            $notesIndex = array_search('CATATAN', $headers, true);
             $nameIndex = array_search('NAMA', $headers, true);
             $changes = is_array($payload['changes'] ?? null) ? $payload['changes'] : [];
             $matched = 0;
@@ -668,6 +714,10 @@ function editMappedRecord(PDO $pdo, array $payload, string $username, bool $part
                             'nama' => $nameIndex,
                             'kadpengenalan', 'kp' => $identityIndex,
                             'kategori', 'ketegori' => $categoryIndex,
+                            'incomebefore' => $incomeBeforeIndex,
+                            'incomeafter' => $incomeAfterIndex,
+                            'status' => $statusIndex,
+                            'catatan' => $notesIndex,
                             'program', 'programs' => $programIndex,
                             default => false,
                         };
@@ -839,6 +889,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             $statement = $pdo->prepare('UPDATE users SET display_name = ?, email = ? WHERE username = ? AND active = 1');
             $statement->execute([$displayName, $email, $account['username']]);
         }
+        recordAppAction($pdo, $account['username'], 'profile_update', 'Profil Pengguna', $newPassword !== '' ? 'Maklumat profil dan kata laluan dikemas kini' : 'Maklumat profil dikemas kini');
         jsonResponse(['success' => true, 'displayName' => $displayName, 'email' => $email, 'unit' => $account['unit']]);
     }
     if ($path === '/api/auth/login' && $method === 'POST') {
@@ -876,7 +927,13 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if (!$user) {
             jsonResponse(['success' => false, 'error' => 'Please sign in with your username and password.'], 401);
         }
-        jsonResponse(['success' => true, 'username' => $user['username'], 'displayName' => $user['display_name']]);
+        jsonResponse([
+            'success' => true,
+            'username' => $user['username'],
+            'displayName' => $user['display_name'],
+            'unit' => $user['unit'],
+            'permissions' => userPagePermissions($user),
+        ]);
     }
     if ($path === '/api/auth/create-account' && $method === 'POST') {
         $name = (string)($payload['username'] ?? '');
@@ -997,6 +1054,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             }
             throw $error;
         }
+        recordAppAction($pdo, $manager['username'], 'user_add', 'Pengurusan Pengguna', $displayName);
         jsonResponse(['success' => true, 'id' => (int)$pdo->lastInsertId()], 201);
     }
     if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) && $method === 'PUT') {
@@ -1104,6 +1162,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ((int)$target['id'] === (int)$manager['id'] && $usernameChanged) {
             $_SESSION['username'] = $newUsername;
         }
+        recordAppAction($pdo, $manager['username'], 'user_update', 'Pengurusan Pengguna', $displayName);
         jsonResponse(['success' => true, 'username' => $newUsername, 'email' => $email, 'unit' => $unit]);
     }
     if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) && $method === 'DELETE') {
@@ -1130,6 +1189,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         $statement = $pdo->prepare('UPDATE users SET active = 0 WHERE id = ?');
         $statement->execute([$targetId]);
+        recordAppAction($pdo, $manager['username'], 'user_delete', 'Pengurusan Pengguna', $target['username']);
         jsonResponse(['success' => true]);
     }
 
@@ -1138,7 +1198,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if (!canAccessUserPage($user, 'upload') && !canAccessUserPage($user, 'dashboard')) {
             jsonResponse(['success' => false, 'error' => 'You do not have permission to view datasets.'], 403);
         }
-        jsonResponse($pdo->query('SELECT id, name, filename, row_count, column_count, file_size, version, created_at, updated_at, remote_version, last_synced_at, sync_status, dataset_type FROM datasets ORDER BY updated_at DESC')->fetchAll());
+        jsonResponse($pdo->query('SELECT id, name, filename, row_count, column_count, file_size, version, created_at, updated_at, remote_version, last_synced_at, sync_status, dataset_type, unit_incharge FROM datasets ORDER BY updated_at DESC')->fetchAll());
     }
     if (preg_match('#^/api/datasets/(\d+)(?:/columns)?$#', $path, $matches) && $method === 'GET') {
         requirePageCapability($pdo, 'dataset');
@@ -1187,6 +1247,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             if ($categoryIndex === false) {
                 $categoryIndex = array_search('KETEGORI', $headers, true);
             }
+            $incomeBeforeIndex = array_search('PENDAPATAN AWAL/SEBELUM', $headers, true);
+            $incomeAfterIndex = array_search('PENDAPATAN SEMASA/SELEPAS', $headers, true);
+            $statusIndex = array_search('STATUS', $headers, true);
+            $notesIndex = array_search('CATATAN', $headers, true);
             $programIndex = array_search('PROGRAM', $headers, true);
             $unitIndex = array_search('UNIT', $headers, true);
             foreach (array_slice($rows, 1, null, true) as $rowIndex => $row) {
@@ -1195,10 +1259,35 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
                     continue;
                 }
                 if (!isset($participants[$identity])) {
-                    $participants[$identity] = ['nama' => trim($row[$nameIndex] ?? ''), 'kadPengenalan' => $identity, 'ketegori' => $categoryIndex !== false ? trim($row[$categoryIndex] ?? '') : '', 'programs' => [], 'units' => [], 'sourceFiles' => [], 'sourceRecords' => []];
+                    $participants[$identity] = [
+                        'nama' => trim($row[$nameIndex] ?? ''),
+                        'kadPengenalan' => $identity,
+                        'ketegori' => $categoryIndex !== false ? trim($row[$categoryIndex] ?? '') : '',
+                        'incomeBefore' => $incomeBeforeIndex !== false ? trim($row[$incomeBeforeIndex] ?? '') : '',
+                        'incomeAfter' => $incomeAfterIndex !== false ? trim($row[$incomeAfterIndex] ?? '') : '',
+                        'status' => $statusIndex !== false ? trim($row[$statusIndex] ?? '') : '',
+                        'catatan' => $notesIndex !== false ? trim($row[$notesIndex] ?? '') : '',
+                        'programs' => [],
+                        'units' => [],
+                        'sourceFiles' => [],
+                        'sourceRecords' => [],
+                    ];
                 }
                 $item = &$participants[$identity];
-                $unit = $unitIndex !== false ? trim($row[$unitIndex] ?? '') : '';
+                foreach ([
+                    'incomeBefore' => $incomeBeforeIndex,
+                    'incomeAfter' => $incomeAfterIndex,
+                    'status' => $statusIndex,
+                    'catatan' => $notesIndex,
+                ] as $field => $fieldIndex) {
+                    if ($item[$field] === '' && $fieldIndex !== false) {
+                        $item[$field] = trim($row[$fieldIndex] ?? '');
+                    }
+                }
+                $unit = trim((string)($dataset['unit_incharge'] ?? ''));
+                if ($unit === '' && $unitIndex !== false) {
+                    $unit = trim($row[$unitIndex] ?? '');
+                }
                 if ($unit !== '' && !in_array($unit, $item['units'], true)) {
                     $item['units'][] = $unit;
                 }
@@ -1220,7 +1309,22 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         $output = [];
         foreach (array_values($participants) as $index => $item) {
-            $output[] = ['index' => $index + 1, 'nama' => $item['nama'], 'kadPengenalan' => $item['kadPengenalan'], 'ketegori' => $item['ketegori'], 'jumlahProgram' => count($item['programs']), 'programs' => $item['programs'], 'unit' => implode(', ', $item['units']), 'sourceFile' => implode(', ', $item['sourceFiles']), 'datasetId' => $item['sourceRecords'][0]['datasetId'] ?? null, 'sourceRecords' => $item['sourceRecords']];
+            $output[] = [
+                'index' => $index + 1,
+                'nama' => $item['nama'],
+                'kadPengenalan' => $item['kadPengenalan'],
+                'ketegori' => $item['ketegori'],
+                'incomeBefore' => $item['incomeBefore'],
+                'incomeAfter' => $item['incomeAfter'],
+                'status' => $item['status'],
+                'catatan' => $item['catatan'],
+                'jumlahProgram' => count($item['programs']),
+                'programs' => $item['programs'],
+                'unit' => implode(', ', $item['units']),
+                'sourceFile' => implode(', ', $item['sourceFiles']),
+                'datasetId' => $item['sourceRecords'][0]['datasetId'] ?? null,
+                'sourceRecords' => $item['sourceRecords'],
+            ];
         }
         jsonResponse(['success' => true, 'participants' => $output]);
     }
@@ -1258,7 +1362,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         jsonResponse(['success' => true, 'recipients' => $recipients]);
     }
     if ($path === '/api/user/activity' && $method === 'GET') {
-        $account = requirePageCapability($pdo, 'activity');
+        $account = requireApiUser($pdo);
         $limit = min(max((int)($query['limit'] ?? 1000), 1), 1000);
         $activityUsername = trim((string)$account['display_name']);
         $picUsername = $activityUsername !== '' ? $activityUsername : (string)$account['username'];
@@ -1288,8 +1392,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         );
         $progressStatement->execute([$activityUsername, $account['username']]);
         $progressChange = (int)$progressStatement->fetchColumn();
-        $statement = $pdo->prepare("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
-        $statement->bindValue(1, $limit, PDO::PARAM_INT);
+        $statement = $pdo->prepare("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, dataset.dataset_type, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id WHERE LOWER(TRIM(activity.username)) IN (LOWER(TRIM(?)), LOWER(TRIM(?))) ORDER BY activity.created_at DESC, activity.id DESC LIMIT ?");
+        $statement->bindValue(1, $account['username'], PDO::PARAM_STR);
+        $statement->bindValue(2, $activityUsername, PDO::PARAM_STR);
+        $statement->bindValue(3, $limit, PDO::PARAM_INT);
         $statement->execute();
         $activities = $statement->fetchAll();
         $earliest = $pdo->query("SELECT MIN(DATE_FORMAT(created_at, '%Y-%m')) FROM user_activity WHERE action = 'status_change' OR (action = 'UPDATE' AND UPPER(TRIM(column_name)) = 'STATUS')")->fetchColumn();
@@ -1350,6 +1456,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'CSV is empty.'], 400);
         }
         $datasetType = ($payload['datasetType'] ?? '') === 'peserta' ? 'peserta' : 'penerima';
+        $unitInCharge = strtoupper(trim((string)($payload['unitInCharge'] ?? '')));
+        if (!in_array($unitInCharge, ['UPP', 'UPU', 'ULK', 'UAK', 'UPA'], true)) {
+            jsonResponse(['success' => false, 'error' => 'A valid unit is required.'], 400);
+        }
         if ($datasetType === 'penerima') {
             $rows = ensureRecipientEmploymentStatusColumn($rows);
         }
@@ -1366,10 +1476,10 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         $pdo->beginTransaction();
         try {
-            $statement = $pdo->prepare("INSERT INTO datasets (name, filename, filepath, row_count, column_count, file_size, dataset_type, created_at, updated_at, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'local')");
-            $statement->execute([$name, $safeOriginal, $filepath, max(count($rows) - 1, 0), count($rows[0]), strlen($csv), $datasetType]);
+            $statement = $pdo->prepare("INSERT INTO datasets (name, filename, filepath, row_count, column_count, file_size, dataset_type, unit_incharge, created_at, updated_at, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), 'local')");
+            $statement->execute([$name, $safeOriginal, $filepath, max(count($rows) - 1, 0), count($rows[0]), strlen($csv), $datasetType, $unitInCharge]);
             $id = (int)$pdo->lastInsertId();
-            recordActivity($pdo, $account['username'], $id, $name, 'dataset_create');
+            recordActivity($pdo, $account['username'], $id, $name, 'dataset_create', null, $datasetType);
             $pdo->commit();
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) {
@@ -1378,7 +1488,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             @unlink($filepath);
             throw $error;
         }
-        jsonResponse(['success' => true, 'type' => 'csv', 'id' => $id, 'name' => $name, 'filename' => $safeOriginal, 'rows' => max(count($rows) - 1, 0), 'columns' => count($rows[0]), 'version' => 1, 'sync_status' => 'local'], 201);
+        jsonResponse(['success' => true, 'type' => 'csv', 'id' => $id, 'name' => $name, 'filename' => $safeOriginal, 'rows' => max(count($rows) - 1, 0), 'columns' => count($rows[0]), 'version' => 1, 'sync_status' => 'local', 'unit_incharge' => $unitInCharge], 201);
     }
 
     if (preg_match('#^/api/(peserta-program|penerima-bantuan)/records$#', $path, $matches) && in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
@@ -1423,6 +1533,76 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         editMappedRecord($pdo, $payload, $account['username'], $participant, $method === 'DELETE');
     }
+    if (preg_match('#^/api/upload/datasets/(\d+)/metadata$#', $path, $matches) && $method === 'PUT') {
+        $account = requirePageCapability($pdo, 'upload', true);
+        $datasetId = (int)$matches[1];
+        $dataset = datasetById($pdo, $datasetId);
+        if (!$dataset) {
+            jsonResponse(['success' => false, 'error' => 'Dataset not found.'], 404);
+        }
+
+        $name = trim((string)($payload['name'] ?? ''));
+        $datasetType = strtolower(trim((string)($payload['datasetType'] ?? '')));
+        $unitInCharge = strtoupper(trim((string)($payload['unitInCharge'] ?? '')));
+        $nameLength = function_exists('mb_strlen') ? mb_strlen($name, 'UTF-8') : strlen($name);
+        if ($name === '' || $nameLength > 255) {
+            jsonResponse(['success' => false, 'error' => 'Dataset name must be between 1 and 255 characters.'], 400);
+        }
+        if (!in_array($datasetType, ['penerima', 'peserta'], true)) {
+            jsonResponse(['success' => false, 'error' => 'Invalid dataset type.'], 400);
+        }
+        if (!in_array($unitInCharge, ['', 'UPP', 'UPU', 'ULK', 'UAK', 'UPA'], true)) {
+            jsonResponse(['success' => false, 'error' => 'Invalid unit.'], 400);
+        }
+
+        $oldMetadata = json_encode([
+            'name' => (string)$dataset['name'],
+            'datasetType' => (string)$dataset['dataset_type'],
+            'unitInCharge' => (string)($dataset['unit_incharge'] ?? ''),
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        $newMetadata = json_encode([
+            'name' => $name,
+            'datasetType' => $datasetType,
+            'unitInCharge' => $unitInCharge,
+        ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        if ($name !== (string)$dataset['name']
+            || $datasetType !== (string)$dataset['dataset_type']
+            || $unitInCharge !== (string)($dataset['unit_incharge'] ?? '')) {
+            $pdo->beginTransaction();
+            try {
+                $update = $pdo->prepare(
+                    "UPDATE datasets SET name = ?, dataset_type = ?, unit_incharge = ?, version = version + 1, updated_at = NOW(), sync_status = 'modified' WHERE id = ?"
+                );
+                $update->execute([$name, $datasetType, $unitInCharge, $datasetId]);
+                recordActivity(
+                    $pdo,
+                    $account['username'],
+                    $datasetId,
+                    $name,
+                    'dataset_update',
+                    null,
+                    'metadata',
+                    $oldMetadata,
+                    $newMetadata
+                );
+                $pdo->commit();
+            } catch (Throwable $error) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $error;
+            }
+        }
+
+        jsonResponse([
+            'success' => true,
+            'id' => $datasetId,
+            'name' => $name,
+            'dataset_type' => $datasetType,
+            'unit_incharge' => $unitInCharge,
+        ]);
+    }
     if (preg_match('#^/api/datasets/(\d+)$#', $path, $matches) && $method === 'PUT') {
         $account = requirePageCapability($pdo, 'dataset', true);
         $dataset = datasetById($pdo, (int)$matches[1]);
@@ -1457,7 +1637,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             }
             $pdo->beginTransaction();
             try {
-                recordActivity($pdo, $account['username'], $id, $dataset['name'], 'dataset_delete');
+                recordActivity($pdo, $account['username'], $id, $dataset['name'], 'dataset_delete', null, $dataset['dataset_type'] ?? null);
                 $statement->execute([$id]);
                 $pdo->commit();
             } catch (Throwable $error) {
@@ -1572,7 +1752,6 @@ if (preg_match('#^/data-set/(\d+)$#', $path, $legacyDatasetMatch)) {
         '/data-set' => '/set-data',
         '/account' => '/akaun-pengguna',
         '/manage-users' => '/pengurusan-pengguna',
-        '/updates' => '/log-perisian',
         '/login' => '/log-masuk',
         '/create-account' => '/cipta-akaun',
     ];
@@ -1585,6 +1764,11 @@ if ($legacyDestination !== null) {
         $location .= '?' . $query;
     }
     header('Location: ' . $location, true, 302);
+    exit;
+}
+
+if ($path === '/') {
+    header('Location: ' . $basePath . '/bpa/dashboard', true, 302);
     exit;
 }
 
@@ -1640,7 +1824,7 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
     $bpaInitialDashboardUnit = null;
     if ($isUnifiedBpaDashboard) {
         $requestedUnit = strtoupper((string)($_GET['unit'] ?? $_SERVER['HTTP_X_BPA_DASHBOARD_UNIT'] ?? ''));
-        $dashboardUnits = ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+        $dashboardUnits = ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
         $bpaInitialDashboardUnit = in_array($requestedUnit, $dashboardUnits, true) ? $requestedUnit : null;
         if ($bpaInitialDashboardUnit === null) {
             foreach ($dashboardUnits as $unitCode) {
@@ -1650,10 +1834,12 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
                 }
             }
         }
-        if ($bpaInitialDashboardUnit !== null && $bpaInitialDashboardUnit !== 'BPA') {
+        if ($bpaInitialDashboardUnit !== null && !in_array($bpaInitialDashboardUnit, ['BPA', 'UPP'], true)) {
             $bpaFile = __DIR__ . '/bpa/' . strtolower($bpaInitialDashboardUnit) . '/dashboard.php';
         }
-        if ($bpaInitialDashboardUnit !== null && !defined('BPA_AUTHORIZED_UNIT')) {
+        if ($bpaInitialDashboardUnit !== null
+            && $bpaInitialDashboardUnit !== 'UPP'
+            && !defined('BPA_AUTHORIZED_UNIT')) {
             define('BPA_AUTHORIZED_UNIT', $bpaInitialDashboardUnit);
         }
     }
@@ -3027,6 +3213,10 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
     }
     .bpa-dashboard-content[data-dashboard-unit]:not([data-dashboard-unit="BPA"]) > .container > .card.shadow-sm.border-0.mb-3 table.table tbody tr:last-child td,
     .bpa-dashboard-content[data-dashboard-unit]:not([data-dashboard-unit="BPA"]) > .container > .card.shadow-sm.border-0.mb-3 + .row.g-3 > [class*="col-"] > .card table.table tbody tr:last-child td {
+        border-bottom: 0 !important;
+    }
+    .bpa-dashboard-content[data-dashboard-unit]:not([data-dashboard-unit="BPA"]) > .container > .card.shadow-sm.border-0.mb-3 table.table tbody tr:last-child,
+    .bpa-dashboard-content[data-dashboard-unit]:not([data-dashboard-unit="BPA"]) > .container > .card.shadow-sm.border-0.mb-3 + .row.g-3 > [class*="col-"] > .card table.table tbody tr:last-child {
         border-bottom: 0 !important;
     }
     .bpa-dashboard-content[data-dashboard-unit]:not([data-dashboard-unit="BPA"]) > .container > .card.shadow-sm.border-0.mb-3 table.table tbody td:nth-child(2),
@@ -5566,17 +5756,17 @@ CSS;
 }
 
 $pages = [
-    '/' => 'dashboard.html',
+    '/upp-dashboard' => 'dashboard.html',
     '/log-masuk' => 'login.html',
     '/cipta-akaun' => 'create-account.html',
     '/muat-naik' => 'upload.html',
     '/set-data' => 'dataset.html',
+    '/penerima-peserta' => 'penerima-peserta.html',
     '/peserta-program' => 'peserta-program.html',
     '/penerima-bantuan' => 'penerima-bantuan.html',
     '/aktiviti-pengguna' => 'user.html',
     '/pengurusan-pengguna' => 'manage-users.html',
     '/akaun-pengguna' => 'account.html',
-    '/log-perisian' => 'updates.html',
     '/sidebar' => 'components/sidebar.html',
     '/header' => 'components/header.html',
 ];
@@ -5646,7 +5836,7 @@ if (isset($_SERVER['HTTP_X_APP_FRAGMENT']) || in_array($path, ['/sidebar', '/hea
     exit;
 }
 
-if ($path === '/muat-naik' || $path === '/set-data' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/aktiviti-pengguna' || $path === '/pengurusan-pengguna' || $path === '/akaun-pengguna' || $path === '/log-perisian') {
+if ($path === '/muat-naik' || $path === '/set-data' || $path === '/penerima-peserta' || $path === '/peserta-program' || $path === '/penerima-bantuan' || $path === '/aktiviti-pengguna' || $path === '/pengurusan-pengguna' || $path === '/akaun-pengguna') {
     $shellPath = __DIR__ . '/views/dashboard.html';
     $shell = file_get_contents($shellPath);
     $start = strpos($shell, '<main class="main-content" id="page-content">');

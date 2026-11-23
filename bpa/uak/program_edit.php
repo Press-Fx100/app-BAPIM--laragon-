@@ -163,6 +163,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':program_id' => $program_id,
                 ':unit_id' => $uak_id,
             ]);
+            record_bapim_action($pdo, 'program_update', 'Program UAK', $nama_program, (string)($program['nama_program'] ?? ''));
+
+            if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => true, 'message' => 'Program berjaya dikemaskini.', 'programId' => $program_id]);
+                exit;
+            }
 
             $ok = "Program berjaya dikemaskini.";
 

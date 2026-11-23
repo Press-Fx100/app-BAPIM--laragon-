@@ -368,15 +368,24 @@ body{background:#f4f6f8;padding-top:70px;}
     </div>
 
     <div class="bpa-admin-tools">
-      <form class="bpa-admin-year-form" method="get">
+      <form class="bpa-admin-year-form bpa-upp-year-action" method="get">
         <label class="visually-hidden" for="bpa-dashboard-year">Tahun dashboard</label>
-        <input id="bpa-dashboard-year" name="tahun" type="number"
-               class="form-control bpa-admin-year-select" aria-label="Pilih tahun dashboard"
-               value="<?= $tahun ?>"
-               <?= $availableYears ? 'min="' . min($availableYears) . '" max="' . max($availableYears) . '"' : 'disabled' ?>
-               step="1" inputmode="numeric"
-               data-current-year="<?= $tahun ?>"
-               data-available-years="<?= safe(json_encode($availableYears)) ?>">
+        <span class="bpa-admin-action-icon" aria-hidden="true"><i class="bi bi-calendar3"></i></span>
+        <select id="bpa-dashboard-year" name="tahun"
+                class="form-select bpa-admin-year-select" aria-label="Pilih tahun dashboard"
+                <?= $availableYears ? '' : 'disabled' ?>
+                data-current-year="<?= $tahun ?>"
+                data-available-years="<?= safe(json_encode($availableYears)) ?>">
+          <?php if ($availableYears): ?>
+            <?php foreach ($availableYears as $year): ?>
+              <option value="<?= (int)$year ?>" <?= (int)$year === (int)$tahun ? 'selected' : '' ?>>
+                <?= (int)$year ?>
+              </option>
+            <?php endforeach; ?>
+          <?php else: ?>
+            <option value="<?= (int)$tahun ?>" selected><?= (int)$tahun ?></option>
+          <?php endif; ?>
+        </select>
       </form>
       <nav class="bpa-admin-actions" aria-label="Pautan dashboard BPA">
         <a class="bpa-admin-action bpa-admin-action--sku" href="/bpa/admin/sku_list"

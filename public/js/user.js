@@ -14,7 +14,10 @@ let selectedActivityUser = "";
 let selectedActivityAction = "";
 let selectedActivityColumn = "";
 let selectedActivityDataset = "";
-let selectedActivityDate = "";
+let selectedActivityStartDate = "";
+let selectedActivityEndDate = "";
+let draftActivityStartDate = "";
+let draftActivityEndDate = "";
 let auditCalendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
 const rowsPerPage = 10;
@@ -275,6 +278,63 @@ function normalizeActivity(activity) {
     };
 }
 
+function getDatasetMetadataChanges(activity) {
+    if (
+        activity.action !== "DATASET_UPDATE" ||
+        String(activity.column).trim().toLowerCase() !== "metadata"
+    ) {
+        return null;
+    }
+
+    let oldMetadata;
+    let newMetadata;
+    try {
+        oldMetadata = JSON.parse(activity.oldValue);
+        newMetadata = JSON.parse(activity.newValue);
+    } catch {
+        return {
+            fields: ["Metadata"],
+            changes: [{ oldValue: "Tidak dapat dibaca", newValue: "Tidak dapat dibaca" }]
+        };
+    }
+
+    if (
+        !oldMetadata || typeof oldMetadata !== "object" || Array.isArray(oldMetadata) ||
+        !newMetadata || typeof newMetadata !== "object" || Array.isArray(newMetadata)
+    ) {
+        return {
+            fields: ["Metadata"],
+            changes: [{ oldValue: "Tidak dapat dibaca", newValue: "Tidak dapat dibaca" }]
+        };
+    }
+
+    const fieldLabels = {
+        name: "Nama",
+        datasetType: "Jenis Set Data",
+        unitInCharge: "Unit"
+    };
+    const changes = [...new Set([...Object.keys(oldMetadata), ...Object.keys(newMetadata)])]
+        .filter(key => JSON.stringify(oldMetadata[key]) !== JSON.stringify(newMetadata[key]))
+        .map(key => ({
+            field: fieldLabels[key] ||
+                key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, character => character.toUpperCase()),
+            oldValue: formatAuditMetadataValue(oldMetadata[key]),
+            newValue: formatAuditMetadataValue(newMetadata[key])
+        }));
+
+    return {
+        fields: changes.length ? changes.map(change => change.field) : ["—"],
+        changes: changes.length ? changes : [{ oldValue: "—", newValue: "Tiada perubahan" }]
+    };
+}
+
+function formatAuditMetadataValue(value) {
+    if (value === null || value === undefined || String(value).trim() === "") {
+        return "—";
+    }
+    return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
 function parseCreatedAt(createdAt) {
     if (!createdAt) {
         return null;
@@ -419,6 +479,7 @@ function createChartData() {
                 Number.parseInt(channel, 16)
             );
             const lineColor = `rgba(${red}, ${green}, ${blue}, 0.65)`;
+            const fillColor = `rgba(${red}, ${green}, ${blue}, 0.12)`;
 
             return {
                 label: username,
@@ -427,10 +488,10 @@ function createChartData() {
                     return cumulative;
                 }),
                 borderColor: lineColor,
-                backgroundColor: lineColor,
+                backgroundColor: fillColor,
                 borderWidth: 2,
                 tension: 0,
-                fill: false,
+                fill: true,
                 pointRadius: 3,
                 pointHoverRadius: 5,
                 spanGaps: true
@@ -588,7 +649,9 @@ function renderTable() {
             (!selectedActivityAction || action === selectedActivityAction) &&
             (!selectedActivityColumn || activity.column === selectedActivityColumn) &&
             (!selectedActivityDataset || activity.dataset === selectedActivityDataset) &&
-            (!selectedActivityDate || getActivityDateKey(activity.createdAt) === selectedActivityDate);
+            ((!selectedActivityStartDate && !selectedActivityEndDate) ||
+                (getActivityDateKey(activity.createdAt) >= selectedActivityStartDate &&
+                    getActivityDateKey(activity.createdAt) <= selectedActivityEndDate));
     });
 
     const total = filteredActivities.length;
@@ -646,13 +709,37 @@ function renderTable() {
             const actionText = getActivityActionLabel(activity.action);
             const actionClass = {
                 DATASET_CREATE: "dataset-add",
+                DATASET_UPDATE: "dataset-update",
                 DATASET_DELETE: "dataset-delete"
             }[activity.action] || actionText.toLowerCase().replaceAll(" ", "-");
             const action = escapeHTML(actionText);
             const user = escapeHTML(activity.username);
             const userBadgeStyle = getUserBadgeStyle(activity.username);
+            const metadataChanges = getDatasetMetadataChanges(activity);
             const previousValue = escapeHTML(activity.oldValue || "—");
             const nextValue = escapeHTML(activity.newValue || "—");
+            const locationContent = metadataChanges
+                ? `<div class="audit-location-values audit-metadata-fields">${metadataChanges.fields
+                    .map(field => `<span class="audit-location-badge">${escapeHTML(field)}</span>`)
+                    .join("")}</div>`
+                : `<div class="audit-location-values">
+                    <span class="audit-location-badge" title="${escapeHTML(activity.row || "—")}"><span class="audit-location-text">${escapeHTML(activity.row || "—")}</span></span>
+                    <span class="audit-location-transition" aria-hidden="true">, </span>
+                    <span class="audit-location-badge" title="${escapeHTML(activity.column || "—")}"><span class="audit-location-text">${escapeHTML(activity.column || "—")}</span></span>
+                </div>`;
+            const changeContent = metadataChanges
+                ? `<div class="audit-change-values audit-metadata-changes">${metadataChanges.changes
+                    .map(change => `<div class="audit-metadata-change">
+                        <span class="audit-value-badge old" title="${escapeHTML(change.oldValue)}"><span class="audit-value-text">${escapeHTML(change.oldValue)}</span></span>
+                        <span class="audit-value-transition" aria-hidden="true">&gt;</span>
+                        <span class="audit-value-badge new" title="${escapeHTML(change.newValue)}"><span class="audit-value-text">${escapeHTML(change.newValue)}</span></span>
+                    </div>`)
+                    .join("")}</div>`
+                : `<div class="audit-change-values">
+                    <span class="audit-value-badge old" title="${previousValue}"><span class="audit-value-text">${previousValue}</span></span>
+                    <span class="audit-value-transition" aria-hidden="true">&gt;</span>
+                    <span class="audit-value-badge new" title="${nextValue}"><span class="audit-value-text">${nextValue}</span></span>
+                </div>`;
 
             row.innerHTML = `
                 <td class="audit-user audit-user-cell">
@@ -668,19 +755,11 @@ function renderTable() {
                 </td>
 
                 <td class="audit-location-cell">
-                    <div class="audit-location-values">
-                        <span class="audit-location-badge" title="${escapeHTML(activity.row || "—")}"><span class="audit-location-text">${escapeHTML(activity.row || "—")}</span></span>
-                        <span class="audit-location-transition" aria-hidden="true">, </span>
-                        <span class="audit-location-badge" title="${escapeHTML(activity.column || "—")}"><span class="audit-location-text">${escapeHTML(activity.column || "—")}</span></span>
-                    </div>
+                    ${locationContent}
                 </td>
 
                 <td class="audit-change-cell">
-                    <div class="audit-change-values">
-                        <span class="audit-value-badge old">${previousValue}</span>
-                        <span class="audit-value-transition" aria-hidden="true">&gt;</span>
-                        <span class="audit-value-badge new">${nextValue}</span>
-                    </div>
+                    ${changeContent}
                 </td>
 
                 <td>
@@ -712,11 +791,12 @@ function renderTable() {
     );
     const dateButton = document.getElementById("auditDateFilterButton");
     const calendarMenu = document.getElementById("auditCalendarMenu");
-    dateButton?.classList.toggle("active", Boolean(selectedActivityDate));
+    const hasDateRange = Boolean(selectedActivityStartDate && selectedActivityEndDate);
+    dateButton?.classList.toggle("active", hasDateRange);
     if (dateButton) {
-        const label = selectedActivityDate
-            ? `Tapis mengikut tarikh: ${selectedActivityDate}`
-            : "Tapis mengikut tarikh";
+        const label = hasDateRange
+            ? `Tapis tarikh: ${formatActivityDateKey(selectedActivityStartDate)} hingga ${formatActivityDateKey(selectedActivityEndDate)}`
+            : "Pilih julat tarikh";
         dateButton.title = label;
         dateButton.setAttribute("aria-label", label);
     }
@@ -728,6 +808,7 @@ function getActivityActionLabel(action) {
         EDIT: "UPDATE",
         STATUS_CHANGE: "UPDATE",
         DATASET_CREATE: "DATASET ADD",
+        DATASET_UPDATE: "DATASET UPDATE",
         DATASET_DELETE: "DATASET DELETE"
     })[action] || action;
 }
@@ -791,10 +872,18 @@ function getActivityDateKey(createdAt) {
     ].join("-");
 }
 
+function formatActivityDateKey(dateKey) {
+    if (!dateKey) return "";
+    const [year, month, day] = dateKey.split("-");
+    return `${day}/${month}/${year}`;
+}
+
 function renderAuditCalendar() {
     const monthLabel = document.getElementById("auditCalendarMonth");
     const daysContainer = document.getElementById("auditCalendarDays");
-    if (!monthLabel || !daysContainer) return;
+    const preview = document.getElementById("auditCalendarPreview");
+    const applyButton = document.getElementById("auditCalendarApply");
+    if (!monthLabel || !daysContainer || !preview || !applyButton) return;
 
     const year = auditCalendarMonth.getFullYear();
     const month = auditCalendarMonth.getMonth();
@@ -807,6 +896,13 @@ function renderAuditCalendar() {
     const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const todayKey = getActivityDateKey(new Date());
+    const hasRange = Boolean(draftActivityStartDate && draftActivityEndDate);
+    const rangeStart = hasRange
+        ? (draftActivityStartDate < draftActivityEndDate ? draftActivityStartDate : draftActivityEndDate)
+        : "";
+    const rangeEnd = hasRange
+        ? (draftActivityStartDate > draftActivityEndDate ? draftActivityStartDate : draftActivityEndDate)
+        : "";
     const buttons = [];
 
     for (let index = 0; index < firstWeekday; index += 1) {
@@ -819,17 +915,23 @@ function renderAuditCalendar() {
             String(month + 1).padStart(2, "0"),
             String(day).padStart(2, "0")
         ].join("-");
-        const classes = [
-            "audit-calendar-day",
-            dateKey === selectedActivityDate ? "selected" : "",
-            dateKey === todayKey ? "today" : ""
-        ].filter(Boolean).join(" ");
+        const classes = ["audit-calendar-day"];
+        if (hasRange && dateKey >= rangeStart && dateKey <= rangeEnd) classes.push("in-range");
+        if (dateKey === draftActivityStartDate) classes.push("range-start");
+        if (dateKey === draftActivityEndDate) classes.push("range-end");
+        if (dateKey === todayKey) classes.push("today");
         buttons.push(
-            `<button type="button" class="${classes}" data-calendar-date="${dateKey}" aria-pressed="${dateKey === selectedActivityDate}">${day}</button>`
+            `<button type="button" class="${classes.join(" ")}" data-calendar-date="${dateKey}" aria-pressed="${dateKey === draftActivityStartDate || dateKey === draftActivityEndDate}">${day}</button>`
         );
     }
 
     daysContainer.innerHTML = buttons.join("");
+    preview.textContent = draftActivityStartDate
+        ? draftActivityEndDate
+            ? `${formatActivityDateKey(draftActivityStartDate)} hingga ${formatActivityDateKey(draftActivityEndDate)}`
+            : formatActivityDateKey(draftActivityStartDate)
+        : "";
+    applyButton.disabled = !hasRange;
 }
 
 function initializeUserPage() {
@@ -871,16 +973,17 @@ function initializeUserPage() {
                 const willOpen = !calendarMenu.classList.contains("show");
                 calendarMenu.classList.toggle("show", willOpen);
                 if (willOpen) {
-                    const selectedDate = selectedActivityDate
-                        ? parseCreatedAt(`${selectedActivityDate} 00:00:00`)
+                    draftActivityStartDate = selectedActivityStartDate;
+                    draftActivityEndDate = selectedActivityEndDate;
+                    const selectedDate = selectedActivityStartDate || selectedActivityEndDate;
+                    const parsedDate = selectedDate
+                        ? parseCreatedAt(`${selectedDate} 00:00:00`)
                         : new Date();
-                    if (selectedDate) {
-                        auditCalendarMonth = new Date(
-                            selectedDate.getFullYear(),
-                            selectedDate.getMonth(),
-                            1
-                        );
-                    }
+                    auditCalendarMonth = new Date(
+                        parsedDate.getFullYear(),
+                        parsedDate.getMonth(),
+                        1
+                    );
                     renderAuditCalendar();
                 }
                 dateButton.setAttribute("aria-expanded", String(willOpen));
@@ -902,23 +1005,35 @@ function initializeUserPage() {
                 }
 
                 if (target.dataset.calendarDate) {
-                    selectedActivityDate = target.dataset.calendarDate;
-                    calendarMenu.classList.remove("show");
-                    currentPage = 1;
-                    renderTable();
+                    const selectedDate = target.dataset.calendarDate;
+                    if (!draftActivityStartDate || draftActivityEndDate) {
+                        draftActivityStartDate = selectedDate;
+                        draftActivityEndDate = "";
+                    } else if (selectedDate < draftActivityStartDate) {
+                        draftActivityEndDate = draftActivityStartDate;
+                        draftActivityStartDate = selectedDate;
+                    } else {
+                        draftActivityEndDate = selectedDate;
+                    }
+                    renderAuditCalendar();
                     return;
                 }
 
-                if (target.id === "auditCalendarToday") {
-                    selectedActivityDate = getActivityDateKey(new Date());
+                if (target.id === "auditCalendarApply" && draftActivityStartDate && draftActivityEndDate) {
+                    selectedActivityStartDate = draftActivityStartDate;
+                    selectedActivityEndDate = draftActivityEndDate;
                     calendarMenu.classList.remove("show");
                     currentPage = 1;
                     renderTable();
                 } else if (target.id === "auditCalendarClear") {
-                    selectedActivityDate = "";
+                    selectedActivityStartDate = "";
+                    selectedActivityEndDate = "";
+                    draftActivityStartDate = "";
+                    draftActivityEndDate = "";
                     calendarMenu.classList.remove("show");
                     currentPage = 1;
                     renderTable();
+                    renderAuditCalendar();
                 }
             });
             document.addEventListener("click", event => {
@@ -989,7 +1104,9 @@ function getFilteredActivityCount() {
             (!selectedActivityAction || action === selectedActivityAction) &&
             (!selectedActivityColumn || activity.column === selectedActivityColumn) &&
             (!selectedActivityDataset || activity.dataset === selectedActivityDataset) &&
-            (!selectedActivityDate || getActivityDateKey(activity.createdAt) === selectedActivityDate);
+            ((!selectedActivityStartDate && !selectedActivityEndDate) ||
+                (getActivityDateKey(activity.createdAt) >= selectedActivityStartDate &&
+                    getActivityDateKey(activity.createdAt) <= selectedActivityEndDate));
     }).length;
 }
 

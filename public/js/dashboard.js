@@ -10,14 +10,27 @@ let pageSize = 50;
 let sortColumn = -1;
 let sortDirection = "asc";
 let selectedPIC = "";
+let selectedParticipantUnit = "";
+let selectedParticipantYear = "";
+let currentUserUnit = "";
+let participantUnitDefaultInitialized = false;
+let participantYearDefaultInitialized = false;
 let dashboardMode = "recipients";
 let recipientRows = [];
 let participantRows = [];
 let dashboardRowsLoaded = false;
+let participantProgramDrilldown = null;
+let participantRowsVersion = 0;
+let participantChartEntriesCacheKey = "";
+let participantChartEntriesCache = [];
+let barChartViewKey = null;
 
 let lineChart = null;
 let barChart = null;
 let pieChart = null;
+let pieChartExitInProgress = false;
+let pieChartExitVersion = 0;
+let barChartEntranceTimeout = null;
 
 let picSelect;
 let totalRecords;
@@ -26,10 +39,11 @@ let totalParticipants;
 let contactedRecipients;
 let uncontactedRecipients;
 let multiProgramParticipants;
-let participantTotal = 0;
 let currentDateTime;
 let currentDate;
 let currentTime;
+let dashboardLegendList;
+let dashboardLegendSignature = null;
 let clockInterval = null;
 let statsSection;
 let tableSearch;
@@ -49,6 +63,7 @@ let pieLegend;
 let lineLegend;
 let barLegend;
 const chartColorCache = new Map();
+const statNumberAnimationFrames = new WeakMap();
 const chartPalette = [
     "#60A5FA",
     "#FB923C",
@@ -76,6 +91,14 @@ const chartPalette = [
     "#7DD3FC"
 ];
 
+function shouldReduceDashboardMotion() {
+    const isUppDashboard = Boolean(
+        document.querySelector(".bpa-shell-page.dashboard-page")
+    );
+    return !isUppDashboard
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 const barHoverLiftPlugin = {
     id: "barHoverLift",
     afterDatasetsDraw(chart) {
@@ -87,7 +110,7 @@ const barHoverLiftPlugin = {
         }
 
         const bar = chart.getDatasetMeta(active.datasetIndex).data[active.index];
-        const { x, y, base, width } = bar.getProps(["x", "y", "base", "width"], true);
+        const { x, y, base, width } = bar.getProps(["x", "y", "base", "width"]);
         const left = x - width / 2;
         const top = Math.max(chart.chartArea.top, y);
         const right = x + width / 2;
@@ -122,6 +145,14 @@ const barHoverLiftPlugin = {
         ctx.restore();
     }
 };
+
+function finishDashboardBarChartEntrance(canvas) {
+    if (barChartEntranceTimeout !== null) {
+        window.clearTimeout(barChartEntranceTimeout);
+        barChartEntranceTimeout = null;
+    }
+    canvas?.classList.remove("dashboard-chart-animating");
+}
 
 const dashboardChartTooltipPlugin = {
     id: "dashboardChartTooltip",
@@ -184,7 +215,29 @@ const dashboardChartTooltipPlugin = {
     }
 };
 
-async function initializeDashboard(animateCharts = false) {
+async function initializeDashboard(animateCharts = false, resetToDefault = false) {
+    if (resetToDefault) {
+        dashboardMode = "recipients";
+        selectedPIC = "";
+        selectedParticipantUnit = "";
+        selectedParticipantYear = "";
+        currentUserUnit = "";
+        participantUnitDefaultInitialized = false;
+        participantYearDefaultInitialized = false;
+        participantProgramDrilldown = null;
+        currentPage = 1;
+    }
+    participantProgramDrilldown = null;
+    barChartViewKey = null;
+    const participantYearSelect = document.getElementById("participantYearSelect");
+    if (resetToDefault && participantYearSelect) {
+        const currentYear = String(new Date().getFullYear());
+        selectedParticipantYear = [...participantYearSelect.options]
+            .some(option => option.value === currentYear)
+            ? currentYear
+            : "";
+        participantYearSelect.value = selectedParticipantYear;
+    }
     picSelect = document.getElementById("picSelect");
     totalRecords = document.getElementById("totalRecords");
     totalRecipients = document.getElementById("totalRecipients");
@@ -195,6 +248,8 @@ async function initializeDashboard(animateCharts = false) {
     currentDateTime = document.getElementById("currentDateTime");
     currentDate = document.getElementById("currentDate");
     currentTime = document.getElementById("currentTime");
+    dashboardLegendList = document.getElementById("dashboardLegendList");
+    dashboardLegendSignature = null;
     totalRecords = totalRecipients;
     statsSection = document.getElementById("statsSection");
     tableSearch = document.getElementById("tableSearch");
@@ -222,6 +277,17 @@ async function initializeDashboard(animateCharts = false) {
         return;
     }
 
+    if (animateCharts) {
+        [
+            totalRecipients,
+            totalParticipants,
+            contactedRecipients,
+            uncontactedRecipients,
+            multiProgramParticipants
+        ].forEach(startDashboardStatNumberJumble);
+    }
+
+    dashboardRowsLoaded = false;
     updateDashboardClock();
 
     if (clockInterval) {
@@ -234,6 +300,10 @@ async function initializeDashboard(animateCharts = false) {
         picSelect.dataset.initialized = "true";
 
         setupDashboardStatCards();
+        document.getElementById("programChartBackButton")?.addEventListener("click", () => {
+            participantProgramDrilldown = null;
+            updateCharts();
+        });
         tableSearch?.addEventListener("input", applyFilters);
         pageSizeSelect?.addEventListener("change", () => {
             pageSize = Number(pageSizeSelect.value);
@@ -244,6 +314,21 @@ async function initializeDashboard(animateCharts = false) {
             selectedPIC = picSelect.value;
             applyFilters();
         });
+        document.addEventListener("change", event => {
+            let animateUnitChange = false;
+            if (event.target?.id === "participantUnitSelect") {
+                selectedParticipantUnit = event.target.value;
+                populateParticipantYearOptions();
+                animateUnitChange = true;
+            } else if (event.target?.id === "participantYearSelect") {
+                selectedParticipantYear = event.target.value;
+            } else {
+                return;
+            }
+            participantProgramDrilldown = null;
+            updateParticipantFilterStatCards(true, animateUnitChange);
+            updateCharts();
+        });
     }
 
     setDashboardMode(dashboardMode, false);
@@ -253,6 +338,8 @@ async function initializeDashboard(animateCharts = false) {
     );
     await loadCombinedRecipientData(animateCharts);
 }
+
+window.initializeDashboard = initializeDashboard;
 
 function updateDashboardClock() {
     if (!currentDate || !currentTime) {
@@ -273,6 +360,232 @@ function updateDashboardClock() {
     }).format(now);
 }
 
+function startDashboardStatNumberJumble(element) {
+    if (
+        !element ||
+        element.textContent.trim() !== "—" ||
+        shouldReduceDashboardMotion()
+    ) {
+        return;
+    }
+
+    const update = now => {
+        const previousTick = Number(element.dataset.jumbleTick || "0");
+        if (now - previousTick >= 65) {
+            element.dataset.jumbleTick = String(now);
+            element.textContent = `${Math.floor(Math.random() * 10)},${Array.from(
+                { length: 3 },
+                () => Math.floor(Math.random() * 10)
+            ).join("")}`;
+        }
+        statNumberAnimationFrames.set(element, window.requestAnimationFrame(update));
+    };
+
+    element.dataset.jumbleTick = "0";
+    statNumberAnimationFrames.set(element, window.requestAnimationFrame(update));
+}
+
+function stopDashboardStatNumberJumble(element) {
+    if (!element || !element.dataset.jumbleTick) return;
+
+    const frame = statNumberAnimationFrames.get(element);
+    if (frame !== undefined) {
+        window.cancelAnimationFrame(frame);
+        statNumberAnimationFrames.delete(element);
+    }
+    delete element.dataset.jumbleTick;
+    element.removeAttribute("aria-label");
+    element.textContent = "—";
+}
+
+function animateDashboardStatNumber(element, value, duration = 450) {
+    const target = String(value);
+    const previousFrame = statNumberAnimationFrames.get(element);
+    if (previousFrame !== undefined) {
+        window.cancelAnimationFrame(previousFrame);
+        statNumberAnimationFrames.delete(element);
+    }
+    delete element.dataset.jumbleTick;
+
+    if (shouldReduceDashboardMotion()) {
+        element.textContent = target;
+        element.removeAttribute("aria-label");
+        return;
+    }
+
+    element.setAttribute("aria-label", target);
+    const digitCount = (target.match(/\d/g) || []).length;
+    const startedAt = performance.now();
+
+    const update = now => {
+        const progress = Math.min((now - startedAt) / duration, 1);
+        let digitIndex = 0;
+        element.textContent = target.replace(/\d/g, digit => {
+            const lockAt = .58 + ((digitIndex + 1) / digitCount) * .4;
+            digitIndex += 1;
+            if (progress >= lockAt) return digit;
+
+            const randomDigit = Math.floor(Math.random() * 10);
+            return String(randomDigit === Number(digit) ? (randomDigit + 1) % 10 : randomDigit);
+        });
+
+        if (progress < 1) {
+            statNumberAnimationFrames.set(element, window.requestAnimationFrame(update));
+        } else {
+            statNumberAnimationFrames.delete(element);
+            element.textContent = target;
+            element.removeAttribute("aria-label");
+        }
+    };
+
+    statNumberAnimationFrames.set(element, window.requestAnimationFrame(update));
+}
+
+function updatePieTotal(value) {
+    if (!pieTotal) {
+        return;
+    }
+
+    const target = Number(value).toLocaleString();
+    if (
+        pieTotal.dataset.jumbleTarget === target &&
+        statNumberAnimationFrames.has(pieTotal)
+    ) {
+        return;
+    }
+
+    pieTotal.dataset.jumbleTarget = target;
+    if (pieTotal.textContent.trim() === target) return;
+    animateDashboardStatNumber(pieTotal, target, 1900);
+}
+
+function updateParticipantFilterStatCards(animate = true, animateUnitChange = false) {
+    const yearSelect = document.getElementById("participantYearSelect");
+    const unitSelect = document.getElementById("participantUnitSelect");
+    const selectedYear = yearSelect?.value || "";
+    const unitValue = unitSelect?.value || selectedParticipantUnit;
+    const selectedUnit = [...(unitSelect?.options || [])]
+        .find(option => option.value === unitValue)?.textContent.trim()
+        || currentUserUnit
+        || "Semua";
+    const participantCardLabel = document.getElementById("participantCardLabel");
+    const participantCardUnit = document.getElementById("participantCardUnit");
+    const previousUnitLabel = participantCardUnit?.textContent.trim();
+    const participantCardUnitDisplay = participantCardUnit?.closest(".participant-card-unit");
+    if (participantCardUnitDisplay) {
+        participantCardUnitDisplay.hidden = false;
+    }
+    if (participantCardLabel) {
+        participantCardLabel.textContent = selectedYear
+            ? `JUMLAH PESERTA PROGRAM (${selectedYear})`
+            : "JUMLAH PESERTA PROGRAM";
+    }
+    if (participantCardUnit) {
+        participantCardUnit.textContent = selectedUnit;
+    }
+    if (!dashboardRowsLoaded) return;
+
+    let participantCount = 0;
+    let multiProgramCount = 0;
+    participantRows.forEach(row => {
+        const units = String(row[5] ?? "")
+            .split(",")
+            .map(unit => unit.trim())
+            .filter(Boolean);
+        const matchesUnit = !selectedParticipantUnit
+            || (selectedParticipantUnit === "__NO_UNIT__"
+                ? units.length === 0
+                : units.includes(selectedParticipantUnit));
+        if (!matchesUnit) return;
+
+        const programs = [...new Set(
+            String(row[4] ?? "")
+                .split(",")
+                .map(program => program.trim())
+                .filter(program => program && (
+                    !selectedParticipantYear ||
+                    getProgramYear(program) === selectedParticipantYear
+                ))
+        )];
+        if (selectedParticipantYear && !programs.length) return;
+
+        participantCount += 1;
+        if (programs.length > 1) multiProgramCount += 1;
+    });
+
+    if (participantCardUnitDisplay) {
+        participantCardUnitDisplay.hidden = participantCount === 0;
+    }
+    if (
+        animateUnitChange &&
+        participantCount > 0 &&
+        participantCardUnit &&
+        previousUnitLabel !== selectedUnit
+    ) {
+        animateDashboardStatCardLabel(
+            participantCardUnit,
+            "participant-card-unit-enter"
+        );
+    }
+
+    if (totalParticipants) {
+        const value = participantCount.toLocaleString();
+        if (animate) {
+            animateDashboardStatNumber(totalParticipants, value);
+        } else {
+            const previousFrame = statNumberAnimationFrames.get(totalParticipants);
+            if (previousFrame !== undefined) {
+                window.cancelAnimationFrame(previousFrame);
+                statNumberAnimationFrames.delete(totalParticipants);
+            }
+            totalParticipants.textContent = value;
+            totalParticipants.removeAttribute("aria-label");
+        }
+    }
+    if (multiProgramParticipants) {
+        const value = multiProgramCount.toLocaleString();
+        if (animate) {
+            animateDashboardStatNumber(multiProgramParticipants, value);
+        } else {
+            const previousFrame = statNumberAnimationFrames.get(multiProgramParticipants);
+            if (previousFrame !== undefined) {
+                window.cancelAnimationFrame(previousFrame);
+                statNumberAnimationFrames.delete(multiProgramParticipants);
+            }
+            multiProgramParticipants.textContent = value;
+            multiProgramParticipants.removeAttribute("aria-label");
+        }
+    }
+}
+
+function animateDashboardStatCardLabel(element, className) {
+    element.classList.remove(className);
+    void element.offsetWidth;
+    element.classList.add(className);
+    element.addEventListener("animationend", event => {
+        if (event.target === element) {
+            element.classList.remove(className);
+        }
+    }, { once: true });
+}
+
+function updateRecipientCardPic() {
+    const recipientCardPic = document.getElementById("recipientCardPic");
+    if (!recipientCardPic) return;
+
+    const selectedLabel = picSelect?.selectedOptions[0]?.textContent.trim() || "Semua";
+    const nextLabel = selectedLabel === "Semua" ? "" : selectedLabel;
+    if (recipientCardPic.textContent === nextLabel) return;
+
+    recipientCardPic.textContent = nextLabel;
+    if (nextLabel) {
+        animateDashboardStatCardLabel(
+            recipientCardPic,
+            "recipient-card-pic-enter"
+        );
+    }
+}
+
 function arrangeDashboard() {
     const dashboardContent =
         document.querySelector(".dashboard-content");
@@ -281,7 +594,12 @@ function arrangeDashboard() {
         return;
     }
 
-    dashboardContent.prepend(statsSection);
+    const dashboardTitle = dashboardContent.querySelector(".bpa-upp-dashboard-title");
+    if (dashboardTitle) {
+        dashboardTitle.after(statsSection);
+    } else {
+        dashboardContent.prepend(statsSection);
+    }
 }
 
 function setupDashboardStatCards() {
@@ -294,7 +612,7 @@ function setupDashboardStatCards() {
         const activate = () => {
             const mode = card.dataset.dashboardMode;
             if (mode === "recipients" || mode === "participants") {
-                setDashboardMode(mode);
+                setDashboardMode(mode, true);
             }
         };
 
@@ -308,9 +626,109 @@ function setupDashboardStatCards() {
     });
 }
 
-function setDashboardMode(mode, animateEntrance = true) {
+function animateUppChartCards() {
+    const root = document.querySelector(".bpa-shell-page.dashboard-page");
+    const cards = [...(root?.querySelectorAll("#chartsSection .chart-card") || [])]
+        .filter(card => card.getClientRects().length > 0);
+
+    cards.forEach((card, index) => {
+        card.classList.remove("bpa-upp-dashboard-enter");
+        const delay = index * 55;
+        card.style.setProperty("--bpa-upp-enter-delay", `${delay}ms`);
+        void card.offsetWidth;
+        card.classList.add("bpa-upp-dashboard-enter");
+
+        let timeoutId;
+        const cleanup = () => {
+            card.classList.remove("bpa-upp-dashboard-enter");
+            card.style.removeProperty("--bpa-upp-enter-delay");
+            card.removeEventListener("animationend", finishAnimation);
+            window.clearTimeout(timeoutId);
+        };
+        const finishAnimation = event => {
+            if (event.target === card && event.animationName === "bpa-upp-fade-in-up") {
+                cleanup();
+            }
+        };
+
+        card.addEventListener("animationend", finishAnimation);
+        timeoutId = window.setTimeout(cleanup, delay + 700);
+    });
+}
+
+function animateUppChartAreas() {
+    const root = document.querySelector(".bpa-shell-page.dashboard-page");
+    const areas = [...(root?.querySelectorAll(
+        "#chartsSection .chart-wrapper, #chartsSection .pie-wrapper"
+    ) || [])].filter(area => area.getClientRects().length > 0);
+
+    areas.forEach(area => {
+        area.classList.remove("bpa-upp-chart-area-enter");
+        void area.offsetWidth;
+        area.classList.add("bpa-upp-chart-area-enter");
+        area.addEventListener("animationend", event => {
+            if (event.target === area && event.animationName === "bpa-upp-fade-in-up") {
+                area.classList.remove("bpa-upp-chart-area-enter");
+            }
+        }, { once: true });
+    });
+}
+
+function animateUppModeHeaderAndControls(root) {
+    const title = root.querySelector(".bpa-upp-dashboard-title");
+    const controls = [...(root.querySelectorAll(".bpa-upp-dashboard-actions > .bpa-admin-action") || [])]
+        .filter(control => control.getClientRects().length > 0);
+
+    const targets = [
+        ...(title ? [[title, "bpa-upp-mode-title-enter", 0]] : []),
+        ...controls.map((control, index) => [
+            control,
+            "bpa-upp-mode-control-enter",
+            index * 70
+        ])
+    ];
+    targets.forEach(([element, className, delay]) => {
+        element.classList.remove(className);
+        element.style.setProperty("--bpa-upp-mode-enter-delay", `${delay}ms`);
+        void element.offsetWidth;
+        element.classList.add(className);
+
+        let timeoutId;
+        const cleanup = () => {
+            element.classList.remove(className);
+            element.style.removeProperty("--bpa-upp-mode-enter-delay");
+            element.removeEventListener("animationend", finishAnimation);
+            window.clearTimeout(timeoutId);
+        };
+        const finishAnimation = event => {
+            if (event.target === element && event.animationName === "bpa-upp-fade-in-up") {
+                cleanup();
+            }
+        };
+
+        element.addEventListener("animationend", finishAnimation);
+        timeoutId = window.setTimeout(cleanup, delay + 700);
+    });
+}
+
+function setDashboardMode(mode, animateEntrance = true, animateParticipantStats = false) {
+    const previousMode = dashboardMode;
+    if (previousMode !== mode) {
+        participantProgramDrilldown = null;
+    }
     dashboardMode = mode;
     const isParticipants = mode === "participants";
+    const recordsOverviewSection = document.getElementById("recordsOverviewSection");
+    if (!dashboardRowsLoaded && recordsOverviewSection) {
+        recordsOverviewSection.style.display = isParticipants ? "none" : "";
+    }
+    if (isParticipants) {
+        updateParticipantFilterStatCards(animateParticipantStats);
+    }
+    if (animateEntrance && previousMode !== mode) {
+        animateUppChartCards();
+    }
+
     const dashboardContentTitle = document.getElementById("dashboardDataTitle");
     const dashboardContentDescription = document.getElementById("dashboardDataDescription");
     const analysisTitle = document.getElementById("datasetAnalysisTitle");
@@ -319,7 +737,25 @@ function setDashboardMode(mode, animateEntrance = true) {
     const recordsTitle = document.getElementById("dashboardRecordsTitle");
     const recordsDescription = document.getElementById("dashboardRecordsDescription");
     const picControl = document.querySelector(".pic-control");
+    const unitControl = document.querySelector(".bpa-upp-unit-action");
+    const yearControl = document.querySelector(".bpa-upp-year-action");
     const pieCenterLabel = document.getElementById("pieCenterLabel");
+    const dashboardLegendTitle = document.getElementById("dashboardLegendTitle");
+
+    if (dashboardLegendTitle) {
+        dashboardLegendTitle.textContent = isParticipants ? "PROGRAM" : "STATUS";
+        if (
+            previousMode !== mode &&
+            !document.querySelector(".bpa-shell-page.dashboard-page.bpa-upp-dashboard-preloading")
+        ) {
+            dashboardLegendTitle.classList.remove("dashboard-legend-content-enter");
+            void dashboardLegendTitle.offsetWidth;
+            dashboardLegendTitle.classList.add("dashboard-legend-content-enter");
+            dashboardLegendTitle.addEventListener("animationend", () => {
+                dashboardLegendTitle.classList.remove("dashboard-legend-content-enter");
+            }, { once: true });
+        }
+    }
 
     document.querySelectorAll(".stat-card[data-dashboard-mode]").forEach(card => {
         const selected = card.dataset.dashboardMode === mode;
@@ -371,6 +807,28 @@ function setDashboardMode(mode, animateEntrance = true) {
     }
     if (picControl) {
         picControl.style.display = isParticipants ? "none" : "";
+        const picAction = picControl.closest(".bpa-upp-pic-action");
+        if (picAction) {
+            picAction.style.display = isParticipants ? "none" : "";
+        }
+    }
+    if (unitControl) {
+        unitControl.style.display = isParticipants ? "" : "none";
+    }
+    if (yearControl) {
+        yearControl.style.display = isParticipants ? "" : "none";
+    }
+    const unitSelect = document.getElementById("participantUnitSelect");
+    if (unitSelect) {
+        unitSelect.value = selectedParticipantUnit;
+    }
+    const yearSelect = document.getElementById("participantYearSelect");
+    if (yearSelect) {
+        yearSelect.value = selectedParticipantYear;
+    }
+    if (animateEntrance && previousMode !== mode) {
+        const root = document.querySelector(".bpa-shell-page.dashboard-page");
+        if (root) animateUppModeHeaderAndControls(root);
     }
     if (pieCenterLabel) {
         pieCenterLabel.textContent = isParticipants
@@ -399,7 +857,7 @@ function setDashboardMode(mode, animateEntrance = true) {
     }
     if (barChartDescription) {
         barChartDescription.textContent = isParticipants
-            ? "Jumlah peserta yang menyertai setiap program."
+            ? "Program dengan nama yang sama digabungkan. Pilih program untuk melihat pecahan mengikut tahun."
             : "Jumlah penerima bantuan dalam setiap kategori status.";
     }
 
@@ -562,6 +1020,27 @@ function openChartFilter(columnIndex, value) {
     );
 }
 
+function handleChartEntrySelection(entry, columnIndex) {
+    const value = entry?.[0];
+    if (value === undefined) {
+        return;
+    }
+
+    if (dashboardMode === "participants") {
+        if (!participantProgramDrilldown) {
+            participantProgramDrilldown = {
+                key: entry[2],
+                label: value
+            };
+            window.requestAnimationFrame(() => updateCharts(true));
+        } else {
+            openChartFilter(columnIndex, entry[3]);
+        }
+    } else {
+        openChartFilter(columnIndex, value);
+    }
+}
+
 function populatePICFilter() {
     if (!picSelect) {
         return;
@@ -573,7 +1052,7 @@ function populatePICFilter() {
         document.createElement("option");
 
     allOption.value = "";
-    allOption.textContent = "Semua PIC";
+    allOption.textContent = "Semua";
 
     picSelect.appendChild(allOption);
 
@@ -590,6 +1069,7 @@ function populatePICFilter() {
     if (picIndex === -1) {
         picSelect.disabled = true;
         selectedPIC = "";
+        updateRecipientCardPic();
         return;
     }
 
@@ -631,6 +1111,7 @@ function populatePICFilter() {
         selectedPIC = "";
         picSelect.value = "";
     }
+    updateRecipientCardPic();
 }
 
 function getPICFilteredRows() {
@@ -681,13 +1162,11 @@ function getSearchFilteredRows() {
 }
 
 function applyFilters() {
+    updateRecipientCardPic();
     filteredRows =
         getSearchFilteredRows();
 
     currentPage = 1;
-
-    totalParticipants.textContent =
-        participantTotal.toLocaleString();
 
     renderTable();
     renderAnalysis();
@@ -1062,11 +1541,26 @@ function renderPagination(totalPages) {
 
 async function loadCombinedRecipientData(animateCharts = false) {
     try {
-        const [recipientResponse, participantResponse] = await Promise.all([
-            fetch("/api/penerima-bantuan", { cache: "no-store" }),
-            fetch("/api/peserta-program", { cache: "no-store" })
-        ]);
+        const recipientRequest = fetch("/api/penerima-bantuan", { cache: "no-store" });
+        const participantRequest = fetch("/api/peserta-program", { cache: "no-store" });
+        updateParticipantFilterStatCards(false);
+        const currentUserResponse = await fetch("/api/auth/me", { cache: "no-store" });
 
+        if (!currentUserResponse.ok) {
+            throw new Error("Gagal memuatkan maklumat pengguna dashboard.");
+        }
+
+        const currentUserPayload = await currentUserResponse.json();
+        currentUserUnit = String(currentUserPayload.unit ?? "").trim().toUpperCase();
+        if (!participantUnitDefaultInitialized && currentUserUnit) {
+            selectedParticipantUnit = currentUserUnit;
+        }
+        updateParticipantFilterStatCards(false);
+
+        const [recipientResponse, participantResponse] = await Promise.all([
+            recipientRequest,
+            participantRequest
+        ]);
         if (!recipientResponse.ok || !participantResponse.ok) {
             throw new Error("Gagal memuatkan data dashboard.");
         }
@@ -1075,14 +1569,10 @@ async function loadCombinedRecipientData(animateCharts = false) {
         const participantPayload = await participantResponse.json();
         const recipients = recipientPayload.recipients || [];
         const participants = participantPayload.participants || [];
-        participantTotal = participants.length;
         const contactedRecipientTotal = recipients.filter(recipient =>
             String(recipient.status ?? "").trim()
         ).length;
         const uncontactedRecipientTotal = recipients.length - contactedRecipientTotal;
-        const multiProgramParticipantTotal = participants.filter(participant =>
-            Number(participant.jumlahProgram) > 1
-        ).length;
 
         recipientRows = recipients.map(recipient => [
             recipient.nama || "",
@@ -1100,37 +1590,55 @@ async function loadCombinedRecipientData(animateCharts = false) {
             Number(participant.jumlahProgram) || 0,
             Array.isArray(participant.programs)
                 ? participant.programs.join(", ")
-                : String(participant.programs || "")
+                : String(participant.programs || ""),
+            participant.unit || ""
         ]);
+        participantRowsVersion += 1;
+        populateParticipantUnitOptions();
+        populateParticipantYearOptions();
         dashboardRowsLoaded = true;
         sortColumn = -1;
         sortDirection = "asc";
 
         if (totalRecipients) {
-            totalRecipients.textContent = recipients.length.toLocaleString();
-        }
-        if (totalParticipants) {
-            totalParticipants.textContent = participantTotal.toLocaleString();
+            const value = recipients.length.toLocaleString();
+            if (animateCharts) {
+                animateDashboardStatNumber(totalRecipients, value);
+            } else {
+                totalRecipients.textContent = value;
+            }
         }
         if (contactedRecipients) {
-            contactedRecipients.textContent =
-                contactedRecipientTotal.toLocaleString();
+            const value = contactedRecipientTotal.toLocaleString();
+            if (animateCharts) {
+                animateDashboardStatNumber(contactedRecipients, value);
+            } else {
+                contactedRecipients.textContent = value;
+            }
         }
         if (uncontactedRecipients) {
-            uncontactedRecipients.textContent =
-                uncontactedRecipientTotal.toLocaleString();
+            const value = uncontactedRecipientTotal.toLocaleString();
+            if (animateCharts) {
+                animateDashboardStatNumber(uncontactedRecipients, value);
+            } else {
+                uncontactedRecipients.textContent = value;
+            }
         }
-        if (multiProgramParticipants) {
-            multiProgramParticipants.textContent =
-                multiProgramParticipantTotal.toLocaleString();
-        }
+        updateParticipantFilterStatCards(animateCharts);
         updateDashboardClock();
 
         document.querySelector(".dashboard-page")?.classList.remove(
             "dashboard-data-pending"
         );
-        setDashboardMode(dashboardMode, animateCharts);
+        setDashboardMode(dashboardMode, animateCharts, animateCharts);
     } catch (error) {
+        [
+            totalRecipients,
+            totalParticipants,
+            contactedRecipients,
+            uncontactedRecipients,
+            multiProgramParticipants
+        ].forEach(stopDashboardStatNumberJumble);
         console.error("Dashboard loading error:", error);
         document.querySelectorAll(".dashboard-data-pending .dashboard-loading-state").forEach(
             state => {
@@ -1474,7 +1982,7 @@ function showNoDataset() {
     selectedPIC = "";
 
     picSelect.innerHTML =
-        '<option value="">Semua PIC</option>';
+        '<option value="">Semua</option>';
 
     picSelect.disabled =
         true;
@@ -1509,8 +2017,9 @@ function showNoDataset() {
 function getCategoryCounts(columnIndex) {
     const counts = new Map();
 
-    const rows =
-        getPICFilteredRows();
+    const rows = dashboardMode === "participants"
+        ? getParticipantUnitFilteredRows()
+        : getPICFilteredRows();
 
     rows.forEach(row => {
         const rawValue =
@@ -1522,8 +2031,12 @@ function getCategoryCounts(columnIndex) {
             return;
         }
 
-        const categories =
-            rawValue
+        const categories = dashboardMode === "participants"
+            ? rawValue
+                .split(",")
+                .map(value => value.trim())
+                .filter(program => !selectedParticipantYear || getProgramYear(program) === selectedParticipantYear)
+            : rawValue
                 .split(",")
                 .map(
                     value =>
@@ -1553,13 +2066,266 @@ function getCategoryCounts(columnIndex) {
     );
 }
 
+function getParticipantUnitFilteredRows() {
+    if (!selectedParticipantUnit || dashboardMode !== "participants") {
+        return getPICFilteredRows();
+    }
+    return getPICFilteredRows().filter(row => {
+        const unit = String(row[5] ?? "").trim();
+        return selectedParticipantUnit === "__NO_UNIT__"
+            ? !unit
+            : unit.split(",").map(value => value.trim()).includes(selectedParticipantUnit);
+    });
+}
+
+function getProgramYear(program) {
+    const yearMatch = String(program).replace(/\s+/g, " ").trim().match(
+        /^(.*?)(?:\s+|[-–—]\s*|\(\s*)((?:19|20)\d{2})\s*\)?$/
+    );
+    return yearMatch?.[2] || "";
+}
+
+function populateParticipantYearOptions() {
+    const select = document.getElementById("participantYearSelect");
+    if (!select) return;
+
+    const selectedValue = selectedParticipantYear;
+    const years = new Set();
+    participantRows.forEach(row => {
+        const rowUnits = String(row[5] ?? "")
+            .split(",")
+            .map(unit => unit.trim())
+            .filter(Boolean);
+        const matchesUnit = !selectedParticipantUnit
+            || (selectedParticipantUnit === "__NO_UNIT__"
+                ? rowUnits.length === 0
+                : rowUnits.includes(selectedParticipantUnit));
+        if (!matchesUnit) return;
+
+        String(row[4] ?? "")
+            .split(",")
+            .map(program => getProgramYear(program))
+            .filter(Boolean)
+            .forEach(year => years.add(year));
+    });
+
+    select.replaceChildren();
+    const options = [["", "Semua"]];
+    [...years]
+        .sort((a, b) => Number(b) - Number(a))
+        .forEach(year => options.push([year, year]));
+    options.forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        select.appendChild(option);
+    });
+    const availableYears = [...years].sort((a, b) => Number(b) - Number(a));
+    const selectedYearIsAvailable = availableYears.includes(selectedValue);
+    if (selectedYearIsAvailable) {
+        select.value = selectedValue;
+    } else if (!participantYearDefaultInitialized || selectedValue) {
+        const currentYear = new Date().getFullYear();
+        const defaultYear = availableYears.find(year => Number(year) <= currentYear)
+            || availableYears[0]
+            || "";
+        select.value = defaultYear;
+    } else {
+        select.value = "";
+    }
+    selectedParticipantYear = select.value;
+    participantYearDefaultInitialized = true;
+}
+
+function populateParticipantUnitOptions() {
+    const select = document.getElementById("participantUnitSelect");
+    if (!select) return;
+
+    const selectedValue = selectedParticipantUnit || (
+        !participantUnitDefaultInitialized
+            ? currentUserUnit
+            : ""
+    );
+    const units = new Set();
+    participantRows.forEach(row => {
+        String(row[5] ?? "")
+            .split(",")
+            .map(unit => unit.trim())
+            .filter(Boolean)
+            .forEach(unit => units.add(unit));
+    });
+
+    select.replaceChildren();
+    const options = [["", "Semua"]];
+    [...units]
+        .sort((a, b) => a.localeCompare(b))
+        .forEach(unit => options.push([unit, unit]));
+    const hasUnassignedParticipants = participantRows.some(row =>
+        !String(row[5] ?? "").split(",").some(unit => unit.trim())
+    );
+    if (hasUnassignedParticipants) {
+        options.push(["__NO_UNIT__", "Tiada"]);
+    }
+    options.forEach(([value, label]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        select.appendChild(option);
+    });
+    select.value = [...select.options].some(option => option.value === selectedValue)
+        ? selectedValue
+        : "";
+    selectedParticipantUnit = select.value;
+    participantUnitDefaultInitialized = true;
+}
+
+function getParticipantProgramGroupName(program) {
+    const displayName = String(program).replace(/\s+/g, " ").trim();
+    const yearMatch = displayName.match(
+        /^(.*?)(?:\s+|[-–—]\s*|\(\s*)((?:19|20)\d{2})\s*\)?$/
+    );
+    return (yearMatch ? yearMatch[1] : displayName)
+        .replace(/\s+siri\s+\d+\s*$/i, "")
+        .replace(/\s+\d+\.0\s*$/i, "")
+        .replace(/[\s(–—-]+$/, "")
+        .trim();
+}
+
+function getProgramNameSimilarity(left, right) {
+    const first = left.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const second = right.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const longestLength = Math.max(first.length, second.length);
+    if (!longestLength) return 1;
+    if (Math.min(first.length, second.length) / longestLength < 0.7) return 0;
+
+    let previousRow = Array.from({ length: second.length + 1 }, (_, index) => index);
+    for (let firstIndex = 1; firstIndex <= first.length; firstIndex += 1) {
+        const currentRow = [firstIndex];
+        for (let secondIndex = 1; secondIndex <= second.length; secondIndex += 1) {
+            const substitutionCost = first[firstIndex - 1] === second[secondIndex - 1] ? 0 : 1;
+            currentRow[secondIndex] = Math.min(
+                currentRow[secondIndex - 1] + 1,
+                previousRow[secondIndex] + 1,
+                previousRow[secondIndex - 1] + substitutionCost
+            );
+        }
+        previousRow = currentRow;
+    }
+
+    return 1 - previousRow[second.length] / longestLength;
+}
+
+function getParticipantProgramChartEntries(columnIndex) {
+    const cacheKey = [
+        participantRowsVersion,
+        columnIndex,
+        selectedParticipantUnit,
+        selectedParticipantYear,
+        participantProgramDrilldown?.key || ""
+    ].join(":");
+    if (cacheKey === participantChartEntriesCacheKey) {
+        return participantChartEntriesCache;
+    }
+
+    const programs = new Map();
+    getParticipantUnitFilteredRows().forEach(row => {
+        const categories = new Set(
+            String(row[columnIndex] ?? "")
+                .split(",")
+                .map(value => value.trim())
+                .filter(program => program && (
+                    !selectedParticipantYear ||
+                    getProgramYear(program) === selectedParticipantYear
+                ))
+        );
+        const participant = String(row[1] ?? "");
+        categories.forEach(program => {
+            const displayProgram = program.replace(/\s+/g, " ").trim();
+            const variantKey = displayProgram.toLocaleLowerCase();
+            let variant = programs.get(variantKey);
+            if (!variant) {
+                const groupName = getParticipantProgramGroupName(displayProgram) || displayProgram;
+                variant = {
+                    label: displayProgram,
+                    filterValue: program,
+                    normalizedName: groupName.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(),
+                    participants: new Set()
+                };
+                programs.set(variantKey, variant);
+            }
+            variant.participants.add(participant);
+        });
+    });
+
+    const groups = new Map();
+    programs.forEach(variant => {
+        let groupKey;
+        let group;
+        let bestSimilarity = 0.7;
+        groups.forEach((candidate, key) => {
+            const similarity = getProgramNameSimilarity(variant.normalizedName, candidate.normalizedName);
+            if (similarity >= bestSimilarity) {
+                bestSimilarity = similarity;
+                groupKey = key;
+                group = candidate;
+            }
+        });
+
+        if (!group) {
+            groupKey = variant.normalizedName || `program-${groups.size}`;
+            group = {
+                label: getParticipantProgramGroupName(variant.label) || variant.label,
+                normalizedName: variant.normalizedName,
+                participants: new Set(),
+                variants: new Map()
+            };
+            groups.set(groupKey, group);
+        }
+
+        variant.participants.forEach(participant => group.participants.add(participant));
+        group.variants.set(variant.label.toLocaleLowerCase(), variant);
+    });
+
+    let entries;
+    if (participantProgramDrilldown) {
+        const group = groups.get(participantProgramDrilldown.key);
+        entries = !group ? [] : [...group.variants.values()]
+            .map(variant => [
+                variant.label,
+                variant.participants.size,
+                group.label,
+                variant.filterValue
+            ])
+            .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+    } else {
+        entries = [...groups.entries()]
+            .map(([key, group]) => [
+                group.variants.size === 1
+                    ? group.variants.values().next().value.label
+                    : group.label,
+                group.participants.size,
+                key
+            ])
+            .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+    }
+    participantChartEntriesCacheKey = cacheKey;
+    participantChartEntriesCache = entries;
+    return entries;
+}
+
 function chartColors(labels) {
+    let modeColorCache = chartColorCache.get(dashboardMode);
+    if (!modeColorCache) {
+        modeColorCache = new Map();
+        chartColorCache.set(dashboardMode, modeColorCache);
+    }
+
     return labels.map(label => {
         const key = String(label);
-        if (!chartColorCache.has(key)) {
-            chartColorCache.set(key, chartPalette[chartColorCache.size % chartPalette.length]);
+        if (!modeColorCache.has(key)) {
+            modeColorCache.set(key, chartPalette[modeColorCache.size % chartPalette.length]);
         }
-        return chartColorCache.get(key);
+        return modeColorCache.get(key);
     });
 }
 
@@ -1644,7 +2410,8 @@ function createLegendItem(
 function renderCategoryLegend(
     container,
     entries,
-    showPercentages
+    showPercentages,
+    onDashboardLegendSelect
 ) {
     container.innerHTML =
         "";
@@ -1681,9 +2448,61 @@ function renderCategoryLegend(
             );
         }
     );
+
+    if (container === pieLegend && dashboardLegendList) {
+        const signature = JSON.stringify({ mode: dashboardMode, entries, showPercentages });
+        const shouldUpdate = dashboardLegendSignature !== signature
+            || dashboardLegendList.children.length !== pieLegend.children.length;
+        if (shouldUpdate) {
+            dashboardLegendList.replaceChildren(
+                ...[...pieLegend.children].map((item, index) => {
+                    const listItem = document.createElement("div");
+                    listItem.setAttribute("role", "listitem");
+
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "legend-item dashboard-legend-item";
+                    button.append(
+                        ...[...item.childNodes].map(child => child.cloneNode(true))
+                    );
+                    if (onDashboardLegendSelect) {
+                        button.addEventListener("click", () => {
+                            onDashboardLegendSelect(entries[index]);
+                        });
+                    }
+
+                    listItem.appendChild(button);
+                    return listItem;
+                })
+            );
+            dashboardLegendSignature = signature;
+            animateDashboardLegendContent();
+        }
+    }
+}
+
+function animateDashboardLegendContent() {
+    const items = dashboardLegendList ? [...dashboardLegendList.children] : [];
+
+    items.forEach((item, index) => {
+        item.classList.remove("dashboard-legend-content-enter");
+        item.style.setProperty(
+            "--dashboard-legend-enter-delay",
+            `${Math.min(index, 8) * 35}ms`
+        );
+        void item.offsetWidth;
+        item.classList.add("dashboard-legend-content-enter");
+        item.addEventListener("animationend", () => {
+            item.classList.remove("dashboard-legend-content-enter");
+            item.style.removeProperty("--dashboard-legend-enter-delay");
+        }, { once: true });
+    });
 }
 
 function destroyCharts() {
+    pieChartExitVersion += 1;
+    pieChartExitInProgress = false;
+
     [lineChart, barChart, pieChart].forEach(chart => {
         if (chart) {
             chart.destroy();
@@ -1692,6 +2511,7 @@ function destroyCharts() {
 
     lineChart = null;
     barChart = null;
+    barChartViewKey = null;
     pieChart = null;
 
     lineLegend.innerHTML =
@@ -1702,14 +2522,73 @@ function destroyCharts() {
 
     pieLegend.innerHTML =
         "";
+    if (dashboardLegendList) {
+        dashboardLegendList.innerHTML = "";
+    }
 
-    pieTotal.textContent =
-        "0";
+    updatePieTotal(0);
 }
 
 function updateCharts(animateEntrance = false) {
+    if (animateEntrance) {
+        animateUppChartAreas();
+    }
     updateBarChart(animateEntrance);
     updatePieChart(animateEntrance);
+}
+
+function animatePieChartOut(chart) {
+    if (pieChartExitInProgress) {
+        return;
+    }
+
+    const chartCard = chart.canvas?.closest(".chart-card");
+    if (chartCard?.classList.contains("bpa-upp-dashboard-enter")) {
+        chart.destroy();
+        if (pieChart === chart) {
+            pieChart = null;
+        }
+        updatePieChart(true);
+        return;
+    }
+
+    if (shouldReduceDashboardMotion()) {
+        chart.destroy();
+        if (pieChart === chart) {
+            pieChart = null;
+        }
+        updatePieChart(true);
+        return;
+    }
+
+    pieChartExitInProgress = true;
+    const transitionVersion = ++pieChartExitVersion;
+    const canvas = chart.canvas;
+    chart.options.animation = {
+        ...chart.options.animation,
+        duration: 1100,
+        animateRotate: true,
+        animateScale: false,
+        onComplete: () => {
+            if (transitionVersion !== pieChartExitVersion) {
+                return;
+            }
+
+            if (Chart.getChart(canvas) === chart) {
+                chart.destroy();
+            }
+            if (pieChart === chart) {
+                pieChart = null;
+            }
+            pieChartExitInProgress = false;
+
+            if (canvas.isConnected) {
+                updatePieChart(true);
+            }
+        }
+    };
+    chart.data.datasets[0].data = chart.data.labels.map(() => 0);
+    chart.update();
 }
 
 function updateBarChart(animateEntrance = false) {
@@ -1746,12 +2625,44 @@ function updateBarChart(animateEntrance = false) {
         );
 
     const chartCategory = dashboardMode === "participants" ? "program" : "status";
+    const barTitle = document.getElementById("barChartTitle");
+    const barDescription = document.getElementById("barChartDescription");
+    const backButton = document.getElementById("programChartBackButton");
+    const isProgramDrilldown = dashboardMode === "participants" && Boolean(participantProgramDrilldown);
+    const shouldShowBackButton = isProgramDrilldown;
+    const shouldAnimateBackButton = Boolean(backButton && backButton.hidden && shouldShowBackButton);
+    if (dashboardMode === "participants") {
+        updateDashboardChartHeader(
+            barTitle,
+            isProgramDrilldown
+                ? participantProgramDrilldown.label
+                : "Bilangan Peserta Mengikut Program",
+            barDescription,
+            isProgramDrilldown
+                ? "Pilih program mengikut tahun untuk melihat peserta."
+                : "Program dengan nama yang sama digabungkan. Pilih program untuk melihat pecahan mengikut tahun."
+        );
+        if (backButton) backButton.hidden = !shouldShowBackButton;
+    } else if (backButton) {
+        backButton.hidden = true;
+    }
+    if (shouldAnimateBackButton) {
+        backButton.classList.remove("bpa-upp-back-button-enter");
+        void backButton.offsetWidth;
+        backButton.classList.add("bpa-upp-back-button-enter");
+        backButton.addEventListener("animationend", event => {
+            if (event.target === backButton && event.animationName === "bpa-upp-back-button-enter") {
+                backButton.classList.remove("bpa-upp-back-button-enter");
+            }
+        }, { once: true });
+    }
     const barIndex = getHeaders().findIndex(
         header => String(header).trim().toLowerCase() === chartCategory
     );
 
     if (!currentRows.length || barIndex < 0) {
         if (barChart) {
+            finishDashboardBarChartEntrance(barChart.canvas);
             barChart.destroy();
             barChart = null;
         }
@@ -1761,6 +2672,7 @@ function updateBarChart(animateEntrance = false) {
 
         legend.style.display =
             "none";
+        barChartViewKey = null;
 
         return;
     }
@@ -1774,22 +2686,25 @@ function updateBarChart(animateEntrance = false) {
     const columnIndex =
         Number(barIndex);
 
-    const entries =
-        getCategoryCounts(
-            columnIndex
-        );
+    const entries = dashboardMode === "participants"
+        ? getParticipantProgramChartEntries(columnIndex)
+        : getCategoryCounts(columnIndex);
 
     if (!entries.length) {
         if (barChart) {
+            finishDashboardBarChartEntrance(barChart.canvas);
             barChart.destroy();
             barChart = null;
         }
+        barChartViewKey = null;
         return;
     }
 
     const labels = entries.map(([label]) => label);
     const values = entries.map(([, count]) => count);
+    const viewKey = `${dashboardMode}:${selectedPIC}:${selectedParticipantUnit}:${selectedParticipantYear}:${participantProgramDrilldown?.key || ""}`;
     const hasSameData = barChart &&
+        barChartViewKey === viewKey &&
         barChart.data.labels.length === labels.length &&
         labels.every((label, index) => barChart.data.labels[index] === label) &&
         barChart.data.datasets[0]?.data.length === values.length &&
@@ -1805,14 +2720,26 @@ function updateBarChart(animateEntrance = false) {
             entries,
             false
         );
+        barChartViewKey = viewKey;
         return;
     }
 
     if (barChart) {
+        finishDashboardBarChartEntrance(barChart.canvas);
         barChart.destroy();
         barChart = null;
     }
 
+    const shouldAnimate = !shouldReduceDashboardMotion();
+    if (shouldAnimate) {
+        canvas.classList.add("dashboard-chart-animating");
+        barChartEntranceTimeout = window.setTimeout(
+            () => finishDashboardBarChartEntrance(canvas),
+            1400
+        );
+    } else {
+        finishDashboardBarChartEntrance(canvas);
+    }
     barChart = new Chart(
         canvas,
         {
@@ -1830,11 +2757,10 @@ function updateBarChart(animateEntrance = false) {
                 responsive: true,
                 maintainAspectRatio: false,
                 onClick: (event, elements) => {
-                    const index = elements[0]?.index;
-                    const value = entries[index]?.[0];
-                    if (value !== undefined) {
-                        openChartFilter(columnIndex, value);
-                    }
+                    handleChartEntrySelection(
+                        entries[elements[0]?.index],
+                        columnIndex
+                    );
                 },
                 plugins: {
                     legend: { display: false },
@@ -1861,7 +2787,7 @@ function updateBarChart(animateEntrance = false) {
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 },
                 animation: {
-                    duration: 1300,
+                    duration: shouldAnimate ? 1300 : 0,
                     easing: "easeOutCubic"
                 },
                 transitions: {
@@ -1878,6 +2804,12 @@ function updateBarChart(animateEntrance = false) {
         }
     );
 
+    if (shouldAnimate) {
+        barChart.reset();
+        barChart.update();
+    }
+
+    barChartViewKey = viewKey;
     renderCategoryLegend(
         barLegend,
         entries,
@@ -1885,12 +2817,37 @@ function updateBarChart(animateEntrance = false) {
     );
 }
 
+function updateDashboardChartHeader(title, titleText, description, descriptionText) {
+    let changed = false;
+    [
+        [title, titleText],
+        [description, descriptionText]
+    ].forEach(([element, text]) => {
+        if (!element || element.textContent === text) return;
+        element.textContent = text;
+        changed = true;
+    });
+
+    if (!changed) return;
+
+    [title, description].filter(Boolean).forEach(element => {
+        element.classList.remove("bpa-upp-chart-header-text-enter");
+        void element.offsetWidth;
+        element.classList.add("bpa-upp-chart-header-text-enter");
+        element.addEventListener("animationend", event => {
+            if (
+                event.target === element
+                && event.animationName === "bpa-upp-chart-header-text-enter"
+            ) {
+                element.classList.remove("bpa-upp-chart-header-text-enter");
+            }
+        }, { once: true });
+    });
+}
+
 function updatePieChart(animateEntrance = false) {
     pieLegend.innerHTML =
         "";
-
-    pieTotal.textContent =
-        "0";
 
     const section =
         document.getElementById(
@@ -1908,7 +2865,14 @@ function updatePieChart(animateEntrance = false) {
 
     const registeredChart = Chart.getChart(canvas);
     if (pieChart !== registeredChart) {
+        if (pieChartExitInProgress) {
+            pieChartExitVersion += 1;
+            pieChartExitInProgress = false;
+        }
         pieChart = registeredChart || null;
+    }
+    if (pieChartExitInProgress) {
+        return;
     }
 
     const wrapper =
@@ -1922,14 +2886,31 @@ function updatePieChart(animateEntrance = false) {
         );
 
     const chartCategory = dashboardMode === "participants" ? "program" : "status";
+    const pieTitle = document.getElementById("pieChartTitle");
+    const pieDescription = document.getElementById("pieChartDescription");
+    updateDashboardChartHeader(
+        pieTitle,
+        dashboardMode === "participants" && participantProgramDrilldown
+            ? participantProgramDrilldown.label
+            : dashboardMode === "participants"
+                ? "Taburan Program Peserta"
+                : "Taburan Status Penerima Bantuan",
+        pieDescription,
+        dashboardMode === "participants" && participantProgramDrilldown
+            ? "Pecahan penyertaan mengikut tahun bagi program dipilih."
+            : dashboardMode === "participants"
+                ? "Peratus dan jumlah peserta bagi setiap program."
+                : "Peratus dan jumlah penerima bagi setiap status."
+    );
     const pieIndex = getHeaders().findIndex(
         header => String(header).trim().toLowerCase() === chartCategory
     );
 
     if (!currentRows.length || pieIndex < 0) {
+        updatePieTotal(0);
         if (pieChart) {
-            pieChart.destroy();
-            pieChart = null;
+            animatePieChartOut(pieChart);
+            return;
         }
 
         wrapper.style.display =
@@ -1950,16 +2931,19 @@ function updatePieChart(animateEntrance = false) {
     const columnIndex =
         Number(pieIndex);
 
-    const entries =
-        getCategoryCounts(
-            columnIndex
-        );
+    const entries = dashboardMode === "participants"
+        ? getParticipantProgramChartEntries(columnIndex)
+        : getCategoryCounts(columnIndex);
 
     if (!entries.length) {
         if (pieChart) {
-            pieChart.destroy();
-            pieChart = null;
+            updatePieTotal(0);
+            animatePieChartOut(pieChart);
+            return;
         }
+        updatePieTotal(0);
+        wrapper.style.display = "none";
+        legend.style.display = "none";
         return;
     }
 
@@ -1969,6 +2953,13 @@ function updatePieChart(animateEntrance = false) {
                 sum + count,
             0
         );
+    updatePieTotal(total);
+    renderCategoryLegend(
+        pieLegend,
+        entries,
+        true,
+        entry => handleChartEntrySelection(entry, columnIndex)
+    );
 
     const labels = entries.map(([label]) => label);
     const values = entries.map(([, count]) => count);
@@ -1981,23 +2972,15 @@ function updatePieChart(animateEntrance = false) {
     if (hasSameData && !animateEntrance) {
         pieChart.resize();
         pieChart.update("none");
-        renderCategoryLegend(
-            pieLegend,
-            entries,
-            true
-        );
-        pieTotal.textContent = total.toLocaleString();
         return;
     }
 
     if (pieChart) {
-        pieChart.destroy();
-        pieChart = null;
+        animatePieChartOut(pieChart);
+        return;
     }
 
-    pieTotal.textContent =
-        total.toLocaleString();
-
+    const shouldAnimate = !shouldReduceDashboardMotion();
     pieChart = new Chart(
         canvas,
         {
@@ -2020,20 +3003,18 @@ function updatePieChart(animateEntrance = false) {
                 },
                 cutout: "64%",
                 animation: {
-                    duration: 1100,
+                    duration: shouldAnimate ? 1100 : 0,
                     animateRotate: true,
                     animateScale: false
                 },
                 transitions: {
-                    attach: { animation: { duration: 0 } },
                     resize: { animation: { duration: 0 } }
                 },
                 onClick: (event, elements) => {
-                    const index = elements[0]?.index;
-                    const value = entries[index]?.[0];
-                    if (value !== undefined) {
-                        openChartFilter(columnIndex, value);
-                    }
+                    handleChartEntrySelection(
+                        entries[elements[0]?.index],
+                        columnIndex
+                    );
                 },
                 plugins: {
                     legend: { display: false },
@@ -2059,11 +3040,10 @@ function updatePieChart(animateEntrance = false) {
         }
     );
 
-    renderCategoryLegend(
-        pieLegend,
-        entries,
-        true
-    );
+    if (shouldAnimate) {
+        pieChart.reset();
+        pieChart.update();
+    }
 }
 
 function populateChartColumnSelectors() {
@@ -2466,14 +3446,8 @@ if (picSelect) {
     );
 }
 
-window.appInitialPageReady = initializeDashboard();
-
-document.addEventListener("app:page-loaded", () => {
-    const pathname = typeof window.appPathname === "function"
-        ? window.appPathname(window.location.pathname)
-        : window.location.pathname;
-    if (pathname === "/") {
-        window.registerAppPageLoadTask(initializeDashboard(true));
-    }
-});
+const isBpaDashboardShell = /\/bpa\/dashboard\/?$/.test(window.location.pathname);
+window.appInitialPageReady = isBpaDashboardShell
+    ? Promise.resolve()
+    : initializeDashboard(true);
 })();

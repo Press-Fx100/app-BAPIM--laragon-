@@ -1,6 +1,7 @@
 <main class="main-content">
     <div class="dashboard-content account-page">
-        <section class="content-card account-settings-card manage-users-card">
+        <div class="manage-users-layout account-layout">
+        <section class="content-card account-settings-card manage-users-card account-profile-card">
             <div class="card-header-custom account-settings-header">
                 <div>
                     <h5>Profil Pengguna</h5>
@@ -71,5 +72,17 @@
                 </form>
             </div>
         </section>
+        <section class="content-card account-user-log-card" aria-labelledby="accountUserLogTitle">
+            <div class="card-header-custom account-settings-header">
+                <div>
+                    <h5 id="accountUserLogTitle">Log Pengguna</h5>
+                    <span>Tindakan anda dalam aplikasi.</span>
+                </div>
+            </div>
+            <div class="account-user-log-list" id="accountUserLogList" role="list" tabindex="0">
+                <div class="managed-user-list-empty">Memuatkan log...</div>
+            </div>
+        </section>
+        </div>
     </div>
 </main>

@@ -262,13 +262,19 @@ if ($role === 'admin') {
     </div>
 
     <div class="bpa-unit-dashboard-tools">
-      <form class="d-flex gap-2 bpa-unit-dashboard-year-form" method="get">
+      <form class="d-flex gap-2 bpa-unit-dashboard-year-form bpa-upp-year-action" method="get">
         <label class="visually-hidden" for="bpa-unit-dashboard-year">Tahun dashboard UPA</label>
-        <input id="bpa-unit-dashboard-year" name="tahun" type="number"
-               class="form-control bpa-admin-year-select" aria-label="Pilih tahun dashboard UPA"
-               value="<?= $tahun ?>" min="<?= min($years) ?>" max="<?= max($years) ?>"
-               step="1" inputmode="numeric" data-current-year="<?= $tahun ?>"
-               data-available-years="<?= htmlspecialchars(json_encode($years), ENT_QUOTES, 'UTF-8') ?>">
+        <span class="bpa-admin-action-icon" aria-hidden="true"><i class="bi bi-calendar3"></i></span>
+        <select id="bpa-unit-dashboard-year" name="tahun"
+                class="form-select bpa-admin-year-select" aria-label="Pilih tahun dashboard UPA"
+                data-current-year="<?= $tahun ?>"
+                data-available-years="<?= htmlspecialchars(json_encode($years), ENT_QUOTES, 'UTF-8') ?>">
+          <?php foreach ($years as $year): ?>
+            <option value="<?= (int)$year ?>" <?= (int)$year === (int)$tahun ? 'selected' : '' ?>>
+              <?= (int)$year ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
         <input type="hidden" name="unit" value="UPA">
       </form>
       <nav class="bpa-admin-actions bpa-unit-dashboard-actions" aria-label="Pautan dashboard UPA">

@@ -11,7 +11,6 @@ const PREVIEW_ROWS = 10;
 let uploadOverlay;
 let uploadCard;
 let closeUploadButton;
-let cancelUploadButton;
 let uploadDropZone;
 let browseUploadButton;
 let datasetFileInput;
@@ -20,6 +19,7 @@ let uploadFileName;
 let uploadFileMeta;
 let removeUploadFileButton;
 let uploadDatasetName;
+let uploadUnitInCharge;
 let uploadSheetSection;
 let uploadSheetList;
 let uploadSelectedSheetCount;
@@ -32,21 +32,24 @@ let uploadCardFooter;
 let importUploadButton;
 let uploadDatasetType;
 let uploadMode = "penerima";
-let participantImportMethod = "color";
 let participantHeaderMapping = {
     name: "",
     identity: "",
     category: "",
+    incomeBefore: "",
+    incomeAfter: "",
+    status: "",
+    notes: "",
     program: ""
 };
 let participantHeaderMappingContainer;
-let participantImportOptions;
-let participantImportMethodSelect;
-let participantProgramHeaderField;
-let participantProgramRequired;
 let participantNameHeader;
 let participantIdentityHeader;
 let participantCategoryHeader;
+let participantIncomeBeforeHeader;
+let participantIncomeAfterHeader;
+let participantStatusHeader;
+let participantNotesHeader;
 let participantProgramHeader;
 let recipientHeaderMapping = {
     name: "", identity: "", phone: "", email: "", status: "", notes: "", pic: ""
@@ -107,6 +110,15 @@ function showUploadStatus(message, type = "") {
     uploadStatusMessage.style.display = "block";
 }
 
+function setImportButtonLabel(label) {
+    const labelElement = importUploadButton?.querySelector(
+        ".dataset-upload-action-label"
+    );
+    if (labelElement) {
+        labelElement.textContent = label;
+    }
+}
+
 function hideUploadStatus() {
     uploadStatusMessage.style.display = "none";
     uploadStatusMessage.textContent = "";
@@ -132,16 +144,6 @@ function handleFile(file) {
     csvRows = null;
     activeSheet = 0;
 
-    if (uploadMode === "peserta" && extension === "csv") {
-        participantImportMethod = "column";
-        if (participantImportMethodSelect) {
-            participantImportMethodSelect.value = "column";
-            participantImportMethodSelect.dispatchEvent(
-                new Event("change", { bubbles: true })
-            );
-        }
-    }
-
     uploadDropZone?.classList.add("hidden");
     uploadPreviewSection.style.display = "block";
     uploadSheetSection.style.display = "none";
@@ -159,7 +161,7 @@ function handleFile(file) {
     uploadDatasetName.value = file.name.replace(/\.(csv|xlsx|xls)$/i, "");
 
     importUploadButton.disabled = true;
-    importUploadButton.textContent = "Import Data";
+    setImportButtonLabel("Import Data");
 
     showUploadStatus("Membaca fail...");
 
@@ -195,37 +197,28 @@ function readCSV(file) {
             uploadPreviewSection.style.display = "block";
             uploadCardFooter.style.display = "flex";
 
-            renderTable(rows.slice(0, PREVIEW_ROWS + 1));
-
             renderParticipantHeaderMapping();
             renderRecipientHeaderMapping();
-            let participantRows = null;
             if (uploadMode === "peserta") {
                 if (participantHeadersAreValid()) {
-                    participantRows = buildParticipantRows();
-                    uploadPreviewRows.textContent =
-                        `${Math.max(participantRows.length - 1, 0).toLocaleString()} baris`;
+                    const participantRows = buildParticipantRows(true);
+                    uploadPreviewRows.textContent = `${Math.min(
+                        Math.max(participantRows.length - 1, 0),
+                        PREVIEW_ROWS
+                    ).toLocaleString()} baris pratonton`;
                     renderTable(participantRows.slice(0, PREVIEW_ROWS + 1));
-                    importUploadButton.disabled = participantRows.length < 2;
+                    importUploadButton.disabled = false;
                 } else {
                     importUploadButton.disabled = true;
                 }
             } else {
+                renderIdentityNormalizedPreview();
                 importUploadButton.disabled = !recipientHeadersAreValid();
             }
 
             if (uploadMode === "peserta" && !participantHeadersAreValid()) {
                 showUploadStatus(
                     "Pilih lajur NAMA, KAD PENGENALAN dan PROGRAM yang berbeza.",
-                    "error"
-                );
-            } else if (
-                uploadMode === "peserta" &&
-                participantImportMethod === "column" &&
-                participantRows?.length < 2
-            ) {
-                showUploadStatus(
-                    "Tiada rekod dengan Kad Pengenalan dan program yang sah.",
                     "error"
                 );
             } else {
@@ -271,8 +264,7 @@ function readExcel(file) {
             workbook = XLSX.read(data, {
                 type: "array",
                 cellFormula: false,
-                cellHTML: false,
-                cellStyles: true
+                cellHTML: false
             });
 
             if (!workbook.SheetNames?.length) {
@@ -282,20 +274,15 @@ function readExcel(file) {
 
             excelSheets = workbook.SheetNames.map(sheetName => {
                 const worksheet = workbook.Sheets[sheetName];
-
-                const rows = XLSX.utils.sheet_to_json(
-                    worksheet,
-                    {
-                        header: 1,
-                        defval: "",
-                        raw: false
-                    }
-                );
+                const range = worksheet?.["!ref"]
+                    ? XLSX.utils.decode_range(worksheet["!ref"])
+                    : null;
 
                 return {
                     name: sheetName,
-                    rows: rows.slice(0, PREVIEW_ROWS + 1),
-                    rowCount: Math.max(rows.length - 1, 0),
+                    rowCount: range
+                        ? Math.max(range.e.r - range.s.r, 0)
+                        : 0,
                     selected: false
                 };
             });
@@ -305,19 +292,9 @@ function readExcel(file) {
             uploadCardFooter.style.display = "flex";
 
             createSheetList();
-            showSheet(0);
             renderParticipantHeaderMapping();
             renderRecipientHeaderMapping();
             updateSheetSelection();
-
-            if (uploadMode === "peserta" && participantHeadersAreValid()) {
-                const participantRows = buildParticipantRows();
-
-                uploadPreviewRows.textContent =
-                    `${Math.max(participantRows.length - 1, 0).toLocaleString()} baris`;
-                renderTable(participantRows.slice(0, PREVIEW_ROWS + 1));
-                importUploadButton.disabled = participantRows.length < 2;
-            }
 
             showUploadStatus(
                 "Pilih worksheet yang ingin diimport."
@@ -385,7 +362,9 @@ function createSheetList() {
                 sheet.selected
             );
 
-            showSheet(index);
+            activeSheet = sheet.selected
+                ? index
+                : excelSheets.findIndex(selectedSheet => selectedSheet.selected);
             updateSheetSelection();
         }
 
@@ -409,7 +388,9 @@ function createSheetList() {
                 sheet.selected
             );
 
-            showSheet(index);
+            activeSheet = sheet.selected
+                ? index
+                : excelSheets.findIndex(selectedSheet => selectedSheet.selected);
             updateSheetSelection();
         });
 
@@ -432,11 +413,12 @@ function updateSheetSelection() {
         sheet => sheet.selected
     );
 
-    if (
-        uploadMode === "peserta" &&
-        selectedType === "csv" &&
-        participantImportMethod === "column"
-    ) {
+    if (selectedType === "xlsx" || selectedType === "xls") {
+        renderParticipantHeaderMapping();
+        renderRecipientHeaderMapping();
+    }
+
+    if (uploadMode === "peserta" && selectedType === "csv") {
         uploadSelectedSheetCount.textContent = "Fail CSV dipilih";
 
         if (!participantHeadersAreValid()) {
@@ -448,19 +430,43 @@ function updateSheetSelection() {
             return;
         }
 
-        const participantRows = buildParticipantRows();
+        const participantRows = buildParticipantRows(true);
         uploadPreviewRows.textContent =
-            `${Math.max(participantRows.length - 1, 0).toLocaleString()} baris`;
+            `${Math.min(
+                Math.max(participantRows.length - 1, 0),
+                PREVIEW_ROWS
+            ).toLocaleString()} baris pratonton`;
         renderTable(participantRows.slice(0, PREVIEW_ROWS + 1));
-        importUploadButton.disabled = participantRows.length < 2;
-        if (participantRows.length < 2) {
-            showUploadStatus(
-                participantHeadersAreValid()
-                    ? "Tiada rekod dengan Kad Pengenalan dan program yang sah."
-                    : "Pilih lajur NAMA, KAD PENGENALAN dan PROGRAM yang berbeza."
-            );
-        } else {
+        importUploadButton.disabled = false;
+        hideUploadStatus();
+        return;
+    }
+
+    if (selectedType === "csv") {
+        uploadSelectedSheetCount.textContent = "Fail CSV dipilih";
+        renderParticipantHeaderMapping();
+        renderRecipientHeaderMapping();
+
+        if (uploadMode === "peserta" && participantHeadersAreValid()) {
+            const participantRows = buildParticipantRows(true);
+            uploadPreviewRows.textContent = `${Math.min(
+                Math.max(participantRows.length - 1, 0),
+                PREVIEW_ROWS
+            ).toLocaleString()} baris pratonton`;
+            renderTable(participantRows.slice(0, PREVIEW_ROWS + 1));
+            importUploadButton.disabled = false;
             hideUploadStatus();
+        } else {
+            renderIdentityNormalizedPreview();
+            importUploadButton.disabled = !recipientHeadersAreValid();
+            if (!recipientHeadersAreValid()) {
+                showUploadStatus(
+                    "Pilih lajur NAMA dan KAD PENGENALAN.",
+                    "error"
+                );
+            } else {
+                hideUploadStatus();
+            }
         }
         return;
     }
@@ -468,43 +474,68 @@ function updateSheetSelection() {
     uploadSelectedSheetCount.textContent =
         `${selected.length} daripada ${excelSheets.length} sheet dipilih`;
 
-    importUploadButton.disabled =
-        selected.length === 0;
-
-    if (uploadMode === "peserta" && selected.length && participantHeadersAreValid()) {
-        const participantRows = buildParticipantRows();
-
-        uploadPreviewRows.textContent =
-            `${Math.max(participantRows.length - 1, 0).toLocaleString()} baris`;
-        renderTable(participantRows.slice(0, PREVIEW_ROWS + 1));
-        importUploadButton.disabled = participantRows.length < 2;
-    } else if (uploadMode === "peserta") {
+    if (!selected.length) {
+        uploadPreviewRows.textContent = "-";
+        uploadPreviewTable.replaceChildren();
         importUploadButton.disabled = true;
-    } else if (uploadMode === "penerima") {
-        renderRecipientHeaderMapping();
-        importUploadButton.disabled =
-            (
-                (selectedType === "xlsx" || selectedType === "xls") &&
-                selected.length === 0
-            ) ||
-            !recipientHeadersAreValid();
+        showUploadStatus("Pilih sekurang-kurangnya satu Excel sheet.");
+        return;
     }
 
-    if (selected.length === 0) {
-        showUploadStatus(
-            "Pilih sekurang-kurangnya satu worksheet."
-        );
-    } else if (uploadMode === "peserta" && !participantHeadersAreValid()) {
-        showUploadStatus(
-            "Pilih lajur NAMA, KAD PENGENALAN dan PROGRAM yang berbeza."
-        );
-    } else if (uploadMode === "peserta" && importUploadButton.disabled) {
-        showUploadStatus(
-            "Tiada rekod dengan Kad Pengenalan dan program yang sah."
-        );
-    } else {
-        hideUploadStatus();
+    if (!excelSheets[activeSheet]?.selected) {
+        activeSheet = excelSheets.findIndex(sheet => sheet.selected);
     }
+
+    if (uploadMode === "peserta") {
+        if (!participantHeadersAreValid()) {
+            uploadPreviewRows.textContent = "-";
+            uploadPreviewTable.replaceChildren();
+            importUploadButton.disabled = true;
+            showUploadStatus(
+                "Pilih lajur NAMA, KAD PENGENALAN dan PROGRAM yang berbeza.",
+                "error"
+            );
+            return;
+        }
+
+        const participantRows = buildParticipantRows(true);
+        uploadPreviewRows.textContent = `${Math.min(
+            Math.max(participantRows.length - 1, 0),
+            PREVIEW_ROWS
+        ).toLocaleString()} baris pratonton`;
+        renderTable(participantRows.slice(0, PREVIEW_ROWS + 1));
+        importUploadButton.disabled = false;
+        hideUploadStatus();
+        return;
+    }
+
+    showSheet(activeSheet);
+    importUploadButton.disabled = !recipientHeadersAreValid();
+    if (recipientHeadersAreValid()) {
+        hideUploadStatus();
+    } else {
+        showUploadStatus("Pilih lajur NAMA dan KAD PENGENALAN.", "error");
+    }
+}
+
+function renderIdentityNormalizedPreview() {
+    if (!csvRows?.length) {
+        return;
+    }
+
+    const identityHeader = uploadMode === "penerima"
+        ? recipientHeaderMapping.identity
+        : participantHeaderMapping.identity;
+    const identityIndex = csvRows[0].indexOf(identityHeader);
+    const rows = csvRows.slice(0, PREVIEW_ROWS + 1).map(row => [...row]);
+
+    if (identityIndex >= 0) {
+        rows.slice(1).forEach(row => {
+            row[identityIndex] = participantIdentityText(row[identityIndex]);
+        });
+    }
+
+    renderTable(rows);
 }
 
 function showSheet(index) {
@@ -519,7 +550,37 @@ function showSheet(index) {
     uploadPreviewRows.textContent =
         `${sheet.rowCount.toLocaleString()} baris`;
 
-    renderTable(sheet.rows);
+    const worksheet = workbook?.Sheets[workbook.SheetNames[index]];
+    if (!worksheet) {
+        throw new Error(`Excel worksheet "${sheet.name}" is unavailable.`);
+    }
+
+    const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+    const headers = [];
+    for (let column = range.s.c; column <= range.e.c; column += 1) {
+        headers.push(participantCellText(
+            worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: column })]
+        ));
+    }
+    const identityHeader = uploadMode === "penerima"
+        ? recipientHeaderMapping.identity
+        : participantHeaderMapping.identity;
+    const identityIndex = headers.indexOf(identityHeader);
+    const previewRows = [headers];
+    const lastPreviewRow = Math.min(range.e.r, range.s.r + PREVIEW_ROWS);
+
+    for (let row = range.s.r + 1; row <= lastPreviewRow; row += 1) {
+        const values = [];
+        for (let column = range.s.c; column <= range.e.c; column += 1) {
+            const address = XLSX.utils.encode_cell({ r: row, c: column });
+            values.push(column - range.s.c === identityIndex
+                ? participantIdentityCellText(worksheet[address])
+                : participantCellText(worksheet[address]));
+        }
+        previewRows.push(values);
+    }
+
+    renderTable(previewRows);
 }
 
 function renderTable(rows) {
@@ -663,65 +724,22 @@ function countDelimiter(line, delimiter) {
     return line.split(delimiter).length - 1;
 }
 
-function getCellColor(cell) {
-    return [
-        cell?.s?.fgColor,
-        cell?.s?.fill?.fgColor
-    ]
-        .filter(Boolean)
-        .map(color => {
-            if (color.rgb) {
-                return String(color.rgb)
-                    .replace(/^FF/i, "")
-                    .toUpperCase();
-            }
-
-            if (
-                color.theme !== undefined ||
-                color.indexed !== undefined
-            ) {
-                return `${color.theme ?? "indexed"}:${color.theme ?? color.indexed}`;
-            }
-
-            return "";
-        })
-        .filter(Boolean)
-        .join("|");
-}
-
-function isColoredParticipantCell(cell) {
-    const color = getCellColor(cell);
-
-    return Boolean(
-        color &&
-        color
-            .split("|")
-            .some(value => {
-                const normalized = String(value)
-                    .replace(/^#/, "")
-                    .replace(/^RGB:/i, "")
-                    .toUpperCase();
-
-                const isWhite =
-                    normalized === "FFF" ||
-                    normalized === "FFFFFF" ||
-                    normalized === "FFFFFFFF" ||
-                    /^F{6,8}$/.test(normalized) ||
-                    normalized === "0:0" ||
-                    normalized === "0:1" ||
-                    normalized === "1:0" ||
-                    normalized === "1:1" ||
-                    normalized === "THEME:0" ||
-                    normalized === "THEME:1" ||
-                    normalized === "INDEXED:9";
-
-                return !isWhite && normalized !== "000000";
-            })
-    );
-}
-
 function participantCellText(cell) {
     return String(cell?.w ?? cell?.v ?? "").trim();
+}
+
+function participantIdentityCellText(cell) {
+    if (cell?.t === "n" && Number.isFinite(cell.v)) {
+        const zeroFormat = typeof cell.z === "string" && /^0+$/.test(cell.z)
+            ? cell.z.length
+            : 0;
+        const value = Number.isInteger(cell.v)
+            ? String(cell.v).padStart(zeroFormat, "0")
+            : String(cell.v);
+        return participantIdentityText(value);
+    }
+
+    return participantIdentityText(participantCellText(cell));
 }
 
 function expandScientificNumber(value) {
@@ -755,8 +773,7 @@ function expandScientificNumber(value) {
 
 function participantIdentityText(value) {
     return expandScientificNumber(value)
-        .replace(/\.$/, "")
-        .trim();
+        .replace(/[^a-zA-Z0-9]/g, "");
 }
 
 function getParticipantHeaders() {
@@ -768,62 +785,38 @@ function getParticipantHeaders() {
 
     const headers = new Set();
 
-    excelSheets.forEach(sheet => {
-        const worksheet = workbook?.Sheets[sheet.name];
+    excelSheets
+        .filter(sheet => sheet.selected)
+        .forEach(sheet => {
+            const worksheet = workbook?.Sheets[sheet.name];
 
-        if (!worksheet?.["!ref"]) {
-            return;
-        }
-
-        const range = XLSX.utils.decode_range(worksheet["!ref"]);
-
-        for (let column = range.s.c; column <= range.e.c; column += 1) {
-            const address = XLSX.utils.encode_cell({
-                r: range.s.r,
-                c: column
-            });
-            const header = participantCellText(worksheet[address]);
-
-            if (header) {
-                headers.add(header);
+            if (!worksheet?.["!ref"]) {
+                return;
             }
-        }
-    });
+
+            const range = XLSX.utils.decode_range(worksheet["!ref"]);
+
+            for (let column = range.s.c; column <= range.e.c; column += 1) {
+                const address = XLSX.utils.encode_cell({
+                    r: range.s.r,
+                    c: column
+                });
+                const header = participantCellText(worksheet[address]);
+
+                if (header) {
+                    headers.add(header);
+                }
+            }
+        });
 
     return Array.from(headers);
 }
 
 function renderParticipantHeaderMapping() {
     if (uploadMode !== "peserta") {
-        participantImportOptions.style.display = "none";
         participantHeaderMappingContainer.style.display = "none";
         return;
     }
-
-    if (selectedType === "csv") {
-        participantImportMethod = "column";
-    }
-
-    participantImportOptions.style.display = "grid";
-    participantImportMethodSelect.value = participantImportMethod;
-    const colorMethodOption = participantImportMethodSelect.querySelector(
-        'option[value="color"]'
-    );
-    if (colorMethodOption) {
-        colorMethodOption.disabled = selectedType === "csv";
-    }
-    participantImportMethodSelect
-        .closest(".custom-select")
-        ?.querySelectorAll(".custom-select-option")
-        .forEach(option => {
-            if (option.dataset.value === "color") {
-                option.disabled = selectedType === "csv";
-            }
-        });
-    participantProgramHeaderField.style.display =
-        participantImportMethod === "column" ? "block" : "none";
-    participantProgramRequired.style.display =
-        participantImportMethod === "column" ? "inline" : "none";
 
     if (!workbook && selectedType !== "csv") {
         participantHeaderMappingContainer.style.display = "none";
@@ -834,14 +827,17 @@ function renderParticipantHeaderMapping() {
     participantHeaderMappingContainer.style.display = "block";
     participantHeaderMappingContainer.querySelector(
         ".dataset-upload-section-title span"
-    ).textContent = participantImportMethod === "column"
-        ? "Pilih lajur sumber. Rekod dengan Kad Pengenalan sama akan digabungkan."
-        : "Program dikenal pasti melalui warna sel.";
+    ).textContent =
+        "Pilih lajur sumber. Rekod dengan Kad Pengenalan sama akan digabungkan.";
 
     [
-        [participantNameHeader, "name", false],
-        [participantIdentityHeader, "identity", false],
+        [participantNameHeader, "name", true],
+        [participantIdentityHeader, "identity", true],
         [participantCategoryHeader, "category", true],
+        [participantIncomeBeforeHeader, "incomeBefore", true],
+        [participantIncomeAfterHeader, "incomeAfter", true],
+        [participantStatusHeader, "status", true],
+        [participantNotesHeader, "notes", true],
         [participantProgramHeader, "program", true]
     ].forEach(([select, field, hasUnselectedOption]) => {
         const currentValue = participantHeaderMapping[field];
@@ -849,12 +845,16 @@ function renderParticipantHeaderMapping() {
             name: "NAMA",
             identity: "KAD PENGENALAN",
             category: "KATEGORI",
+            incomeBefore: "PENDAPATAN AWAL/SEBELUM",
+            incomeAfter: "PENDAPATAN SEMASA/SELEPAS",
+            status: "STATUS",
+            notes: "CATATAN",
             program: "PROGRAM"
         }[field];
 
         select.innerHTML = "";
 
-        if (hasUnselectedOption) {
+        if (hasUnselectedOption || headers.length === 0) {
             const optional = document.createElement("option");
             optional.value = "";
             optional.textContent = "Tidak dipilih";
@@ -876,6 +876,10 @@ function renderParticipantHeaderMapping() {
     participantHeaderMapping.name = participantNameHeader.value;
     participantHeaderMapping.identity = participantIdentityHeader.value;
     participantHeaderMapping.category = participantCategoryHeader.value;
+    participantHeaderMapping.incomeBefore = participantIncomeBeforeHeader.value;
+    participantHeaderMapping.incomeAfter = participantIncomeAfterHeader.value;
+    participantHeaderMapping.status = participantStatusHeader.value;
+    participantHeaderMapping.notes = participantNotesHeader.value;
     participantHeaderMapping.program = participantProgramHeader.value;
 }
 
@@ -884,9 +888,10 @@ function participantHeadersAreValid() {
         participantHeaderMapping.name,
         participantHeaderMapping.identity,
         participantHeaderMapping.category,
-        participantImportMethod === "column"
-            ? participantHeaderMapping.program
-            : ""
+        participantHeaderMapping.incomeBefore,
+        participantHeaderMapping.incomeAfter,
+        participantHeaderMapping.status,
+        participantHeaderMapping.program
     ].filter(Boolean);
 
     return Boolean(
@@ -894,10 +899,7 @@ function participantHeadersAreValid() {
         participantHeaderMapping.identity &&
         participantHeaderMapping.name !== participantHeaderMapping.identity &&
         new Set(mappedHeaders).size === mappedHeaders.length &&
-        (
-            participantImportMethod !== "column" ||
-            participantHeaderMapping.program
-        )
+        participantHeaderMapping.program
     );
 }
 
@@ -969,7 +971,10 @@ function renderRecipientHeaderMapping() {
             pic: "PIC"
         }[field];
         select.innerHTML = "";
-        if (field !== "name" && field !== "identity") {
+        if (
+            (field !== "name" && field !== "identity") ||
+            headers.length === 0
+        ) {
             const optional = document.createElement("option");
             optional.value = "";
             optional.textContent = "Tidak dipilih";
@@ -1031,10 +1036,8 @@ function buildRecipientRows() {
                     const index = headers.indexOf(recipientHeaderMapping[field]);
                     return index >= 0
                         ? field === "identity"
-                            ? participantIdentityText(
-                                participantCellText(
-                                    worksheet[XLSX.utils.encode_cell({ r: row, c: index })]
-                                )
+                            ? participantIdentityCellText(
+                                worksheet[XLSX.utils.encode_cell({ r: row, c: index })]
                             )
                             : participantCellText(
                                 worksheet[XLSX.utils.encode_cell({ r: row, c: index })]
@@ -1048,10 +1051,19 @@ function buildRecipientRows() {
     return output.concat(sourceRows);
 }
 
-function buildParticipantRows() {
+function buildParticipantRows(previewOnly = false) {
     const records = new Map();
 
-    const addRecord = (name, identity, category, program) => {
+    const addRecord = (
+        name,
+        identity,
+        category,
+        incomeBefore,
+        incomeAfter,
+        status,
+        notes,
+        program
+    ) => {
         const cleanIdentity = participantIdentityText(identity);
         const identityKey = cleanIdentity.toUpperCase().replace(/[\s-]+/g, "");
 
@@ -1064,6 +1076,10 @@ function buildParticipantRows() {
                 name: String(name ?? "").trim(),
                 identity: cleanIdentity,
                 category: String(category ?? "").trim(),
+                incomeBefore: String(incomeBefore ?? "").trim(),
+                incomeAfter: String(incomeAfter ?? "").trim(),
+                status: String(status ?? "").trim(),
+                notes: String(notes ?? "").trim(),
                 programs: [],
                 programKeys: new Set()
             });
@@ -1075,6 +1091,14 @@ function buildParticipantRows() {
 
         if (!record.name && cleanName) record.name = cleanName;
         if (!record.category && cleanCategory) record.category = cleanCategory;
+        if (!record.incomeBefore && incomeBefore) {
+            record.incomeBefore = String(incomeBefore).trim();
+        }
+        if (!record.incomeAfter && incomeAfter) {
+            record.incomeAfter = String(incomeAfter).trim();
+        }
+        if (!record.status && status) record.status = String(status).trim();
+        if (!record.notes && notes) record.notes = String(notes).trim();
 
         String(program ?? "")
             .split(",")
@@ -1088,80 +1112,27 @@ function buildParticipantRows() {
             });
     };
 
-    if (participantImportMethod === "column") {
-        const sourceSheets = [];
+    const sourceSheets = [];
 
-        if (selectedType === "csv") {
-            if (csvRows?.length) {
-                sourceSheets.push({
-                    name: selectedFile?.name || "CSV",
-                    headers: csvRows[0].map(value => String(value ?? "").trim()),
-                    rows: csvRows.slice(1)
-                });
-            }
-        } else if (workbook) {
-            excelSheets.forEach((sheet, index) => {
-                if (!sheet.selected) return;
-
-                const sheetName = workbook.SheetNames[index];
-                const worksheet = workbook.Sheets[sheetName];
-                if (!worksheet?.["!ref"]) return;
-
-                const range = XLSX.utils.decode_range(worksheet["!ref"]);
-                const headers = [];
-
-                for (let column = range.s.c; column <= range.e.c; column += 1) {
-                    headers[column] = participantCellText(
-                        worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: column })]
-                    );
-                }
-
-                const rows = [];
-                for (let row = range.s.r + 1; row <= range.e.r; row += 1) {
-                    const values = [];
-                    for (let column = range.s.c; column <= range.e.c; column += 1) {
-                        values[column] = participantCellText(
-                            worksheet[XLSX.utils.encode_cell({ r: row, c: column })]
-                        );
-                    }
-                    rows.push(values);
-                }
-
-                sourceSheets.push({ name: sheetName, headers, rows });
+    if (selectedType === "csv") {
+        if (csvRows?.length) {
+            sourceSheets.push({
+                name: selectedFile?.name || "CSV",
+                headers: csvRows[0].map(value => String(value ?? "").trim()),
+                rows: previewOnly
+                    ? csvRows.slice(1, PREVIEW_ROWS + 1)
+                    : csvRows.slice(1)
             });
         }
-
-        sourceSheets.forEach(sheet => {
-            const nameIndex = sheet.headers.indexOf(participantHeaderMapping.name);
-            const identityIndex = sheet.headers.indexOf(participantHeaderMapping.identity);
-            const categoryIndex = participantHeaderMapping.category
-                ? sheet.headers.indexOf(participantHeaderMapping.category)
-                : -1;
-            const programIndex = sheet.headers.indexOf(participantHeaderMapping.program);
-
-            if (nameIndex < 0 || identityIndex < 0 || programIndex < 0) {
-                throw new Error(
-                    `Sumber "${sheet.name}" mesti mempunyai lajur NAMA, KAD PENGENALAN dan PROGRAM yang dipilih.`
-                );
-            }
-
-            sheet.rows.forEach(row => {
-                if (!String(row[programIndex] ?? "").trim()) return;
-                addRecord(
-                    row[nameIndex],
-                    participantIdentityText(row[identityIndex]),
-                    categoryIndex >= 0 ? row[categoryIndex] : "",
-                    row[programIndex]
-                );
-            });
-        });
     } else if (workbook) {
         excelSheets.forEach((sheet, sheetIndex) => {
             if (!sheet.selected) return;
 
             const sheetName = workbook.SheetNames[sheetIndex];
             const worksheet = workbook.Sheets[sheetName];
-            const range = XLSX.utils.decode_range(worksheet["!ref"] || "A1");
+            if (!worksheet?.["!ref"]) return;
+
+            const range = XLSX.utils.decode_range(worksheet["!ref"]);
             const headers = [];
 
             for (let column = range.s.c; column <= range.e.c; column += 1) {
@@ -1170,53 +1141,86 @@ function buildParticipantRows() {
                 );
             }
 
-            const nameIndex = headers.indexOf(participantHeaderMapping.name);
-            const identityIndex = headers.indexOf(participantHeaderMapping.identity);
-            const categoryIndex = participantHeaderMapping.category
-                ? headers.indexOf(participantHeaderMapping.category)
-                : -1;
-
-            if (nameIndex < 0 || identityIndex < 0) {
-                throw new Error(
-                    `Sheet "${sheetName}" mesti mempunyai header yang dipilih untuk NAMA dan KAD PENGENALAN.`
-                );
-            }
-
-            for (let row = range.s.r + 1; row <= range.e.r; row += 1) {
-                let name = "";
-                let identity = "";
-                let category = "";
-                const programs = [];
-
+            const lastRow = previewOnly
+                ? Math.min(range.e.r, range.s.r + PREVIEW_ROWS)
+                : range.e.r;
+            const rows = [];
+            for (let row = range.s.r + 1; row <= lastRow; row += 1) {
+                const values = [];
                 for (let column = range.s.c; column <= range.e.c; column += 1) {
                     const address = XLSX.utils.encode_cell({ r: row, c: column });
-                    const text = participantCellText(worksheet[address]);
-
-                    if (column === nameIndex) name = text;
-                    else if (column === identityIndex) {
-                        identity = participantIdentityText(text);
-                    }
-                    else if (column === categoryIndex) category = text;
-                    else if (
-                        headers[column] &&
-                        isColoredParticipantCell(worksheet[address])
-                    ) {
-                        programs.push(headers[column]);
-                    }
+                    values[column] =
+                        column === headers.indexOf(participantHeaderMapping.identity)
+                            ? participantIdentityCellText(worksheet[address])
+                            : participantCellText(worksheet[address]);
                 }
-
-                programs.forEach(program => addRecord(name, identity, category, program));
-                if (!programs.length) addRecord(name, identity, category, "");
+                rows.push(values);
             }
+
+            sourceSheets.push({ name: sheetName, headers, rows });
         });
     }
 
+    sourceSheets.forEach(sheet => {
+        const nameIndex = sheet.headers.indexOf(participantHeaderMapping.name);
+        const identityIndex = sheet.headers.indexOf(participantHeaderMapping.identity);
+        const categoryIndex = participantHeaderMapping.category
+            ? sheet.headers.indexOf(participantHeaderMapping.category)
+            : -1;
+        const incomeBeforeIndex = participantHeaderMapping.incomeBefore
+            ? sheet.headers.indexOf(participantHeaderMapping.incomeBefore)
+            : -1;
+        const incomeAfterIndex = participantHeaderMapping.incomeAfter
+            ? sheet.headers.indexOf(participantHeaderMapping.incomeAfter)
+            : -1;
+        const statusIndex = participantHeaderMapping.status
+            ? sheet.headers.indexOf(participantHeaderMapping.status)
+            : -1;
+        const notesIndex = participantHeaderMapping.notes
+            ? sheet.headers.indexOf(participantHeaderMapping.notes)
+            : -1;
+        const programIndex = sheet.headers.indexOf(participantHeaderMapping.program);
+
+        if (nameIndex < 0 || identityIndex < 0 || programIndex < 0) {
+            throw new Error(
+                `Sumber "${sheet.name}" mesti mempunyai lajur NAMA, KAD PENGENALAN dan PROGRAM yang dipilih.`
+            );
+        }
+
+        sheet.rows.forEach(row => {
+            if (!String(row[programIndex] ?? "").trim()) return;
+            addRecord(
+                row[nameIndex],
+                participantIdentityText(row[identityIndex]),
+                categoryIndex >= 0 ? row[categoryIndex] : "",
+                incomeBeforeIndex >= 0 ? row[incomeBeforeIndex] : "",
+                incomeAfterIndex >= 0 ? row[incomeAfterIndex] : "",
+                statusIndex >= 0 ? row[statusIndex] : "",
+                notesIndex >= 0 ? row[notesIndex] : "",
+                row[programIndex]
+            );
+        });
+    });
+
     return [
-        ["NAMA", "KAD PENGENALAN", "KATEGORI", "PROGRAM"],
+        [
+            "NAMA",
+            "KAD PENGENALAN",
+            "KATEGORI",
+            "PENDAPATAN AWAL/SEBELUM",
+            "PENDAPATAN SEMASA/SELEPAS",
+            "STATUS",
+            "CATATAN",
+            "PROGRAM"
+        ],
         ...Array.from(records.values()).map(record => [
             record.name,
             record.identity,
             record.category,
+            record.incomeBefore,
+            record.incomeAfter,
+            record.status,
+            record.notes,
             record.programs.join(", ")
         ])
     ];
@@ -1244,6 +1248,12 @@ async function importDataset() {
         return;
     }
 
+    if (!uploadUnitInCharge.value) {
+        showUploadStatus("Sila pilih unit.", "error");
+        uploadUnitInCharge.focus();
+        return;
+    }
+
     let selectedSheets = [];
 
     if (
@@ -1265,7 +1275,7 @@ async function importDataset() {
     }
 
     importUploadButton.disabled = true;
-    importUploadButton.textContent = "Mengimport...";
+    setImportButtonLabel("Mengimport...");
 
     showUploadStatus("Memuat naik fail...");
 
@@ -1296,9 +1306,11 @@ async function importDataset() {
                 (uploadMode === "peserta" ? "Peserta Program" : "Penerima Bantuan")
             );
             formData.append("datasetType", uploadMode);
+            formData.append("unitInCharge", uploadUnitInCharge.value);
         } else {
             formData.append("file", selectedFile);
             formData.append("datasetType", uploadMode);
+            formData.append("unitInCharge", uploadUnitInCharge.value);
         }
 
         if (selectedType === "csv") {
@@ -1402,8 +1414,7 @@ async function importDataset() {
                 sheet => sheet.selected
             ).length === 0;
 
-        importUploadButton.textContent =
-            "Import Data";
+        setImportButtonLabel("Import Data");
     }
 }
 
@@ -1437,6 +1448,10 @@ function resetUpload(resetSelections = false) {
         name: "",
         identity: "",
         category: "",
+        incomeBefore: "",
+        incomeAfter: "",
+        status: "",
+        notes: "",
         program: ""
     };
     recipientHeaderMapping = {
@@ -1460,6 +1475,7 @@ function resetUpload(resetSelections = false) {
     uploadFileMeta.textContent = "-";
 
     uploadDatasetName.value = "";
+    uploadUnitInCharge.value = "";
 
     uploadSelectedSheetCount.textContent =
         "0 sheet dipilih";
@@ -1469,8 +1485,7 @@ function resetUpload(resetSelections = false) {
     recipientHeaderMappingContainer.style.display = "none";
 
     importUploadButton.disabled = true;
-    importUploadButton.textContent =
-        "Import Data";
+    setImportButtonLabel("Import Data");
 
     browseUploadButton.disabled = false;
 
@@ -1484,13 +1499,6 @@ function resetUpload(resetSelections = false) {
             );
         }
 
-        participantImportMethod = "color";
-        if (participantImportMethodSelect) {
-            participantImportMethodSelect.value = "color";
-            participantImportMethodSelect.dispatchEvent(
-                new Event("change", { bubbles: true })
-            );
-        }
     } else {
         uploadMode = uploadDatasetType?.value || "penerima";
     }
@@ -1500,7 +1508,6 @@ function initializeUploadController() {
     uploadOverlay = document.getElementById("uploadOverlay");
     uploadCard = document.getElementById("uploadFloatingCard");
     closeUploadButton = document.getElementById("closeUploadButton");
-    cancelUploadButton = document.getElementById("cancelUploadButton");
     uploadDropZone = document.getElementById("uploadDropZone");
     browseUploadButton = document.getElementById("browseUploadButton");
     datasetFileInput = document.getElementById("datasetFileInput");
@@ -1509,6 +1516,7 @@ function initializeUploadController() {
     uploadFileMeta = document.getElementById("uploadFileMeta");
     removeUploadFileButton = document.getElementById("removeUploadFileButton");
     uploadDatasetName = document.getElementById("uploadDatasetName");
+    uploadUnitInCharge = document.getElementById("uploadUnitInCharge");
     uploadSheetSection = document.getElementById("uploadSheetSection");
     uploadSheetList = document.getElementById("uploadSheetList");
     uploadSelectedSheetCount = document.getElementById("uploadSelectedSheetCount");
@@ -1520,14 +1528,14 @@ function initializeUploadController() {
     uploadCardFooter = document.getElementById("uploadCardFooter");
     importUploadButton = document.getElementById("importUploadButton");
     uploadDatasetType = document.getElementById("uploadDatasetType");
-    participantImportOptions = document.getElementById("participantImportOptions");
-    participantImportMethodSelect = document.getElementById("participantImportMethod");
     participantHeaderMappingContainer = document.getElementById("participantHeaderMapping");
-    participantProgramHeaderField = document.getElementById("participantProgramHeaderField");
-    participantProgramRequired = document.getElementById("participantProgramRequired");
     participantNameHeader = document.getElementById("participantNameHeader");
     participantIdentityHeader = document.getElementById("participantIdentityHeader");
     participantCategoryHeader = document.getElementById("participantCategoryHeader");
+    participantIncomeBeforeHeader = document.getElementById("participantIncomeBeforeHeader");
+    participantIncomeAfterHeader = document.getElementById("participantIncomeAfterHeader");
+    participantStatusHeader = document.getElementById("participantStatusHeader");
+    participantNotesHeader = document.getElementById("participantNotesHeader");
     participantProgramHeader = document.getElementById("participantProgramHeader");
     recipientHeaderMappingContainer = document.getElementById("recipientHeaderMapping");
     recipientHeaderSelects = {
@@ -1569,30 +1577,12 @@ function initializeUploadController() {
         uploadMode = uploadDatasetType.value;
 
         if (selectedFile) {
-            handleFile(selectedFile);
+            renderParticipantHeaderMapping();
+            renderRecipientHeaderMapping();
+            updateSheetSelection();
         } else {
             renderParticipantHeaderMapping();
             renderRecipientHeaderMapping();
-        }
-    });
-
-    participantImportMethodSelect?.addEventListener("change", () => {
-        participantImportMethod = participantImportMethodSelect.value;
-
-        if (selectedType === "csv" && participantImportMethod === "color") {
-            participantImportMethod = "column";
-            participantImportMethodSelect.value = "column";
-            participantImportMethodSelect.dispatchEvent(
-                new Event("change", { bubbles: true })
-            );
-            return;
-        }
-
-        renderParticipantHeaderMapping();
-        if (selectedFile) {
-            updateSheetSelection();
-        } else {
-            hideUploadStatus();
         }
     });
 
@@ -1600,12 +1590,20 @@ function initializeUploadController() {
         participantNameHeader,
         participantIdentityHeader,
         participantCategoryHeader,
+        participantIncomeBeforeHeader,
+        participantIncomeAfterHeader,
+        participantStatusHeader,
+        participantNotesHeader,
         participantProgramHeader
     ].forEach(select => {
         select?.addEventListener("change", () => {
             participantHeaderMapping.name = participantNameHeader.value;
             participantHeaderMapping.identity = participantIdentityHeader.value;
             participantHeaderMapping.category = participantCategoryHeader.value;
+            participantHeaderMapping.incomeBefore = participantIncomeBeforeHeader.value;
+            participantHeaderMapping.incomeAfter = participantIncomeAfterHeader.value;
+            participantHeaderMapping.status = participantStatusHeader.value;
+            participantHeaderMapping.notes = participantNotesHeader.value;
             participantHeaderMapping.program = participantProgramHeader.value;
             updateSheetSelection();
         });
@@ -1720,11 +1718,6 @@ function initializeUploadController() {
     );
 
     closeUploadButton?.addEventListener(
-    "click",
-    closeUpload
-    );
-
-    cancelUploadButton?.addEventListener(
     "click",
     closeUpload
     );

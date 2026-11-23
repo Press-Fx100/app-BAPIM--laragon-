@@ -248,13 +248,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
 
             $pdo->commit();
+            record_bapim_action($pdo, 'program_update', 'Program ULK', $nama_program, (string)($program['nama_program'] ?? ''));
+            if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => true, 'message' => 'Program berjaya dikemaskini.', 'programId' => $program_id]);
+                exit;
+            }
             $ok = "Program berjaya dikemaskini.";
 
             $stmt->execute([$program_id, $ulk_id]);
             $program = $stmt->fetch(PDO::FETCH_ASSOC);
 
         } catch (Throwable $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $err = "Gagal update: " . $e->getMessage();
         }
     }

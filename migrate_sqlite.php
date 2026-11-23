@@ -46,6 +46,9 @@ if ((int)$targetCounts['datasets'] > 0 || (int)$targetCounts['activities'] > 0 |
     fwrite(STDERR, "The MySQL database already contains data. Migration stopped without changing it.\n");
     exit(1);
 }
+if (!$mysql->query("SHOW COLUMNS FROM datasets LIKE 'unit_incharge'")->fetch()) {
+    $mysql->exec("ALTER TABLE datasets ADD COLUMN unit_incharge VARCHAR(32) NOT NULL DEFAULT '' AFTER dataset_type");
+}
 
 $sourceTables = $sqlite->query("SELECT name FROM sqlite_master WHERE type = 'table'")->fetchAll(PDO::FETCH_COLUMN);
 if (!in_array('datasets', $sourceTables, true)) {
@@ -72,7 +75,7 @@ $value = static function (array $row, array $columns, string $key, mixed $defaul
 try {
     $mysql->beginTransaction();
     $insertDataset = $mysql->prepare(
-        'INSERT INTO datasets (id, name, filename, filepath, row_count, column_count, file_size, dataset_type, version, created_at, updated_at, remote_version, last_synced_at, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO datasets (id, name, filename, filepath, row_count, column_count, file_size, dataset_type, unit_incharge, version, created_at, updated_at, remote_version, last_synced_at, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     foreach ($sqlite->query('SELECT * FROM datasets ORDER BY id') as $row) {
@@ -115,6 +118,7 @@ try {
             max(0, (int)$value($row, $datasetColumns, 'column_count', 0)),
             max(0, (int)$value($row, $datasetColumns, 'file_size', filesize($newPath))),
             $datasetType,
+            (string)$value($row, $datasetColumns, 'unit_incharge', ''),
             max(1, (int)$value($row, $datasetColumns, 'version', 1)),
             $value($row, $datasetColumns, 'created_at', date('Y-m-d H:i:s')),
             $value($row, $datasetColumns, 'updated_at', date('Y-m-d H:i:s')),

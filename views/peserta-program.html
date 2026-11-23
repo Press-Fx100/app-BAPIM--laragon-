@@ -1,6 +1,6 @@
 <main class="main-content">
     <div class="dashboard-content participant-page data-content-pending">
-        <div class="content-card mb-4 dataset-page-header">
+        <div class="content-card mb-4 dataset-page-header sku-search-card-standard">
             <div>
                 <h4>Peserta Program</h4>
                 <p>Senarai peserta dan program yang disertai.</p>
@@ -44,20 +44,24 @@
                                 title="Muat turun Excel" aria-label="Muat turun Excel">
                                 <i class="bi bi-download" aria-hidden="true"></i>
                             </button>
+                            <a id="participantUploadButton" href="/muat-naik" data-app-navigation data-access-page="upload"
+                                class="toolbar-button icon-button" title="Muat Naik &amp; Set Data"
+                                aria-label="Muat Naik &amp; Set Data">
+                                <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                            </a>
                             <button type="button" id="participantAddButton" data-permission-edit="participants" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
                                 <i class="bi bi-plus-lg"></i>
-                            </button>
-                            <button type="button" id="participantDeleteButton" data-permission-edit="participants" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
-                                <i class="bi bi-trash3"></i>
                             </button>
                         </div>
                     </div>
                 </div>
-                <div id="participantDeleteOverlay" class="delete-confirmation-overlay"></div>
-                <div id="participantDeleteConfirmation" class="delete-confirmation" role="dialog" aria-modal="true" aria-hidden="true">
+                <div id="participantDeleteOverlay" class="delete-confirmation-overlay" aria-hidden="true"></div>
+                <div id="participantDeleteConfirmation" class="delete-confirmation sku-delete-confirmation" role="alertdialog"
+                    aria-modal="true" aria-labelledby="participantDeleteTitle"
+                    aria-describedby="participantDeleteMessage" aria-hidden="true">
                     <div class="delete-confirmation-icon">!</div>
                     <div class="delete-confirmation-content">
-                        <h6>Padam rekod?</h6>
+                        <h6 id="participantDeleteTitle">Padam rekod?</h6>
                         <p id="participantDeleteMessage"></p>
                         <div class="delete-confirmation-actions">
                             <button type="button" id="participantCancelDelete" class="cancel-delete">Batal</button>
@@ -67,21 +71,17 @@
                 </div>
             </div>
 
-            <div id="participantAddForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
-                <div id="participantAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
-                    aria-modal="true" aria-labelledby="participantAddTitle" aria-hidden="true">
-                    <div class="dataset-upload-header">
-                        <div>
-                            <h5 id="participantAddTitle">Tambah Rekod</h5>
-                            <p>Masukkan maklumat peserta program baharu.</p>
-                        </div>
-                        <button type="button" id="participantCloseAdd" class="dataset-upload-close"
-                            aria-label="Tutup borang tambah rekod">
-                            <i class="bi bi-x-lg" aria-hidden="true"></i>
-                        </button>
+            <dialog id="participantAddForm" class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--form"
+                aria-labelledby="participantAddTitle" aria-describedby="participantAddDescription">
+                <header class="bpa-create-dialog__header">
+                    <div class="bpa-create-dialog__heading">
+                        <h2 id="participantAddTitle">Tambah Rekod</h2>
+                        <p id="participantAddDescription" class="bpa-create-dialog__subtitle">Masukkan maklumat peserta program baharu.</p>
                     </div>
-
-                    <div class="dataset-upload-body dataset-add-body">
+                    <button type="button" id="participantCloseAdd" class="bpa-create-dialog__close"
+                        aria-label="Tutup borang tambah rekod">&times;</button>
+                </header>
+                <div class="bpa-create-dialog__body dataset-add-body">
                         <div class="form-grid">
                             <div class="form-field full"><label for="participantAddDataset">Fail sumber</label><select id="participantAddDataset"></select></div>
                             <div class="form-field"><label for="participantAddNama">Nama</label><input id="participantAddNama" autocomplete="off"></div>
@@ -89,17 +89,25 @@
                             <div class="form-field"><label for="participantAddCategory">Kategori</label><input id="participantAddCategory" autocomplete="off"></div>
                             <div class="form-field full"><label for="participantAddProgram">Program</label><input id="participantAddProgram" autocomplete="off"></div>
                         </div>
-                    </div>
-
-                    <div class="dataset-upload-footer">
-                        <button type="button" id="participantCancelAdd" class="btn btn-light">Batal</button>
-                        <button type="button" id="participantConfirmAdd" data-permission-edit="participants" class="btn btn-primary">Tambah</button>
-                    </div>
                 </div>
-            </div>
+                <footer class="bpa-budget-modal-footer">
+                        <button type="button" id="participantConfirmAdd" data-permission-edit="participants"
+                            class="budget-list-action bpa-budget-save-button">
+                            <span class="budget-list-action-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
+                            <span>Tambah</span>
+                        </button>
+                </footer>
+            </dialog>
         </div>
 
-        <div class="content-card mb-4">
+        <div class="content-card mb-4 participant-table-card">
+            <div class="participant-table-card-header">
+                <div>
+                    <h5>Senarai Peserta Program</h5>
+                    <span>Maklumat peserta program dan program yang disertai.</span>
+                </div>
+                <span id="participantRecordCount" class="participant-record-count">0 rekod</span>
+            </div>
             <div id="participantLoading" class="loading">Memuatkan peserta...</div>
             <div id="participantEmpty" class="empty-datasets" style="display:none;">
                 <div class="empty-datasets-icon"><i class="bi bi-people" aria-hidden="true"></i></div>
@@ -114,7 +122,11 @@
                             <th>NAMA</th>
                             <th>KAD PENGENALAN</th>
                             <th>KATEGORI</th>
-                            <th>JUMLAH PROGRAM</th>
+                            <th>PENDAPATAN AWAL/SEBELUM</th>
+                            <th>PENDAPATAN SEMASA/SELEPAS</th>
+                            <th>STATUS</th>
+                            <th>CATATAN</th>
+                            <th>PROGRAM</th>
                         </tr>
                     </thead>
                     <tbody id="participantTableBody"></tbody>
@@ -129,26 +141,20 @@
         </div>
     </div>
 
-    <div id="participantProgramsOverlay" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay participant-programs-overlay"
-        aria-hidden="true">
-        <div id="participantProgramsCard" class="dataset-upload-card dataset-add-card participant-programs-dialog"
-            role="dialog" aria-modal="true" aria-labelledby="participantProgramsTitle" aria-hidden="true">
-            <div class="dataset-upload-header">
-                <div>
-                    <h5 id="participantProgramsTitle">Program</h5>
-                    <p>Senarai program yang disertai oleh peserta ini.</p>
-                </div>
-                <button type="button" id="closeParticipantPrograms" class="dataset-upload-close"
-                    aria-label="Tutup senarai program">
-                    <i class="bi bi-x-lg" aria-hidden="true"></i>
-                </button>
+    <dialog id="participantProgramsDialog" class="bpa-create-dialog bpa-create-dialog--structured participant-programs-dialog"
+        aria-labelledby="participantProgramsTitle" aria-describedby="participantProgramsSubtitle">
+        <header class="bpa-create-dialog__header">
+            <div class="bpa-create-dialog__heading">
+                <h2 id="participantProgramsTitle">Program Disertai</h2>
+                <p id="participantProgramsSubtitle" class="bpa-create-dialog__subtitle">
+                    Senarai program peserta.
+                </p>
             </div>
-            <div class="dataset-upload-body participant-programs-body">
-                <ul id="participantProgramsList" class="participant-programs-list"></ul>
-            </div>
-            <div class="dataset-upload-footer">
-                <button type="button" id="closeParticipantProgramsFooter" class="btn btn-light">Tutup</button>
-            </div>
+            <button type="button" id="closeParticipantPrograms" class="bpa-create-dialog__close"
+                aria-label="Tutup senarai program">&times;</button>
+        </header>
+        <div class="bpa-create-dialog__body participant-programs-body">
+            <ul id="participantProgramsList" class="participant-programs-list"></ul>
         </div>
-    </div>
+    </dialog>
 </main>

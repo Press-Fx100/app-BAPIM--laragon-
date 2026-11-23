@@ -11,8 +11,8 @@
     const $ = id => document.getElementById(id);
     let data = [], filtered = [], page = 1, sortKey = "", sortDirection = "asc";
     let visible = columns.map(c => !["sourceFile", "pic"].includes(c[0]));
-    let filters = {}, widths = [45].concat(columns.map(() => 160));
-    let deleteMode = false, active = null, anchor = null;
+    let filters = {}, widths = [45, ...columns.map(() => 160), 48];
+    let active = null, anchor = null;
     let pendingChanges = new Map(), pendingDeleteRow = null;
     let savingChanges = false;
     let saveBadgeTimer = null;
@@ -191,8 +191,7 @@
         sortDirection = "asc";
         visible = columns.map(c => !["sourceFile", "pic"].includes(c[0]));
         filters = {};
-        widths = [45].concat(columns.map(() => 160));
-        deleteMode = false;
+        widths = [45, ...columns.map(() => 160), 48];
         active = null;
         anchor = null;
         pendingChanges.clear();
@@ -218,16 +217,21 @@
             pendingChanges.clear();
             active = null;
             anchor = null;
-            deleteMode = false;
-            deleteActionStyles(false);
         };
         body.dataset.ready = "true";
         bind("recipientSearch", "input", apply);
         bind("recipientAddButton", "click", openAdd);
-        bind("recipientCancelAdd", "click", closeAdd);
         bind("recipientCloseAdd", "click", closeAdd);
         bind("recipientAddForm", "click", event => {
-            if (event.target === $("recipientAddForm")) closeAdd();
+            const dialog = $("recipientAddForm");
+            if (event.target !== dialog) return;
+            const bounds = dialog.getBoundingClientRect();
+            if (event.clientX < bounds.left || event.clientX > bounds.right
+                || event.clientY < bounds.top || event.clientY > bounds.bottom) closeAdd();
+        });
+        bind("recipientAddForm", "cancel", event => {
+            event.preventDefault();
+            closeAdd();
         });
         [["recipientAddStatus", "status"], ["recipientAddStatusPekerjaan", "statusPekerjaan"]]
             .forEach(([inputId, key]) => {
@@ -246,7 +250,6 @@
                 }));
             });
         bind("recipientConfirmAdd", "click", addRecord);
-        bind("recipientDeleteButton", "click", deleteAction);
         bind("recipientSaveButton", "click", saveChanges);
         bind("recipientExportButton", "click", exportToExcel);
         bind("recipientCancelDelete", "click", closeDeleteConfirmation);
@@ -262,6 +265,7 @@
         if (!documentEventsBound) {
             document.addEventListener("click", closeMenus);
             document.addEventListener("click", finishEditOnOutsideClick);
+            document.addEventListener("click", clearCellSelectionOnOutsideClick);
             document.addEventListener("keydown", keyboard);
             document.addEventListener("copy", copy);
             document.addEventListener("cut", cut);
@@ -302,6 +306,16 @@
             }
         });
     }
+    function clearCellSelectionOnOutsideClick(event) {
+        const body = $("recipientTableBody");
+        const target = event.target;
+        if (!body || !(target instanceof Element) || body.closest("table")?.contains(target)) return;
+        active = null;
+        anchor = null;
+        body.querySelectorAll(".selected-cell, .active-cell")
+            .forEach(cell => cell.classList.remove("selected-cell", "active-cell"));
+        updateSelectionInfo();
+    }
     function menu(event, open, close) {
         event.stopPropagation(); const a = $(open), b = $(close);
         if (b) b.classList.remove("show"); if (a) a.classList.toggle("show");
@@ -318,7 +332,14 @@
             data = (await response.json()).recipients || [];
             refreshValueOptions($("recipientAddPIC"), "pic");
             await loadDatasets(); buildColumns(); buildFilters(); apply();
-        } catch (e) { error(e); const node = $("recipientLoading"); if (node) node.textContent = "Gagal memuatkan penerima."; }
+        } catch (e) {
+            error(e);
+            const node = $("recipientLoading");
+            if (node) {
+                node.textContent = "Gagal memuatkan penerima.";
+                node.classList.add("recipient-participant-data-error");
+            }
+        }
     }
     async function loadDatasets() {
         const select = $("recipientAddDataset"); if (!select) return;
@@ -380,16 +401,39 @@
         if (empty) empty.style.display = data.length ? "none" : "block";
         if (none) none.style.display = data.length && !filtered.length ? "block" : "none";
         if (wrapper) wrapper.style.display = filtered.length ? "block" : "none";
+        const recordCount = $("recipientRecordCount");
+        if (recordCount) recordCount.textContent = `${filtered.length.toLocaleString()} rekod`;
         if (!table.tHead) table.createTHead(); table.tHead.innerHTML = "";
         const header = table.tHead.insertRow();
         addHeader(header, "", 0);
         columns.forEach((column, index) => { if (visible[index]) addHeader(header, column[1], index + 1, column[0]); });
+        const actionHeader = document.createElement("th");
+        actionHeader.className = "row-action-column";
+        actionHeader.setAttribute("aria-label", "Tindakan");
+        applyWidth(actionHeader, columns.length + 1);
+        header.appendChild(actionHeader);
         body.innerHTML = "";
         const start = (page - 1) * pageSize;
         filtered.slice(start, start + pageSize).forEach((row, offset) => {
             const tr = body.insertRow(), rowIndex = data.indexOf(row);
             addCell(tr, String(start + offset + 1), rowIndex, 0, row);
             columns.forEach((column, index) => { if (visible[index]) addCell(tr, value(row, column[0]), rowIndex, index + 1, row); });
+            const actionCell = tr.insertCell();
+            actionCell.className = "row-action-cell";
+            applyWidth(actionCell, columns.length + 1);
+            if (typeof window.canEditAppPage === "function" && window.canEditAppPage("recipients")) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "row-delete-button";
+                button.setAttribute("aria-label", `Padam rekod ${value(row, "nama")}`);
+                button.title = "Padam rekod";
+                button.innerHTML = '<i class="bi bi-trash3" aria-hidden="true"></i>';
+                button.addEventListener("click", event => {
+                    event.stopPropagation();
+                    openDeleteConfirmation(row);
+                });
+                actionCell.appendChild(button);
+            }
         });
         table.style.width = "100%";
         table.style.tableLayout = "fixed";
@@ -443,31 +487,16 @@
             td.className = "row-select-cell";
             td.tabIndex = -1;
             td.textContent = "";
-            if (deleteMode) {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.className = "row-delete-button";
-                button.setAttribute("aria-label", `Padam rekod ${value(row, "nama")}`);
-                button.title = "Padam rekod";
-                button.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
-                button.addEventListener("click", event => {
-                    event.stopPropagation();
-                    openDeleteConfirmation(row);
-                });
-                td.appendChild(button);
-            } else {
-                const number = document.createElement("span");
-                number.className = "row-number";
-                number.textContent = text;
-                td.appendChild(number);
-            }
+            const number = document.createElement("span");
+            number.className = "row-number";
+            number.textContent = text;
+            td.appendChild(number);
             return;
         }
         td.addEventListener("mousedown", e => startSelection(e, td));
         td.addEventListener("mouseenter", () => { if (dragging) selectRange(td); });
         td.addEventListener("mousemove", () => { if (dragging) selectRange(td); });
         td.addEventListener("dblclick", event => {
-            if (deleteMode) return;
             if (currentEdit) {
                 if (
                     currentEdit.cell !== td ||
@@ -519,7 +548,7 @@
     }
     function startSelection(event, td) {
         if (event.target.closest?.(".inline-edit-input")) return;
-        if (deleteMode) return; event.preventDefault();
+        event.preventDefault();
         const cell = { row: Number(td.dataset.row), col: Number(td.dataset.col) };
         shiftSelecting = event.shiftKey && !!active;
         if (!shiftSelecting) {
@@ -899,9 +928,14 @@
             }
             return;
         }
-        if (event.key === "Escape" && $("recipientAddForm")?.classList.contains("show")) {
+        if (event.key === "Escape" && $("recipientAddForm")?.open) {
             event.preventDefault();
             closeAdd();
+            return;
+        }
+        if (event.key === "Escape" && $("recipientDeleteConfirmation")?.classList.contains("show")) {
+            event.preventDefault();
+            closeDeleteConfirmation();
             return;
         }
         if (editing && event.key === "Escape" && currentEdit) {
@@ -910,34 +944,19 @@
             return;
         }
         if (editing) return;
-        if (event.key === "Escape" && deleteMode) {
-            deleteMode = false;
-            deleteActionStyles(false);
-            render();
-            return;
-        }
         if (mod && event.key.toLowerCase() === "z") { event.preventDefault(); historyRun(event.shiftKey); }
         else if (mod && event.key.toLowerCase() === "y") { event.preventDefault(); historyRun(true); }
     }
     function openAdd() {
         const form = $("recipientAddForm");
-        const card = $("recipientAddCard");
-        if (!form || !card) return;
-        form.classList.add("show");
-        card.classList.add("show");
-        form.setAttribute("aria-hidden", "false");
-        card.setAttribute("aria-hidden", "false");
+        if (!form || form.open) return;
+        form.showModal();
         $("recipientAddNama")?.focus();
     }
     function closeAdd() {
         closeAddSuggestions();
         const form = $("recipientAddForm");
-        const card = $("recipientAddCard");
-        if (!form || !card) return;
-        form.classList.remove("show");
-        card.classList.remove("show");
-        form.setAttribute("aria-hidden", "true");
-        card.setAttribute("aria-hidden", "true");
+        if (form?.open) window.closeBpaCreateDialog(form);
     }
     async function addRecord() {
         const fields = [["nama", "recipientAddNama"], ["kadPengenalan", "recipientAddKP"], ["telefon", "recipientAddTelefon"], ["email", "recipientAddEmail"], ["status", "recipientAddStatus"], ["statusPekerjaan", "recipientAddStatusPekerjaan"], ["pic", "recipientAddPIC"], ["catatan", "recipientAddCatatan"]];
@@ -967,31 +986,18 @@
             error(e);
         }
     }
-    function deleteAction() {
-        deleteMode = !deleteMode;
-        deleteActionStyles(deleteMode);
-        render();
-    }
-    function deleteActionStyles(active) {
-        const button = $("recipientDeleteButton");
-        button.classList.toggle("active", active);
-        button.style.backgroundColor = active ? "#dc2626" : "";
-        button.style.borderColor = active ? "#dc2626" : "";
-        button.style.color = active ? "#fff" : "";
-        button.setAttribute("aria-pressed", String(active));
-        button.title = active ? "Keluar mod padam" : "Padam Rekod";
-        button.setAttribute("aria-label", button.title);
-    }
     function openDeleteConfirmation(row) {
         pendingDeleteRow = row;
         $("recipientDeleteMessage").textContent =
             `Adakah anda pasti mahu memadam rekod "${value(row, "nama")}"?`;
         $("recipientDeleteOverlay").classList.add("show");
+        $("recipientDeleteOverlay").setAttribute("aria-hidden", "false");
         $("recipientDeleteConfirmation").classList.add("show");
         $("recipientDeleteConfirmation").setAttribute("aria-hidden", "false");
     }
     function closeDeleteConfirmation() {
         $("recipientDeleteOverlay").classList.remove("show");
+        $("recipientDeleteOverlay").setAttribute("aria-hidden", "true");
         $("recipientDeleteConfirmation").classList.remove("show");
         $("recipientDeleteConfirmation").setAttribute("aria-hidden", "true");
         pendingDeleteRow = null;
@@ -1062,7 +1068,10 @@
         const pathname = typeof window.appPathname === "function"
             ? window.appPathname(window.location.pathname)
             : window.location.pathname;
-        if (pathname === "/penerima-bantuan") {
+        if (
+            pathname === "/penerima-bantuan" ||
+            (pathname === "/penerima-peserta" && $("recipientTableBody"))
+        ) {
             window.registerAppPageLoadTask(init());
             return;
         }

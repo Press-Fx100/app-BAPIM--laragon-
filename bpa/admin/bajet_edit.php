@@ -111,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $jumlah_wakalah,
             $id
         ]);
+        record_bapim_action($pdo, 'bajet_update', 'Bajet', 'Bajet #' . $id . ' tahun ' . $tahun, 'Bajet #' . $id . ' tahun ' . (string)$bajet['tahun']);
 
         if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
             header('Content-Type: application/json; charset=utf-8');

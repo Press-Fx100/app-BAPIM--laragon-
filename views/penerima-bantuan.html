@@ -1,6 +1,6 @@
 <main class="main-content">
     <div class="dashboard-content recipient-page data-content-pending">
-        <div class="content-card mb-4 dataset-page-header">
+        <div class="content-card mb-4 dataset-page-header sku-search-card-standard">
             <div>
                 <h4>Penerima Bantuan</h4>
                 <p>Senarai penerima bantuan.</p>
@@ -44,20 +44,24 @@
                                 title="Muat turun Excel" aria-label="Muat turun Excel">
                                 <i class="bi bi-download" aria-hidden="true"></i>
                             </button>
+                            <a id="recipientUploadButton" href="/muat-naik" data-app-navigation data-access-page="upload"
+                                class="toolbar-button icon-button" title="Muat Naik &amp; Set Data"
+                                aria-label="Muat Naik &amp; Set Data">
+                                <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                            </a>
                             <button type="button" id="recipientAddButton" data-permission-edit="recipients" class="toolbar-button icon-button" title="Tambah Rekod" aria-label="Tambah Rekod">
                                 <i class="bi bi-plus-lg"></i>
-                            </button>
-                            <button type="button" id="recipientDeleteButton" data-permission-edit="recipients" class="toolbar-button icon-button delete-button toolbar-button-danger" title="Padam Rekod" aria-label="Padam Rekod" aria-pressed="false">
-                                <i class="bi bi-trash3"></i>
                             </button>
                         </div>
                     </div>
                 </div>
-                <div id="recipientDeleteOverlay" class="delete-confirmation-overlay"></div>
-                <div id="recipientDeleteConfirmation" class="delete-confirmation" role="dialog" aria-modal="true" aria-hidden="true">
+                <div id="recipientDeleteOverlay" class="delete-confirmation-overlay" aria-hidden="true"></div>
+                <div id="recipientDeleteConfirmation" class="delete-confirmation sku-delete-confirmation" role="alertdialog"
+                    aria-modal="true" aria-labelledby="recipientDeleteTitle"
+                    aria-describedby="recipientDeleteMessage" aria-hidden="true">
                     <div class="delete-confirmation-icon">!</div>
                     <div class="delete-confirmation-content">
-                        <h6>Padam rekod?</h6>
+                        <h6 id="recipientDeleteTitle">Padam rekod?</h6>
                         <p id="recipientDeleteMessage"></p>
                         <div class="delete-confirmation-actions">
                             <button type="button" id="recipientCancelDelete" class="cancel-delete">Batal</button>
@@ -67,21 +71,17 @@
                 </div>
             </div>
 
-            <div id="recipientAddForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
-                <div id="recipientAddCard" class="dataset-upload-card dataset-add-card" role="dialog"
-                    aria-modal="true" aria-labelledby="recipientAddTitle" aria-hidden="true">
-                    <div class="dataset-upload-header">
-                        <div>
-                            <h5 id="recipientAddTitle">Tambah Rekod</h5>
-                            <p>Masukkan maklumat penerima bantuan baharu.</p>
-                        </div>
-                        <button type="button" id="recipientCloseAdd" class="dataset-upload-close"
-                            aria-label="Tutup borang tambah rekod">
-                            <i class="bi bi-x-lg" aria-hidden="true"></i>
-                        </button>
+            <dialog id="recipientAddForm" class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--form"
+                aria-labelledby="recipientAddTitle" aria-describedby="recipientAddDescription">
+                <header class="bpa-create-dialog__header">
+                    <div class="bpa-create-dialog__heading">
+                        <h2 id="recipientAddTitle">Tambah Rekod</h2>
+                        <p id="recipientAddDescription" class="bpa-create-dialog__subtitle">Masukkan maklumat penerima bantuan baharu.</p>
                     </div>
-
-                    <div class="dataset-upload-body dataset-add-body">
+                    <button type="button" id="recipientCloseAdd" class="bpa-create-dialog__close"
+                        aria-label="Tutup borang tambah rekod">&times;</button>
+                </header>
+                <div class="bpa-create-dialog__body dataset-add-body">
                         <div class="form-grid">
                             <div class="form-field full"><label for="recipientAddDataset">Fail sumber</label><select id="recipientAddDataset"></select></div>
                             <div class="form-field"><label for="recipientAddNama">Nama</label><input id="recipientAddNama" autocomplete="off"></div>
@@ -93,17 +93,25 @@
                             <div class="form-field"><label for="recipientAddPIC">PIC</label><select id="recipientAddPIC"></select></div>
                             <div class="form-field full"><label for="recipientAddCatatan">Catatan</label><textarea id="recipientAddCatatan"></textarea></div>
                         </div>
-                    </div>
-
-                    <div class="dataset-upload-footer">
-                        <button type="button" id="recipientCancelAdd" class="btn btn-light">Batal</button>
-                        <button type="button" id="recipientConfirmAdd" data-permission-edit="recipients" class="btn btn-primary">Tambah</button>
-                    </div>
                 </div>
-            </div>
+                <footer class="bpa-budget-modal-footer">
+                        <button type="button" id="recipientConfirmAdd" data-permission-edit="recipients"
+                            class="budget-list-action bpa-budget-save-button">
+                            <span class="budget-list-action-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
+                            <span>Tambah</span>
+                        </button>
+                </footer>
+            </dialog>
         </div>
 
-        <div class="content-card mb-4">
+        <div class="content-card mb-4 recipient-table-card">
+            <div class="recipient-table-card-header">
+                <div>
+                    <h5>Senarai Penerima Bantuan</h5>
+                    <span>Maklumat penerima bantuan.</span>
+                </div>
+                <span id="recipientRecordCount" class="recipient-record-count">0 rekod</span>
+            </div>
             <div id="recipientLoading" class="loading">Memuatkan penerima...</div>
             <div id="recipientEmpty" class="empty-datasets" style="display:none;">
                 <div class="empty-datasets-icon"><i class="bi bi-person-vcard" aria-hidden="true"></i></div>

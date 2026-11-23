@@ -28,13 +28,12 @@ function initializeUserManagement() {
     const accessModal = document.getElementById("managedUserAccessModal");
     const accessList = document.getElementById("managedUserAccessList");
     const bapimPageDefinitions = [
-        { key: "dashboard", label: "Papan Pemuka", editable: false },
         { key: "recipients", label: "Penerima Bantuan", editable: true, action: "Boleh sunting rekod" },
         { key: "participants", label: "Peserta Program", editable: true, action: "Boleh sunting rekod" },
-        { key: "upload", label: "Muat Naik & Set Data", editable: true, action: "Boleh muat naik dan urus set data" },
+        { key: "upload", label: "Muat Naik Set Data", editable: true, action: "Boleh muat naik dan urus set data" },
         { key: "dataset", label: "Paparan Set Data", editable: true, action: "Boleh sunting set data" },
         { key: "activity", label: "Aktiviti Pengguna", editable: false },
-        { key: "updates", label: "Log Perisian", editable: false },
+        { key: "account", label: "Profil Pengguna", editable: true, action: "Boleh kemas kini profil" },
         { key: "manageUsers", label: "Pengurusan Pengguna", editable: false }
     ];
     const bpaUnits = [
@@ -53,6 +52,7 @@ function initializeUserManagement() {
             label: "Dashboard",
             children: [
                 { key: "bpaDashboardBPA", label: "BPA Dashboard" },
+                { key: "bpaDashboardUPP", label: "UPP Dashboard" },
                 ...bpaUnits.map(unit => ({ key: `bpaDashboard${unit.code}`, label: `${unit.code} Dashboard` }))
             ]
         },
@@ -75,6 +75,40 @@ function initializeUserManagement() {
         ...bpaAccessSections.flatMap(section => section.children)
     ];
     const pageDefinitions = [...bapimPageDefinitions, ...bpaPageDefinitions];
+    const navigationGroups = [
+        {
+            label: "Navigasi Utama",
+            pages: [
+                { label: "Dashboard", children: bpaAccessSections[0].children },
+                { label: "Bajet", children: [bpaStandalonePageDefinitions[0]] },
+                { label: "SKU", children: [bpaStandalonePageDefinitions[1]] },
+                { label: "Program", children: bpaAccessSections[1].children },
+                {
+                    label: "Penerima & Peserta",
+                    children: bapimPageDefinitions.filter(page =>
+                        ["recipients", "participants", "upload", "dataset"].includes(page.key)
+                    )
+                },
+                {
+                    label: "Aktiviti Pengguna",
+                    children: bapimPageDefinitions.filter(page => page.key === "activity")
+                }
+            ]
+        },
+        {
+            label: "Menu Pengguna",
+            pages: [
+                {
+                    label: "Pengurusan Pengguna",
+                    children: bapimPageDefinitions.filter(page => page.key === "manageUsers")
+                },
+                {
+                    label: "Profil Pengguna",
+                    children: bapimPageDefinitions.filter(page => page.key === "account")
+                },
+            ]
+        }
+    ];
     let users = [];
     let editingUser = null;
     let generatedPassword = null;
@@ -154,7 +188,7 @@ function initializeUserManagement() {
             page.key,
             {
                 access: ["bpaBudget", "bpaSku"].includes(page.key)
-                    ? level === 0
+                    ? level <= 1
                     : page.key === "manageUsers" ? level <= 1 : true,
                 edit: page.editable ? editable : page.key === "manageUsers" && level <= 1
             }
@@ -162,7 +196,9 @@ function initializeUserManagement() {
         const unitCode = String(unit || "").toUpperCase();
         bpaAccessSections.forEach(section => {
             section.children.forEach(child => {
-                if (!child.key.endsWith("BPA")) {
+                if (child.key === "bpaDashboardUPP") {
+                    permissions[child.key].access = true;
+                } else if (!child.key.endsWith("BPA")) {
                     permissions[child.key].access = level <= 1 || unitCode === child.key.slice(section.key.length);
                 } else {
                     permissions[child.key].access = level <= 1;
@@ -189,7 +225,7 @@ function initializeUserManagement() {
     }
 
     function safePermissions(permissions, level) {
-        if (level === 0) return defaultPermissions(0, unitInput.value);
+        if (level <= 1) return defaultPermissions(level, unitInput.value);
         const defaults = defaultPermissions(level, unitInput.value);
         const result = {};
         pageDefinitions.forEach(page => {
@@ -542,6 +578,7 @@ function initializeUserManagement() {
 
     function createAccessRow(page, level) {
         const permission = draftPermissions[page.key];
+        const canConfigureEdits = level > 0 && level <= 2;
         const row = document.createElement("div");
         row.className = "managed-user-access-row";
 
@@ -570,7 +607,7 @@ function initializeUserManagement() {
             switchInput.type = "checkbox";
             switchInput.setAttribute("role", "switch");
             switchInput.checked = permission.edit;
-            switchInput.disabled = !permission.access || level === 0;
+            switchInput.disabled = !permission.access || !canConfigureEdits;
             switchInput.setAttribute("aria-label", page.action);
             switchInput.addEventListener("change", () => {
                 permission.edit = switchInput.checked;
@@ -581,7 +618,7 @@ function initializeUserManagement() {
             row.appendChild(actionLabel);
             actionSwitch = switchInput;
             checkbox.addEventListener("change", () => {
-                actionSwitch.disabled = !page.editable || !permission.access || level === 0;
+                actionSwitch.disabled = !page.editable || !permission.access || !canConfigureEdits;
             });
         } else {
             const readOnly = document.createElement("span");
@@ -625,62 +662,71 @@ function initializeUserManagement() {
         return { section, content };
     }
 
-    function renderBpaAccessOptions(container, level) {
-        bpaStandalonePageDefinitions.forEach(page => {
-            container.appendChild(createAccessRow(page, level).row);
-        });
-        bpaAccessSections.forEach(section => {
-            const sectionElement = document.createElement("section");
-            sectionElement.className = "managed-user-access-section";
-            const heading = document.createElement("label");
-            heading.className = "managed-user-access-section-heading";
+    function renderNavigationPageGroup(container, group, level) {
+        if (group.children.length === 1 && group.children[0].label === group.label) {
+            container.appendChild(createAccessRow(group.children[0], level).row);
+            return;
+        }
+
+        const section = document.createElement("section");
+        section.className = "managed-user-access-section";
+
+        const heading = document.createElement(group.children.length > 1 ? "label" : "div");
+        heading.className = "managed-user-access-section-heading";
+        const headingText = document.createElement("span");
+        headingText.textContent = group.label;
+        heading.appendChild(headingText);
+
+        const children = document.createElement("div");
+        children.className = "managed-user-access-section-children";
+        const childRows = group.children.map(page => createAccessRow(page, level));
+        childRows.forEach(({ row }) => children.appendChild(row));
+
+        if (group.children.length > 1) {
             const sectionCheckbox = document.createElement("input");
             sectionCheckbox.type = "checkbox";
-            sectionCheckbox.checked = section.children.every(child => draftPermissions[child.key].access);
-            sectionCheckbox.indeterminate = section.children.some(child => draftPermissions[child.key].access)
+            sectionCheckbox.checked = group.children.every(child => draftPermissions[child.key].access);
+            sectionCheckbox.indeterminate = group.children.some(child => draftPermissions[child.key].access)
                 && !sectionCheckbox.checked;
             sectionCheckbox.disabled = level === 0;
-            const headingText = document.createElement("span");
-            headingText.textContent = section.label;
-            heading.append(sectionCheckbox, headingText);
+            heading.prepend(sectionCheckbox);
 
-            const children = document.createElement("div");
-            children.className = "managed-user-access-section-children";
-            const childRows = section.children.map(page => createAccessRow(page, level));
-            childRows.forEach(({ row }) => children.appendChild(row));
             sectionCheckbox.addEventListener("change", () => {
                 childRows.forEach(({ row, checkbox, actionSwitch }, index) => {
                     checkbox.checked = sectionCheckbox.checked;
-                    draftPermissions[section.children[index].key].access = checkbox.checked;
+                    draftPermissions[group.children[index].key].access = checkbox.checked;
                     row.classList.toggle("is-disabled", !checkbox.checked);
-                    if (actionSwitch) actionSwitch.disabled = !checkbox.checked || level === 0;
+                    if (actionSwitch) {
+                        actionSwitch.disabled = !checkbox.checked || !(level > 0 && level <= 2);
+                    }
                 });
                 sectionCheckbox.indeterminate = false;
                 syncBpaPermissionParents();
             });
             childRows.forEach(({ checkbox }) => checkbox.addEventListener("change", () => {
-                const allowed = section.children.map(child => draftPermissions[child.key].access);
+                const allowed = group.children.map(child => draftPermissions[child.key].access);
                 sectionCheckbox.checked = allowed.every(Boolean);
                 sectionCheckbox.indeterminate = allowed.some(Boolean) && !sectionCheckbox.checked;
             }));
+        }
 
-            sectionElement.append(heading, children);
-            container.appendChild(sectionElement);
-        });
+        section.append(heading, children);
+        container.appendChild(section);
     }
 
     function renderAccessOptions() {
         const level = modalAccessLevel;
         accessList.replaceChildren();
 
-        const bapim = createCollapsibleAccessSection("BAPIM", "managedUserBapimPermissions", true);
-        bapimPageDefinitions.forEach(page => {
-            bapim.content.appendChild(createAccessRow(page, level).row);
+        navigationGroups.forEach((group, index) => {
+            const navigation = createCollapsibleAccessSection(
+                group.label,
+                `managedUserNavigationGroup${index}`,
+                true
+            );
+            group.pages.forEach(page => renderNavigationPageGroup(navigation.content, page, level));
+            accessList.appendChild(navigation.section);
         });
-
-        const bpa = createCollapsibleAccessSection("BPA", "managedUserBpaPermissions", true);
-        renderBpaAccessOptions(bpa.content, level);
-        accessList.append(bapim.section, bpa.section);
     }
 
     function openAccessModal(user = null) {
@@ -790,7 +836,11 @@ function initializeUserManagement() {
 
     async function toggleUserStatus(user) {
         const isActive = Number(user.active) === 1;
-        if (isActive && !window.confirm(`Nyahaktifkan akaun ${user.username}? Rekod aktiviti akan dikekalkan.`)) return;
+        if (isActive && !await window.confirmBpaAction({
+            titleText: "Nyahaktifkan akaun?",
+            messageText: `Akaun ${user.username} akan dinyahaktifkan. Rekod aktiviti akan dikekalkan.`,
+            confirmText: "Nyahaktifkan"
+        })) return;
         clearMessage();
         try {
             await request(`/api/admin/users/${encodeURIComponent(user.id)}`, {

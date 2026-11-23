@@ -978,14 +978,18 @@ if ($role === 'admin') {
                                                 data-sku-note-open="<?= htmlspecialchars($noteDialogId) ?>">
                                             <i class="bi bi-three-dots" aria-hidden="true"></i>
                                         </button>
-                                        <dialog class="sku-note-dialog" id="<?= htmlspecialchars($noteDialogId) ?>"
+                                        <dialog class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--note bpa-note-dialog"
+                                                id="<?= htmlspecialchars($noteDialogId) ?>"
                                                 aria-labelledby="<?= htmlspecialchars($noteDialogId) ?>-title">
-                                            <header class="sku-note-dialog__header">
-                                                <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan Program</h2>
-                                                <button type="button" class="sku-note-dialog__close"
+                                            <header class="bpa-create-dialog__header">
+                                                <div class="bpa-create-dialog__heading">
+                                                    <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan Program</h2>
+                                                    <p class="bpa-create-dialog__subtitle">Catatan berkaitan dengan program ini.</p>
+                                                </div>
+                                                <button type="button" class="bpa-create-dialog__close"
                                                         aria-label="Tutup catatan" data-sku-note-close>&times;</button>
                                             </header>
-                                            <div class="sku-note-dialog__body">
+                                            <div class="bpa-create-dialog__body bpa-note-dialog__body">
                                                 <p><?= nl2br(htmlspecialchars($catatan)) ?></p>
                                             </div>
                                         </dialog>

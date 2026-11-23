@@ -14,9 +14,21 @@ let deleteConfirmationMessage;
 let cancelDeleteButton;
 let confirmDeleteButton;
 let datasetTypeFilterMenu;
+let datasetEditOverlay;
+let datasetEditCard;
+let datasetEditForm;
+let datasetEditName;
+let datasetEditType;
+let datasetEditUnit;
+let datasetEditFilename;
+let datasetEditRows;
+let datasetEditSize;
+let datasetEditDate;
+let datasetEditError;
+let datasetEditSaveButton;
+let editingDatasetId = null;
 let selectedDatasetType = "";
 let initializedDatasetGrid = null;
-let datasetDeleteMode = false;
 
 function getDatasetType(dataset) {
     const storedType = String(
@@ -53,6 +65,18 @@ function initializeDatasetListController() {
     cancelDeleteButton = document.getElementById("datasetListCancelDeleteButton");
     confirmDeleteButton = document.getElementById("datasetListConfirmDeleteButton");
     datasetTypeFilterMenu = document.getElementById("datasetTypeFilterMenu");
+    datasetEditOverlay = document.getElementById("datasetEditOverlay");
+    datasetEditCard = datasetEditOverlay;
+    datasetEditForm = document.getElementById("datasetEditForm");
+    datasetEditName = document.getElementById("datasetEditName");
+    datasetEditType = document.getElementById("datasetEditType");
+    datasetEditUnit = document.getElementById("datasetEditUnit");
+    datasetEditFilename = document.getElementById("datasetEditFilename");
+    datasetEditRows = document.getElementById("datasetEditRows");
+    datasetEditSize = document.getElementById("datasetEditSize");
+    datasetEditDate = document.getElementById("datasetEditDate");
+    datasetEditError = document.getElementById("datasetEditError");
+    datasetEditSaveButton = document.getElementById("datasetEditSaveButton");
 
     if (!grid || initializedDatasetGrid === grid) {
         return;
@@ -78,6 +102,20 @@ function setupDatasetEvents() {
     cancelDeleteButton?.addEventListener("click", closeDeleteConfirmation);
     deleteOverlay?.addEventListener("click", closeDeleteConfirmation);
     confirmDeleteButton?.addEventListener("click", confirmDelete);
+    datasetEditForm?.addEventListener("submit", saveDatasetMetadata);
+    document.getElementById("datasetEditCloseButton")?.addEventListener("click", closeDatasetEditor);
+    datasetEditOverlay?.addEventListener("click", event => {
+        if (event.target !== datasetEditOverlay) return;
+        const bounds = datasetEditOverlay.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right
+            || event.clientY < bounds.top || event.clientY > bounds.bottom) {
+            closeDatasetEditor();
+        }
+    });
+    datasetEditOverlay?.addEventListener("cancel", event => {
+        event.preventDefault();
+        closeDatasetEditor();
+    });
 
     document.getElementById("toggleDatasetFilterButton")?.addEventListener(
         "click",
@@ -115,23 +153,17 @@ function setupDatasetEvents() {
             datasetTypeFilterMenu.classList.remove("show");
         }
     });
-    document.getElementById("toggleDatasetDeleteButton")?.addEventListener(
-        "click",
-        event => {
-            datasetDeleteMode = !datasetDeleteMode;
-            event.currentTarget.classList.toggle("active", datasetDeleteMode);
-            document.getElementById("datasetGrid")?.classList.toggle(
-                "delete-mode",
-                datasetDeleteMode
-            );
-        }
-    );
-
     document.addEventListener("keydown", event => {
         if (event.key !== "Escape") return;
 
         if (deleteConfirmation?.classList.contains("show")) {
             closeDeleteConfirmation();
+            return;
+        }
+
+        if (datasetEditCard?.open) {
+            event.preventDefault();
+            closeDatasetEditor();
             return;
         }
 
@@ -219,6 +251,7 @@ function renderDatasets() {
 
         const card = column.querySelector(".dataset-card");
         const deleteButton = column.querySelector(".dataset-delete-button");
+        const editButton = column.querySelector(".dataset-edit-button");
 
         card?.addEventListener("click", () => {
             const id = dataset.id;
@@ -242,6 +275,12 @@ function renderDatasets() {
             openDeleteConfirmation(dataset);
         });
 
+        editButton?.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            openDatasetEditor(dataset);
+        });
+
         grid.appendChild(column);
     });
 }
@@ -251,13 +290,20 @@ function createDatasetCard(dataset) {
 
     const name = escapeHtml(
         dataset.name ||
-        dataset.filename ||
+        String(dataset.filename || "").replace(/\.(?:csv|xlsx?)$/i, "") ||
         "Tanpa Nama"
     );
-
-    const filename = escapeHtml(
-        dataset.filename || "-"
-    );
+    const datasetTypeLabel = getDatasetType(dataset) === "peserta"
+        ? "Peserta Program"
+        : "Penerima Bantuan";
+    const unitInCharge = String(
+        dataset.unit_incharge ??
+        dataset.unitInCharge ??
+        ""
+    ).trim();
+    const unitLabel = unitInCharge
+        ? `Unit: ${escapeHtml(unitInCharge.toUpperCase())}`
+        : "Tiada unit";
 
     const rowCount = Number(
         dataset.row_count ??
@@ -281,29 +327,46 @@ function createDatasetCard(dataset) {
     return `
         <div class="dataset-card" data-id="${escapeHtml(String(id))}">
 
-            <button
-                type="button"
-                class="dataset-delete-button"
-                title="Padam set data"
-                aria-label="Padam set data"
-            >
-                <i class="bi bi-x-lg" aria-hidden="true"></i>
-            </button>
-
-            <div class="dataset-icon">
-                <i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i>
+            <div class="dataset-card-header">
+                <div class="dataset-icon" aria-hidden="true">
+                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                </div>
+                <div class="dataset-card-actions">
+                    <button
+                        type="button"
+                        class="dataset-edit-button"
+                        data-permission-upload="upload"
+                        title="Edit maklumat set data"
+                        aria-label="Edit maklumat set data"
+                    >
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </button>
+                    <button
+                        type="button"
+                        class="dataset-delete-button"
+                        title="Padam set data"
+                        aria-label="Padam set data"
+                    >
+                        <i class="bi bi-trash3" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
 
-            <div class="dataset-name">
-                ${name}
+            <div class="dataset-card-content">
+                <span class="dataset-type-badge">
+                    ${datasetTypeLabel}
+                </span>
+                <div class="dataset-name">
+                    ${name}
+                </div>
+                <div class="dataset-unit">
+                    <i class="bi bi-diagram-3" aria-hidden="true"></i>
+                    <span>${unitLabel}</span>
+                </div>
             </div>
 
-            <div class="dataset-filename">
-                ${filename}
-            </div>
-
-            <div class="dataset-info">
-
+            <div class="dataset-card-footer">
+                <div class="dataset-info">
                 <div class="dataset-stat">
                     <span class="dataset-stat-value">
                         ${rowCount.toLocaleString()}
@@ -323,15 +386,79 @@ function createDatasetCard(dataset) {
                         Saiz
                     </span>
                 </div>
-
-            </div>
-
-            <div class="dataset-date">
-                ${date}
+                </div>
+                <div class="dataset-date">
+                    <i class="bi bi-calendar3" aria-hidden="true"></i>
+                    <span>${date}</span>
+                </div>
             </div>
 
         </div>
     `;
+}
+
+function openDatasetEditor(dataset) {
+    editingDatasetId = dataset.id;
+    datasetEditName.value = dataset.name || "";
+    datasetEditType.value = getDatasetType(dataset);
+    datasetEditType.dispatchEvent(new Event("change", { bubbles: true }));
+    datasetEditUnit.value = String(dataset.unit_incharge || dataset.unitInCharge || "").toUpperCase();
+    datasetEditUnit.dispatchEvent(new Event("change", { bubbles: true }));
+    datasetEditFilename.textContent = dataset.filename || "-";
+    datasetEditRows.textContent = Number(dataset.row_count ?? dataset.rowCount ?? 0).toLocaleString();
+    datasetEditSize.textContent = formatFileSize(dataset.file_size ?? dataset.fileSize ?? 0);
+    datasetEditDate.textContent = formatDate(dataset.created_at || dataset.createdAt || dataset.updated_at || dataset.updatedAt);
+    datasetEditError.textContent = "";
+    datasetEditError.style.display = "none";
+    if (datasetEditOverlay && !datasetEditOverlay.open) datasetEditOverlay.showModal();
+    datasetEditName.focus();
+}
+
+function closeDatasetEditor() {
+    editingDatasetId = null;
+    if (datasetEditOverlay?.open) window.closeBpaCreateDialog(datasetEditOverlay);
+    datasetEditForm?.reset();
+    datasetEditError.textContent = "";
+    datasetEditError.style.display = "none";
+}
+
+async function saveDatasetMetadata(event) {
+    event.preventDefault();
+    if (editingDatasetId === null || editingDatasetId === undefined) return;
+
+    datasetEditSaveButton.disabled = true;
+    datasetEditSaveButton.textContent = "Menyimpan...";
+    datasetEditError.textContent = "";
+    datasetEditError.style.display = "none";
+
+    try {
+        const response = await fetch(
+            `/api/upload/datasets/${encodeURIComponent(editingDatasetId)}/metadata`,
+            {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: datasetEditName.value.trim(),
+                    datasetType: datasetEditType.value,
+                    unitInCharge: datasetEditUnit.value
+                })
+            }
+        );
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success === false) {
+            throw new Error(result.error || "Gagal menyimpan maklumat set data.");
+        }
+
+        closeDatasetEditor();
+        await loadDatasetList();
+    } catch (error) {
+        console.error("UPDATE DATASET METADATA ERROR:", error);
+        datasetEditError.textContent = error.message || "Gagal menyimpan maklumat set data.";
+        datasetEditError.style.display = "block";
+    } finally {
+        datasetEditSaveButton.disabled = false;
+        datasetEditSaveButton.textContent = "Simpan perubahan";
+    }
 }
 
 function openDeleteConfirmation(dataset) {
@@ -346,7 +473,6 @@ function openDeleteConfirmation(dataset) {
 
     deleteOverlay?.classList.add("show");
     deleteConfirmation?.classList.add("show");
-
     deleteOverlay?.setAttribute("aria-hidden", "false");
     deleteConfirmation?.setAttribute("aria-hidden", "false");
 }
@@ -504,6 +630,7 @@ let currentSortColumn = null;
 let currentSortDirection = "asc";
 
 let deleteMode = false;
+let pendingDeleteRowIndex = null;
 let newRows = new Set();
 let mouseSelecting = false;
 
@@ -1350,13 +1477,19 @@ function renderTable() {
         headerRow.appendChild(th);
     });
 
+    const actionHeader = document.createElement("th");
+    actionHeader.className = "row-action-column";
+    actionHeader.setAttribute("aria-label", "Tindakan");
+    applyColumnWidth(actionHeader, 48);
+    headerRow.appendChild(actionHeader);
+
     tableHead.appendChild(headerRow);
 
     if (!visibleColumns.some(Boolean)) {
         const row = document.createElement("tr");
         const cell = document.createElement("td");
 
-        cell.colSpan = 1;
+        cell.colSpan = 2;
         cell.className = "text-center p-4 text-muted";
         cell.textContent = "Pilih sekurang-kurangnya satu lajur.";
 
@@ -1481,6 +1614,30 @@ function renderTable() {
 
             tr.appendChild(td);
         });
+
+        const actionCell = document.createElement("td");
+        actionCell.className = "row-action-cell";
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "row-delete-button";
+        deleteButton.dataset.permissionEdit = "dataset";
+        deleteButton.hidden =
+            typeof window.canEditAppPage !== "function" ||
+            !window.canEditAppPage("dataset");
+        deleteButton.setAttribute(
+            "aria-label",
+            `Padam rekod ${actualRowIndex + 1}`
+        );
+        deleteButton.title = "Padam rekod";
+        deleteButton.innerHTML =
+            '<i class="bi bi-trash3" aria-hidden="true"></i>';
+        deleteButton.addEventListener("click", event => {
+            event.stopPropagation();
+            openDeleteConfirmation(actualRowIndex);
+        });
+        actionCell.appendChild(deleteButton);
+
+        tr.appendChild(actionCell);
 
         if (deleteMode && selectedRows.has(actualRowIndex)) {
             selectCell.style.backgroundColor = "#fecaca";
@@ -1773,7 +1930,9 @@ function openDatasetCellSuggestions(td) {
     if (
         !(
             getDatasetType(dataset || {}) === "peserta" &&
-            normalizeDatasetHeader(headers[Number(td.dataset.columnIndex)]) === "kategori"
+            ["kategori", "status"].includes(
+                normalizeDatasetHeader(headers[Number(td.dataset.columnIndex)])
+            )
         ) &&
         !(
             getDatasetType(dataset || {}) === "penerima" &&
@@ -3156,25 +3315,14 @@ function addRow() {
     if (deleteMode) return;
 
     const form = document.getElementById("addForm");
-    const card = document.getElementById("addRecordCard");
-
-    if (!form || !card) return;
-
-    form.classList.add("show");
-    form.setAttribute("aria-hidden", "false");
-    card.classList.add("show");
-    card.setAttribute("aria-hidden", "false");
+    if (!form || form.open) return;
+    form.showModal();
     document.getElementById("addNama")?.focus();
 }
 
 function closeAddForm() {
     const form = document.getElementById("addForm");
-    const card = document.getElementById("addRecordCard");
-
-    form?.classList.remove("show");
-    form?.setAttribute("aria-hidden", "true");
-    card?.classList.remove("show");
-    card?.setAttribute("aria-hidden", "true");
+    if (form?.open) window.closeBpaCreateDialog(form);
 
     document.querySelectorAll(
         "#addRecordFields input, #addRecordFields select, #addRecordFields textarea"
@@ -3324,23 +3472,31 @@ function updateDeleteButton() {
     `;
 }
 
-function openDeleteConfirmation() {
-    if (!deleteMode || !selectedRows.size) return;
+function openDeleteConfirmation(rowIndex = null) {
+    const isSingleRowDelete = Number.isInteger(rowIndex);
+
+    if (!isSingleRowDelete && (!deleteMode || !selectedRows.size)) return;
+
+    pendingDeleteRowIndex = isSingleRowDelete ? rowIndex : null;
 
     const text =
         document.getElementById("deleteConfirmText");
 
     if (text) {
-        text.textContent =
-            `Adakah anda pasti mahu membuang ${selectedRows.size} rekod yang dipilih?`;
+        text.textContent = isSingleRowDelete
+            ? `Adakah anda pasti mahu membuang rekod ${rowIndex + 1}?`
+            : `Adakah anda pasti mahu membuang ${selectedRows.size} rekod yang dipilih?`;
     }
 
     const modal =
         document.getElementById("deleteConfirm");
 
     if (modal) {
-        modal.style.display = "flex";
+        const dialog = modal.querySelector(".delete-confirmation");
+        modal.classList.add("show");
+        dialog?.classList.add("show");
         modal.setAttribute("aria-hidden", "false");
+        dialog?.setAttribute("aria-hidden", "false");
     }
 }
 
@@ -3348,22 +3504,33 @@ function closeDeleteConfirmation() {
     const modal =
         document.getElementById("deleteConfirm");
 
+    pendingDeleteRowIndex = null;
+
     if (modal) {
-        modal.style.display = "none";
+        const dialog = modal.querySelector(".delete-confirmation");
+        modal.classList.remove("show");
+        dialog?.classList.remove("show");
         modal.setAttribute("aria-hidden", "true");
+        dialog?.setAttribute("aria-hidden", "true");
     }
 }
 
 function deleteSelectedRows() {
-    if (!deleteMode || !selectedRows.size) return;
+    const isSingleRowDelete = Number.isInteger(pendingDeleteRowIndex);
 
-    const indexes =
-        [...selectedRows]
+    if (!isSingleRowDelete && (!deleteMode || !selectedRows.size)) return;
+
+    const indexes = (
+        isSingleRowDelete
+            ? [pendingDeleteRowIndex]
+            : [...selectedRows]
+    )
             .filter(index => index >= 0 && index < rows.length)
             .sort((a, b) => b - a);
 
     if (!indexes.length) {
         selectedRows.clear();
+        closeDeleteConfirmation();
         updateDeleteButton();
         return;
     }
@@ -3383,9 +3550,10 @@ function deleteSelectedRows() {
         rows: deletedRows
     });
 
+    const deletedIndexes = new Set(indexes);
     newRows = new Set(
         [...newRows]
-            .filter(index => !selectedRows.has(index))
+            .filter(index => !deletedIndexes.has(index))
             .map(index => {
                 const shift =
                     indexes.filter(
@@ -3695,6 +3863,11 @@ function updatePaginationInfo() {
             total
                 ? `${start.toLocaleString()}–${end.toLocaleString()} daripada ${total.toLocaleString()} baris`
                 : "0 baris";
+    }
+
+    const recordCount = document.getElementById("datasetRecordCount");
+    if (recordCount) {
+        recordCount.textContent = `${total.toLocaleString()} rekod`;
     }
 
     renderPageNumbers(totalPages);
@@ -4267,10 +4440,6 @@ document
     ?.addEventListener("click", addRow);
 
 document
-    .getElementById("cancelAddButton")
-    ?.addEventListener("click", closeAddForm);
-
-document
     .getElementById("closeAddFormButton")
     ?.addEventListener("click", closeAddForm);
 
@@ -4354,10 +4523,19 @@ document
 
 document
     .getElementById("addForm")
-    ?.addEventListener("mousedown", event => {
-        if (event.target.id === "addForm") {
-            closeAddForm();
-        }
+    ?.addEventListener("click", event => {
+        const dialog = event.currentTarget;
+        if (event.target !== dialog) return;
+        const bounds = dialog.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right
+            || event.clientY < bounds.top || event.clientY > bounds.bottom) closeAddForm();
+    });
+
+document
+    .getElementById("addForm")
+    ?.addEventListener("cancel", event => {
+        event.preventDefault();
+        closeAddForm();
     });
 
 document
@@ -4459,9 +4637,6 @@ function bindDatasetViewEvents(detailView) {
     document.getElementById("addRowButton")
         ?.addEventListener("click", addRow);
 
-    document.getElementById("cancelAddButton")
-        ?.addEventListener("click", closeAddForm);
-
     document.getElementById("closeAddFormButton")
         ?.addEventListener("click", closeAddForm);
 
@@ -4512,11 +4687,17 @@ function bindDatasetViewEvents(detailView) {
         });
 
     document.addEventListener("keydown", event => {
-        if (
-            event.key === "Escape" &&
-            document.getElementById("addForm")?.classList.contains("show")
-        ) {
+        const addForm = document.getElementById("addForm");
+        if (event.key === "Escape" && addForm?.open) {
+            event.preventDefault();
             closeAddForm();
+            return;
+        }
+
+        const deleteDialog = document.getElementById("deleteConfirm");
+        if (event.key === "Escape" && deleteDialog?.classList.contains("show")) {
+            event.preventDefault();
+            closeDeleteConfirmation();
         }
     });
 

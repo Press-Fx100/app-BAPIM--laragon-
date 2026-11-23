@@ -72,119 +72,100 @@
 
                 <div id="datasetContent" style="display:none;">
 
-                    <div class="content-card mb-4 dataset-page-header dataset-detail-header">
-
-                        <div class="dataset-header-main">
-
-                            <div class="dataset-header-details">
-
-                                <div id="datasetName" class="dataset-header-title"></div>
-
-                                <div id="datasetFilename" class="dataset-header-file"></div>
-
-                            </div>
-
+                    <header class="recipient-participant-title dataset-detail-title">
+                        <div class="recipient-participant-title-copy">
+                            <h4 id="datasetName"></h4>
+                            <p id="datasetFilename" class="dataset-header-file"></p>
                         </div>
-
-                        <div class="dataset-toolbar">
-
-                        <div class="search-toolbar-group dataset-detail-toolbar-group">
-
-                        <div class="search-box">
-
-                            <i class="bi bi-search" aria-hidden="true"></i>
-                            <input type="text" id="searchInput" placeholder="Cari dataset..." autocomplete="off">
-
-                        </div>
-
-                        <div class="toolbar-group toolbar-filter">
-
-                            <div class="column-menu-wrapper">
-
-                                <button type="button" id="columnButton" class="toolbar-button icon-button" title="Lajur"
-                                    aria-label="Lajur" aria-controls="columnMenu" aria-expanded="false">
-
-                                    <i class="bi bi-layout-three-columns"></i>
-
-                                </button>
-
-                                <div id="columnMenu" class="column-menu">
-
-                                    <div class="column-menu-header">
-
-                                        <button type="button" id="selectAllColumnsButton">
-                                            Pilih Semua
-                                        </button>
-
-                                    </div>
-
-                                    <div id="columnChecklist"></div>
-
-                                </div>
-
-                            </div>
-
-                            <div class="filter-menu-wrapper">
-
-                                <button type="button" id="filterButton" class="toolbar-button icon-button" title="Tapis"
-                                    aria-label="Tapis" aria-controls="filterMenu" aria-expanded="false">
-
-                                    <i class="bi bi-funnel"></i>
-
-                                </button>
-
-                                <div id="filterMenu" class="filter-menu">
-
-                                    <div class="filter-title">
-                                        Tapis
-                                    </div>
-                                    <div id="datasetFilterFields"></div>
-
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                        <div class="toolbar-group toolbar-actions">
-
-                            <button type="button" id="saveChangesButton"
-                                data-permission-edit="dataset"
-                                class="toolbar-button icon-button dataset-save-button" disabled
-                                title="Simpan perubahan" aria-label="Simpan perubahan">
-                                <i class="bi bi-floppy"></i>
-                            </button>
-
-                            <button type="button" id="exportDatasetButton" class="toolbar-button icon-button"
-                                title="Muat turun Excel" aria-label="Muat turun Excel">
-                                <i class="bi bi-download" aria-hidden="true"></i>
-                            </button>
-
-                            <button type="button" id="addRowButton" class="toolbar-button icon-button"
-                                data-permission-edit="dataset"
+                        <div class="recipient-participant-title-actions">
+                            <a href="/muat-naik" data-app-navigation
+                                class="recipient-participant-title-action recipient-participant-title-action--back"
+                                title="Kembali ke Muat Naik" aria-label="Kembali ke Muat Naik">
+                                <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                                    <i class="bi bi-arrow-left"></i>
+                                </span>
+                                <span>Kembali</span>
+                            </a>
+                            <button type="button" id="addRowButton" data-permission-edit="dataset"
+                                class="recipient-participant-title-action recipient-participant-title-action--add"
                                 title="Tambah Rekod" aria-label="Tambah Rekod">
-
-                                <i class="bi bi-plus-lg"></i>
-
+                                <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                                    <i class="bi bi-plus-lg"></i>
+                                </span>
+                                <span>Tambah</span>
                             </button>
-
-                            <button type="button" id="deleteRowButton" class="toolbar-button icon-button delete-button"
-                                data-permission-edit="dataset"
-                                title="Pilih Rekod" aria-label="Pilih Rekod">
-
-                                <i class="bi bi-trash3"></i>
-
+                            <button type="button" id="exportDatasetButton"
+                                class="recipient-participant-title-action recipient-participant-title-action--excel"
+                                title="Excel" aria-label="Excel">
+                                <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                                </span>
+                                <span>Excel</span>
                             </button>
-
                         </div>
+                    </header>
 
+                    <div class="content-card mb-4 dataset-page-header sku-search-card-standard">
+                        <div>
+                            <h4>Carian Set Data</h4>
+                            <p>Cari dan tapis rekod dalam set data ini.</p>
                         </div>
-
+                        <div class="dataset-header-controls">
+                            <div class="search-toolbar-group dataset-detail-toolbar-group">
+                                <div class="search-box">
+                                    <i class="bi bi-search" aria-hidden="true"></i>
+                                    <input type="text" id="searchInput" placeholder="Cari rekod..." autocomplete="off">
+                                </div>
+                                <div class="toolbar-group toolbar-filter">
+                                    <div class="column-menu-wrapper">
+                                        <button type="button" id="columnButton" class="toolbar-button icon-button"
+                                            title="Lajur" aria-label="Lajur" aria-controls="columnMenu"
+                                            aria-expanded="false">
+                                            <i class="bi bi-layout-three-columns"></i>
+                                        </button>
+                                        <div id="columnMenu" class="column-menu">
+                                            <div class="column-menu-header">
+                                                <button type="button" id="selectAllColumnsButton">
+                                                    Pilih Semua
+                                                </button>
+                                            </div>
+                                            <div id="columnChecklist"></div>
+                                        </div>
+                                    </div>
+                                    <div class="filter-menu-wrapper">
+                                        <button type="button" id="filterButton" class="toolbar-button icon-button"
+                                            title="Tapis" aria-label="Tapis" aria-controls="filterMenu"
+                                            aria-expanded="false">
+                                            <i class="bi bi-funnel"></i>
+                                        </button>
+                                        <div id="filterMenu" class="filter-menu">
+                                            <div class="filter-title">Tapis</div>
+                                            <div id="datasetFilterFields"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="toolbar-group toolbar-actions">
+                                    <button type="button" id="saveChangesButton" data-permission-edit="dataset"
+                                        class="toolbar-button icon-button dataset-save-button" disabled
+                                        title="Simpan perubahan" aria-label="Simpan perubahan">
+                                        <i class="bi bi-floppy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     </div>
 
-                    <div class="table-card">
+                    <div class="table-card dataset-detail-table-card">
+
+                        <div class="dataset-detail-table-card-header">
+                            <div>
+                                <h5>Senarai Rekod</h5>
+                                <span>Rekod dalam set data ini.</span>
+                            </div>
+                            <span id="datasetRecordCount" class="recipient-record-count">0 rekod</span>
+                        </div>
 
                         <div id="tableWrapper" class="table-wrapper">
 
@@ -269,9 +250,11 @@
 
     </div>
 
-    <div id="datasetListDeleteOverlay" class="delete-confirmation-overlay"></div>
+    <div id="datasetListDeleteOverlay" class="delete-confirmation-overlay" aria-hidden="true"></div>
 
-    <div id="datasetListDeleteConfirmation" class="delete-confirmation" aria-hidden="true">
+    <div id="datasetListDeleteConfirmation" class="delete-confirmation sku-delete-confirmation"
+        role="alertdialog" aria-modal="true" aria-labelledby="datasetListDeleteConfirmationTitle"
+        aria-describedby="datasetListDeleteConfirmationMessage" aria-hidden="true">
 
         <div class="delete-confirmation-icon">
             !
@@ -303,6 +286,58 @@
 
     </div>
 
+    <dialog id="datasetEditOverlay" class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--dataset-edit"
+        aria-labelledby="datasetEditTitle" aria-describedby="datasetEditDescription">
+        <header class="bpa-create-dialog__header">
+            <div class="bpa-create-dialog__heading">
+                <h2 id="datasetEditTitle">Ubah Maklumat Set Data</h2>
+                <p id="datasetEditDescription" class="bpa-create-dialog__subtitle">Kemas kini nama, jenis dan unit set data.</p>
+            </div>
+            <button type="button" id="datasetEditCloseButton" class="bpa-create-dialog__close"
+                aria-label="Tutup suntingan set data">&times;</button>
+        </header>
+        <form id="datasetEditForm" class="bpa-create-dialog__body dataset-edit-form">
+            <div class="dataset-upload-fields dataset-edit-fields">
+                <div class="dataset-edit-field dataset-edit-field--full">
+                    <label for="datasetEditName">Nama set data</label>
+                    <input type="text" id="datasetEditName" class="form-control" maxlength="255" required>
+                </div>
+                <div class="dataset-edit-field">
+                    <label for="datasetEditType">Jenis set data</label>
+                    <select id="datasetEditType" class="form-select" required>
+                        <option value="penerima">PENERIMA BANTUAN</option>
+                        <option value="peserta">PESERTA PROGRAM</option>
+                    </select>
+                </div>
+                <div class="dataset-edit-field">
+                    <label for="datasetEditUnit">Unit</label>
+                    <select id="datasetEditUnit" class="form-select">
+                        <option value="">Tiada unit ditetapkan</option>
+                        <option value="UPP">UPP</option>
+                        <option value="UPU">UPU</option>
+                        <option value="ULK">ULK</option>
+                        <option value="UAK">UAK</option>
+                        <option value="UPA">UPA</option>
+                    </select>
+                </div>
+            </div>
+            <div id="datasetEditDetails" class="dataset-edit-details" aria-label="Maklumat fail">
+                <div><span>Fail sumber</span><strong id="datasetEditFilename">-</strong></div>
+                <div><span>Baris</span><strong id="datasetEditRows">-</strong></div>
+                <div><span>Saiz</span><strong id="datasetEditSize">-</strong></div>
+                <div><span>Dimuat naik</span><strong id="datasetEditDate">-</strong></div>
+            </div>
+            <div id="datasetEditError" class="dataset-upload-status error" role="alert" style="display:none;"></div>
+        </form>
+        <footer class="bpa-budget-modal-footer">
+            <button type="submit" form="datasetEditForm" id="datasetEditSaveButton"
+                class="budget-list-action bpa-budget-save-button dataset-edit-save-button">
+                <span class="budget-list-action-icon"><i class="bi bi-check-lg" aria-hidden="true"></i></span>
+                <span>Simpan perubahan</span>
+            </button>
+        </footer>
+    </dialog>
+
     <button type="button" id="bulkDeleteButton" data-permission-edit="dataset" class="floating-delete-button" aria-hidden="true">
 
         <div class="floating-delete-icon">
@@ -327,78 +362,47 @@
 
     </button>
 
-    <div id="addForm" class="dataset-upload-overlay dataset-add-overlay content-area-modal-overlay" aria-hidden="true">
-
-        <div id="addRecordCard" class="dataset-upload-card dataset-add-card" role="dialog"
-            aria-modal="true" aria-labelledby="addRecordTitle" aria-hidden="true">
-
-            <div class="dataset-upload-header">
-                <div>
-                    <h5 id="addRecordTitle">Tambah Rekod</h5>
-                    <p id="addRecordDescription">Masukkan maklumat rekod baharu.</p>
-                </div>
-                <button type="button" id="closeAddFormButton" class="dataset-upload-close"
-                    aria-label="Tutup borang tambah rekod">
-                    <i class="bi bi-x-lg" aria-hidden="true"></i>
-                </button>
+    <dialog id="addForm" class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--form"
+        aria-labelledby="addRecordTitle" aria-describedby="addRecordDescription">
+        <header class="bpa-create-dialog__header">
+            <div class="bpa-create-dialog__heading">
+                <h2 id="addRecordTitle">Tambah Rekod</h2>
+                <p id="addRecordDescription" class="bpa-create-dialog__subtitle">Masukkan maklumat rekod baharu.</p>
             </div>
-
-            <div class="dataset-upload-body dataset-add-body">
-                <div class="form-field dataset-add-source">
-                    <label for="addSourceDataset">Fail sumber</label>
-                    <select id="addSourceDataset" disabled></select>
-                </div>
-                <div id="addRecordFields" class="form-grid dataset-add-fields"></div>
+            <button type="button" id="closeAddFormButton" class="bpa-create-dialog__close"
+                aria-label="Tutup borang tambah rekod">&times;</button>
+        </header>
+        <div class="bpa-create-dialog__body dataset-add-body">
+            <div class="form-field dataset-add-source">
+                <label for="addSourceDataset">Fail sumber</label>
+                <select id="addSourceDataset" disabled></select>
             </div>
-
-            <div class="dataset-upload-footer">
-
-                <button type="button" id="cancelAddButton" class="btn btn-light">
-                    Batal
-                </button>
-
-                <button type="button" id="confirmAddButton" data-permission-edit="dataset" class="btn btn-primary">
-
-                    <i class="bi bi-plus-lg me-1"></i>
-                    Tambah
-
-                </button>
-
-            </div>
-
+            <div id="addRecordFields" class="form-grid dataset-add-fields"></div>
         </div>
+        <footer class="bpa-budget-modal-footer">
+            <button type="button" id="confirmAddButton" data-permission-edit="dataset"
+                class="budget-list-action bpa-budget-save-button">
+                <span class="budget-list-action-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
+                <span>Tambah</span>
+            </button>
+        </footer>
+    </dialog>
 
-    </div>
-
-    <div id="deleteConfirm" class="delete-confirm" style="display:none;" aria-hidden="true">
-
-        <div class="form-card">
-
-            <div class="form-title">
-                Sahkan Buang
+    <div id="deleteConfirm" class="delete-confirmation-overlay" aria-hidden="true">
+        <div id="deleteConfirmDialog" class="delete-confirmation sku-delete-confirmation"
+            role="alertdialog" aria-modal="true" aria-labelledby="deleteConfirmTitle"
+            aria-describedby="deleteConfirmText" aria-hidden="true">
+            <div class="delete-confirmation-icon">!</div>
+            <div class="delete-confirmation-content">
+                <h6 id="deleteConfirmTitle">Sahkan Buang</h6>
+                <p id="deleteConfirmText">Adakah anda pasti mahu membuang rekod yang dipilih?</p>
+                <div class="delete-confirmation-actions">
+                    <button type="button" id="cancelDeleteButton" class="cancel-delete">Batal</button>
+                    <button type="button" id="confirmDeleteButton" data-permission-edit="dataset"
+                        class="confirm-delete">Buang</button>
+                </div>
             </div>
-
-            <div id="deleteConfirmText" class="confirm-text">
-                Adakah anda pasti mahu membuang rekod yang dipilih?
-            </div>
-
-            <div class="form-actions">
-
-                <button type="button" id="cancelDeleteButton" class="btn btn-light">
-                    Batal
-                </button>
-
-                <button type="button" id="confirmDeleteButton" data-permission-edit="dataset" class="btn btn-danger">
-
-                    <i class="bi bi-trash3 me-1"></i>
-                    Buang
-
-                </button>
-
-            </div>
-
         </div>
-
     </div>
 
 </main>

@@ -329,10 +329,11 @@ async function removeCachedAccount(
         return;
     }
 
-    const confirmed =
-        window.confirm(
-            `Buang profil "${username}" daripada komputer ini?`
-        );
+    const confirmed = await window.confirmBpaAction({
+        titleText: "Buang profil?",
+        messageText: `Buang profil "${username}" daripada komputer ini?`,
+        confirmText: "Buang profil"
+    });
 
     if (!confirmed) {
         return;
@@ -630,6 +631,20 @@ async function handleLogin(event) {
 // LOGIN SUCCESS
 // ============================================================
 
+function getPostLoginDashboardPath(unit, permissions) {
+    const unitCode = String(unit || "").trim().toUpperCase();
+    if (unitCode === "UPP" && permissions?.bpaDashboardUPP?.access === true) {
+        return "/bpa/dashboard?unit=UPP";
+    }
+
+    const dashboardUnits = ["BPA", "UAK", "UPU", "UPA", "ULK"];
+    if (dashboardUnits.includes(unitCode) && permissions?.[`bpaDashboard${unitCode}`]?.access === true) {
+        return `/bpa/dashboard?unit=${encodeURIComponent(unitCode)}`;
+    }
+
+    return "/";
+}
+
 async function loginSuccess(data) {
     const username =
         data.username || "";
@@ -692,8 +707,18 @@ async function loginSuccess(data) {
             `[AUTH] Welcome ${displayName}.`
         );
 
+        try {
+            sessionStorage.setItem("authTransition", "login");
+        } catch (error) {
+            console.error("Could not save the login transition state:", error);
+        }
+
+        const dashboardPath = getPostLoginDashboardPath(
+            sessionData.unit,
+            sessionData.permissions
+        );
         window.location.replace(
-            typeof window.appUrl === "function" ? window.appUrl("/") : "/"
+            typeof window.appUrl === "function" ? window.appUrl(dashboardPath) : dashboardPath
         );
 
     } catch (error) {

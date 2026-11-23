@@ -169,6 +169,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
 
             $pdo->commit();
+            record_bapim_action($pdo, 'program_add', 'Program UPA', $nama_program);
+            if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest') {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => true, 'message' => 'Program berjaya ditambah.', 'programId' => $newId]);
+                exit;
+            }
 
             header("Location: /bpa/upa/program_list.php?msg=" . urlencode("Program berjaya ditambah."));
             exit;
