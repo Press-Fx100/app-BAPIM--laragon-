@@ -290,7 +290,7 @@ if ($role === 'admin') {
                         <i class="bi bi-eye" aria-hidden="true"></i>
                       </a>
 
-                      <?php if (isset($bpaCanEdit) ? $bpaCanEdit : in_array($role, ['admin', 'editor'], true)): ?>
+                      <?php if ($canManageUnitProgram): ?>
                         <a class="budget-row-action" href="/bpa/upa/program_edit.php?id=<?= (int)$r['program_id'] ?>"
                            title="Edit" aria-label="Edit program">
                           <i class="bi bi-pencil" aria-hidden="true"></i>

@@ -225,7 +225,6 @@ function initializeUserManagement() {
     }
 
     function safePermissions(permissions, level) {
-        if (level <= 1) return defaultPermissions(level, unitInput.value);
         const defaults = defaultPermissions(level, unitInput.value);
         const result = {};
         pageDefinitions.forEach(page => {

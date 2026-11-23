@@ -9,7 +9,7 @@ $canManageUnitProgram = isset($bpaCanEdit)
     ? (bool)$bpaCanEdit
     : in_array($role, ['admin', 'editor'], true);
 
-$isEditor = ($role === 'editor' || $role === 'admin');
+$isEditor = $canManageUnitProgram;
 $isStaffOnly = !$isEditor;
 
 // Dapatkan unit_id ULK (ikut DB)
@@ -326,7 +326,7 @@ if ($role === 'editor') {
                         <i class="bi bi-eye" aria-hidden="true"></i>
                       </a>
 
-                      <?php if (isset($bpaCanEdit) ? $bpaCanEdit : $isEditor): ?>
+                      <?php if ($canManageUnitProgram): ?>
                         <a class="budget-row-action" href="/bpa/ulk/program_edit.php?id=<?= (int)$r['program_id'] ?>"
                            title="Edit" aria-label="Edit program">
                           <i class="bi bi-pencil" aria-hidden="true"></i>

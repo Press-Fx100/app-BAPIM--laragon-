@@ -260,7 +260,7 @@ foreach ($rows as $row) {
         break;
     }
 }
-$showSkuActions = $role === 'admin' || $hasSkuNotes;
+$showSkuActions = $canManageSku || $hasSkuNotes;
 
 $years = $pdo->query("SELECT DISTINCT tahun FROM sku_aktiviti ORDER BY tahun DESC")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -453,7 +453,7 @@ function kiraPeratusSemasa(array $r) {
 
 <?php includeSidebarSkuPage($role, $unitIdLogin); ?>
 
-<div class="container mt-4" data-bpa-list-page="sku" data-sku-admin="<?= $role === 'admin' ? 'true' : 'false' ?>">
+<div class="container mt-4" data-bpa-list-page="sku" data-sku-admin="<?= $canManageSku ? 'true' : 'false' ?>">
 
   <div class="d-flex justify-content-between align-items-center mb-3 sku-page-header">
     <div>
@@ -696,7 +696,7 @@ function kiraPeratusSemasa(array $r) {
                     </button>
                   <?php endif; ?>
 
-                    <?php if ($role === 'admin'): ?>
+                    <?php if ($canManageSku): ?>
                       <a class="budget-row-action" aria-label="Edit SKU" title="Edit"
                          data-app-navigation
                          href="/bpa/admin/sku_edit.php?id=<?= (int)$r['sku_aktiviti_id'] ?>">
