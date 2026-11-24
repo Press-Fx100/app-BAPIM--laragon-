@@ -1161,8 +1161,33 @@ function getSearchFilteredRows() {
     );
 }
 
+function updateRecipientStatCards() {
+    if (dashboardMode !== "recipients" || !dashboardRowsLoaded) return;
+
+    const rows = getPICFilteredRows();
+    const contactedCount = rows.filter(row => String(row[4] ?? "").trim()).length;
+    const values = [
+        [totalRecipients, rows.length],
+        [contactedRecipients, contactedCount],
+        [uncontactedRecipients, rows.length - contactedCount]
+    ];
+
+    values.forEach(([element, value]) => {
+        if (!element) return;
+        const target = value.toLocaleString();
+        if (
+            element.getAttribute("aria-label") === target ||
+            (element.textContent.trim() === target && !statNumberAnimationFrames.has(element))
+        ) {
+            return;
+        }
+        animateDashboardStatNumber(element, target);
+    });
+}
+
 function applyFilters() {
     updateRecipientCardPic();
+    updateRecipientStatCards();
     filteredRows =
         getSearchFilteredRows();
 

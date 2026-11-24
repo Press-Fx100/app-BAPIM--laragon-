@@ -306,7 +306,7 @@ if ($role === 'editor') {
         <div class="card-body">
           <div class="small-muted">Jumlah Program (<?= (int)$tahun ?>)</div>
           <div class="kpi-number"><?= (int)$sum['total'] ?></div>
-          <div class="small-muted">Selesai: <?= (int)$sum['selesai'] ?> | Aktif: <?= (int)$sum['aktif'] ?></div>
+          <div class="small-muted">Selesai: <span class="kpi-sub-number"><?= (int)$sum['selesai'] ?></span> | Aktif: <span class="kpi-sub-number"><?= (int)$sum['aktif'] ?></span></div>
         </div>
       </div>
     </div>
@@ -326,7 +326,7 @@ if ($role === 'editor') {
         <div class="card-body">
           <div class="small-muted">Total Belanja Bajet (RM)</div>
           <div class="kpi-number"><?= number_format($totalBelanjaBajet, 2) ?></div>
-          <div class="small-muted">Dana Wakalah: RM <?= number_format($totalWakalahUnit, 2) ?></div>
+          <div class="small-muted">Dana Wakalah: RM <span class="kpi-sub-number"><?= number_format($totalWakalahUnit, 2) ?></span></div>
         </div>
       </div>
     </div>
@@ -336,7 +336,7 @@ if ($role === 'editor') {
         <div class="card-body">
           <div class="small-muted">Total Peruntukan Bajet (RM)</div>
           <div class="kpi-number"><?= number_format($totalPeruntukanBajet, 2) ?></div>
-          <div class="small-muted">% Guna Bajet: <?= number_format($percentBajetUnit, 1) ?>%</div>
+          <div class="small-muted">% Guna Bajet: <span class="kpi-sub-number"><?= number_format($percentBajetUnit, 1) ?></span>%</div>
         </div>
       </div>
     </div>

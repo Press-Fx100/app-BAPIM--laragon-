@@ -1448,7 +1448,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
     }
     if ($path === '/api/audit' && $method === 'GET') {
         requirePageCapability($pdo, 'activity');
-        $activities = $pdo->query("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id WHERE activity.created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ORDER BY activity.created_at DESC, activity.id DESC")->fetchAll();
+        $activities = $pdo->query("SELECT activity.id, COALESCE((SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.username)) = LOWER(TRIM(activity.username)) LIMIT 1), (SELECT account.username FROM users AS account WHERE LOWER(TRIM(account.display_name)) = LOWER(TRIM(activity.username)) LIMIT 1), activity.username) AS username, activity.dataset_id, COALESCE(NULLIF(dataset.name, ''), activity.dataset_name) AS dataset_name, activity.action, activity.row_id, activity.column_name, activity.old_value, activity.new_value, activity.progress_change, activity.created_at FROM user_activity AS activity LEFT JOIN datasets AS dataset ON dataset.id = activity.dataset_id ORDER BY activity.created_at DESC, activity.id DESC LIMIT 1000")->fetchAll();
         jsonResponse($activities);
     }
 
@@ -2377,10 +2377,11 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         justify-content: flex-start;
         gap: 4px;
         padding: 32px 20px 20px !important;
+        transition: none;
     }
-    .bpa-dashboard-content[data-dashboard-unit="BPA"] .kpi-row .kpi-card {
-        padding-right: 12px !important;
-        padding-left: 12px !important;
+    .bpa-dashboard-content .kpi-row .kpi-card:hover {
+        transform: none;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .045) !important;
     }
     .bpa-dashboard-content[data-dashboard-unit]:not([data-dashboard-unit="BPA"]) > .container > .d-flex.justify-content-between.align-items-center.mb-3 + .row.g-3.mb-3 {
         margin-top: 0 !important;
@@ -2438,17 +2439,13 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         overflow-wrap: normal;
         font-variant-numeric: tabular-nums;
     }
-    .bpa-dashboard-content[data-dashboard-unit="BPA"] .kpi-number,
-    .bpa-dashboard-content[data-dashboard-unit="BPA"] .kpi-card.sm .kpi-number {
-        font-size: clamp(13px, 1.2vw, 18px) !important;
-    }
     .bpa-dashboard-content .kpi-card.sm .kpi-number {
         font-size: clamp(18px, 1.55vw, 23px) !important;
     }
     .bpa-dashboard-content .kpi-sub {
         margin-top: 0;
         color: #748096 !important;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 400;
         line-height: 1.4;
     }

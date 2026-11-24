@@ -327,7 +327,7 @@ document.addEventListener("click", event => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
 
         const button = wrapper.querySelector(".custom-select-button");
-        if (button) {
+        if (button && button.dataset.iconOnly !== "true") {
             button.textContent = option.textContent;
             button.setAttribute("aria-label", `${select.getAttribute("aria-label") || "Pilih"}: ${option.textContent.trim()}`);
         }
@@ -657,7 +657,7 @@ function waitForStylesheets() {
     }));
 }
 
-async function finishPageLoading(initial = false) {
+async function finishPageLoading(initial = false, { animateDashboardCharts = true } = {}) {
     pageContent?.classList.add("is-ready");
     if (initial && pageContent) {
         pageContent.style.transition = "none";
@@ -665,15 +665,17 @@ async function finishPageLoading(initial = false) {
         document.body.classList.remove("app-page-loading");
         pageContent.offsetWidth;
         pageContent.style.removeProperty("transition");
-        refreshBpaDashboardCharts(pageContent, { animate: true });
+        refreshBpaDashboardCharts(pageContent, { animate: animateDashboardCharts });
         document.dispatchEvent(new Event("app:initial-page-ready"));
+        document.dispatchEvent(new Event("app:page-visible"));
         return;
     }
 
     document.body.classList.remove("app-page-loading");
     await nextFrame();
     pageContent?.classList.add("is-visible");
-    refreshBpaDashboardCharts(pageContent, { animate: true });
+    refreshBpaDashboardCharts(pageContent, { animate: animateDashboardCharts });
+    document.dispatchEvent(new Event("app:page-visible"));
 }
 
 function refreshBpaDashboardCharts(root = pageContent, { animate = false } = {}) {
@@ -727,6 +729,11 @@ async function revealInitialPage() {
     await waitForStylesheets();
     await document.fonts.ready;
     await nextFrame();
+    initializeBpaDashboardSwitcher();
+    const bpaDashboardRoot = appPathname(window.location.pathname) === "/bpa/dashboard"
+        ? pageContent.querySelector(".bpa-dashboard-content")
+        : null;
+    if (bpaDashboardRoot) animateBpaDashboardEntry(bpaDashboardRoot);
     await finishPageLoading(true);
 }
 
@@ -748,44 +755,16 @@ async function replacePageContent(update) {
         return;
     }
 
+    if (pageContent.classList.contains("is-visible")) {
+        update();
+        return;
+    }
+
     pageContent.classList.remove("is-ready");
     pageContent.classList.remove("is-visible");
     update();
     pageContent.offsetWidth;
     await nextFrame();
-}
-
-async function transitionPageOut() {
-    if (!pageContent?.classList.contains("is-visible")) {
-        return;
-    }
-
-    await nextFrame();
-    if (!pageContent.classList.contains("is-visible")) {
-        return;
-    }
-
-    let timeoutId;
-    const transitionEnded = new Promise(resolve => {
-        const finish = event => {
-            if (event && (
-                event.target !== pageContent ||
-                event.propertyName !== "opacity"
-            )) {
-                return;
-            }
-
-            pageContent.removeEventListener("transitionend", finish);
-            clearTimeout(timeoutId);
-            resolve();
-        };
-
-        pageContent.addEventListener("transitionend", finish);
-        timeoutId = window.setTimeout(() => finish(), 250);
-    });
-
-    pageContent.classList.remove("is-visible");
-    await transitionEnded;
 }
 
 async function revealPageContent() {
@@ -1549,8 +1528,9 @@ function initializeBpaDashboardSwitcher() {
         .filter(script => !script.src);
     bpaDashboardScripts = inlineDashboardScripts.map(script => script.cloneNode(true));
     const initialUrl = new URL(window.location.href);
-    const initialYear = initialUrl.searchParams.get("tahun");
-    bpaDashboardCache = new Map([[`${initialUnit === "UPP" ? "BPA" : initialUnit}:${initialYear || "default"}`, {
+    const initialYear = initialUrl.searchParams.get("tahun")
+        || String(new Date().getFullYear());
+    bpaDashboardCache = new Map([[`${initialUnit === "UPP" ? "BPA" : initialUnit}:${initialYear}`, {
         markup: root.innerHTML,
         styles: bpaDashboardStyles,
         scripts: bpaDashboardScripts
@@ -1596,6 +1576,152 @@ function showBpaDashboardError(root, error) {
 }
 
 let bpaDashboardYearController = null;
+let cancelBpaDashboardChartExit = null;
+
+function updateBpaDashboardUnitChart(root, incoming) {
+    const canvas = root.querySelector("#unitChart");
+    const chart = canvas && window.Chart?.getChart(canvas);
+    const incomingCanvas = incoming.querySelector("#unitChart");
+    if (!chart || !incomingCanvas) return;
+
+    const labels = JSON.parse(incomingCanvas.dataset.chartLabels || "null");
+    const values = JSON.parse(incomingCanvas.dataset.chartValues || "null");
+    const colors = JSON.parse(incomingCanvas.dataset.chartColors || "null");
+    if (
+        !Array.isArray(labels) ||
+        !Array.isArray(values) ||
+        !Array.isArray(colors) ||
+        labels.length !== values.length ||
+        colors.length !== values.length ||
+        !values.every(Number.isFinite)
+    ) {
+        throw new Error("Data carta unit dashboard tidak sah.");
+    }
+
+    chart.options.animation = {
+        ...chart.options.animation,
+        duration: 1100,
+        animateRotate: true,
+        animateScale: false
+    };
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = values;
+    chart.data.datasets[0].backgroundColor = colors;
+    chart.update();
+}
+
+function animateBpaDashboardStatusChart(root, incoming) {
+    const canvas = root.querySelector("#statusChart");
+    const chart = canvas && window.Chart?.getChart(canvas);
+    const incomingCanvas = incoming.querySelector("#statusChart");
+    if (!chart || !incomingCanvas) return;
+
+    const values = JSON.parse(incomingCanvas.dataset.chartValues || "null");
+    if (
+        !Array.isArray(values) ||
+        values.length !== chart.data.datasets[0]?.data?.length ||
+        !values.every(Number.isFinite)
+    ) {
+        throw new Error("Data carta status dashboard tidak sah.");
+    }
+
+    chart.options.animation = {
+        ...chart.options.animation,
+        duration: 1300,
+        easing: "easeOutCubic"
+    };
+    const stepSize = Math.max(...values) >= 2 ? 2 : 1;
+    if (chart.options.scales?.y?.ticks) {
+        chart.options.scales.y.ticks.stepSize = stepSize;
+    }
+    chart.data.datasets[0].data = values;
+    chart.update();
+}
+
+function animateBpaDashboardPieChartOut(root) {
+    const charts = [...root.querySelectorAll("#unitChart")]
+        .map(canvas => window.Chart?.getChart(canvas))
+        .filter(chart => chart && chart.data.datasets.some(dataset =>
+            Array.isArray(dataset.data) && dataset.data.some(value => Number(value) !== 0)
+        ));
+    if (
+        !charts.length ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+        return Promise.resolve();
+    }
+
+    const originals = charts.map(chart => ({
+        animation: chart.options.animation,
+        datasets: chart.data.datasets.map(dataset =>
+            Array.isArray(dataset.data) ? [...dataset.data] : dataset.data
+        )
+    }));
+    const maxDuration = Math.max(...originals.map(({ animation }) =>
+        Number.isFinite(animation?.duration) ? animation.duration : 1100
+    ));
+
+    return new Promise((resolve, reject) => {
+        const completed = new Set();
+        let finished = false;
+        const timeoutId = window.setTimeout(() => finish(false), maxDuration + 250);
+        const finish = restore => {
+            if (finished) return;
+            finished = true;
+            window.clearTimeout(timeoutId);
+            if (cancelBpaDashboardChartExit === cancel) {
+                cancelBpaDashboardChartExit = null;
+            }
+
+            charts.forEach((chart, chartIndex) => {
+                if (window.Chart.getChart(chart.canvas) !== chart) return;
+                chart.options.animation = originals[chartIndex].animation;
+                if (!restore) return;
+
+                chart.stop();
+                chart.data.datasets.forEach((dataset, datasetIndex) => {
+                    dataset.data = originals[chartIndex].datasets[datasetIndex];
+                });
+                chart.update("none");
+            });
+            resolve();
+        };
+        const cancel = () => finish(true);
+        cancelBpaDashboardChartExit = cancel;
+
+        try {
+            charts.forEach((chart, chartIndex) => {
+                const originalAnimation = originals[chartIndex].animation;
+                const originalOnComplete = originalAnimation?.onComplete;
+                chart.options.animation = {
+                    ...originalAnimation,
+                    duration: Number.isFinite(originalAnimation?.duration)
+                        ? originalAnimation.duration
+                        : 1100,
+                    onComplete: function (...args) {
+                        try {
+                            if (typeof originalOnComplete === "function") {
+                                originalOnComplete.apply(this, args);
+                            }
+                        } finally {
+                            completed.add(chart);
+                            if (completed.size === charts.length) finish(false);
+                        }
+                    }
+                };
+                chart.data.datasets.forEach(dataset => {
+                    if (Array.isArray(dataset.data)) {
+                        dataset.data = dataset.data.map(() => 0);
+                    }
+                });
+                chart.update();
+            });
+        } catch (error) {
+            finish(true);
+            reject(error);
+        }
+    });
+}
 
 async function updateBpaDashboardYear(year) {
     const root = pageContent?.querySelector(".bpa-shell-page");
@@ -1609,6 +1735,7 @@ async function updateBpaDashboardYear(year) {
         : window.appUrl(`/bpa/${unit.toLowerCase()}/dashboard?tahun=${encodeURIComponent(year)}`);
 
     bpaDashboardYearController?.abort();
+    cancelBpaDashboardChartExit?.();
     const controller = new AbortController();
     bpaDashboardYearController = controller;
     root.setAttribute("aria-busy", "true");
@@ -1633,13 +1760,49 @@ async function updateBpaDashboardYear(year) {
         }
         if (controller.signal.aborted) return;
 
+        if (unit === "BPA") {
+            const numberSelector =
+                ".card-kpi .kpi-number, .kpi-row .kpi-number, .kpi-sub-number, " +
+                ".summary-number, .pie-center-number";
+            const incomingNumbers = [...incoming.querySelectorAll(numberSelector)];
+            root.querySelectorAll(numberSelector).forEach((element, index) => {
+                if (incomingNumbers[index]) {
+                    element.textContent = incomingNumbers[index].textContent;
+                }
+            });
+            const numberAnimation = animateBpaDashboardKpiNumbers(
+                root,
+                numberSelector,
+                450
+            );
+            await new Promise(resolve => window.requestAnimationFrame(resolve));
+            if (controller.signal.aborted || !root.isConnected) return;
+            animateBpaDashboardStatusChart(root, incoming);
+            await animateBpaDashboardPieChartOut(root);
+            updateBpaDashboardUnitChart(root, incoming);
+            await numberAnimation;
+        }
+        if (controller.signal.aborted || !root.isConnected) return;
+
+        const preservedChartCanvases = unit === "BPA"
+            ? new Map(["unitChart", "statusChart"]
+                .map(id => [id, root.querySelector(`#${id}`)])
+                .filter(([, canvas]) => canvas))
+            : new Map();
         root.querySelectorAll("canvas").forEach(canvas => {
+            if (unit === "BPA" && ["unitChart", "statusChart"].includes(canvas.id)) return;
             const chart = window.Chart?.getChart(canvas);
             if (chart) chart.destroy();
         });
-
         const scrollTop = pageContent?.scrollTop || 0;
-        root.replaceChildren(...Array.from(incoming.childNodes).map(node => node.cloneNode(true)));
+        const replacement = document.createDocumentFragment();
+        Array.from(incoming.childNodes).forEach(node => {
+            replacement.append(node.cloneNode(true));
+        });
+        preservedChartCanvases.forEach((canvas, id) => {
+            replacement.querySelector(`#${id}`)?.replaceWith(canvas);
+        });
+        root.replaceChildren(replacement);
         root.dataset.dashboardUnit = unit;
         root.dataset.dashboardInitialUnit = unit;
 
@@ -1663,11 +1826,7 @@ async function updateBpaDashboardYear(year) {
             }
         });
         initializeCustomSelects();
-        animateBpaDashboardKpiNumbers(root);
-        animateBpaDashboardTitle(root);
-        animateBpaDashboardToolbarControls(root);
-        animateBpaDashboardSections(root);
-        refreshBpaDashboardCharts(root, { animate: true });
+        if (unit !== "BPA") animateBpaDashboardKpiNumbers(root);
     } catch (error) {
         if (error.name !== "AbortError") {
             console.error("Dashboard year update error:", error);
@@ -1683,18 +1842,16 @@ async function updateBpaDashboardYear(year) {
 
 window.updateBpaDashboardYear = updateBpaDashboardYear;
 
-async function loadBpaDashboard(unit) {
-    const currentUrl = new URL(window.location.href);
-    const currentYear = currentUrl.searchParams.get("tahun");
-    const cacheKey = `${unit}:${currentYear || "default"}`;
+async function loadBpaDashboard(unit, year) {
+    const cacheKey = `${unit}:${year}`;
     const cached = bpaDashboardCache.get(cacheKey);
     if (cached) return cached;
 
     const url = unit === "UPP"
         ? window.appUrl("/upp-dashboard")
         : unit === "BPA"
-        ? window.appUrl(`/bpa/dashboard?unit=BPA${currentYear ? `&tahun=${encodeURIComponent(currentYear)}` : ""}`)
-        : window.appUrl(`/bpa/${unit.toLowerCase()}/dashboard${currentYear ? `?tahun=${encodeURIComponent(currentYear)}` : ""}`);
+        ? window.appUrl(`/bpa/dashboard?unit=BPA&tahun=${encodeURIComponent(year)}`)
+        : window.appUrl(`/bpa/${unit.toLowerCase()}/dashboard?tahun=${encodeURIComponent(year)}`);
     const response = await fetch(url, {
         headers: { "X-BPA-DASHBOARD-UNIT": unit }
     });
@@ -1724,9 +1881,14 @@ async function loadBpaDashboard(unit) {
 
 function animateBpaDashboardKpiNumbers(
     root,
-    selector = ".card-kpi .kpi-number, .kpi-row .kpi-number, .summary-number, .pie-center-number"
+    selector = ".card-kpi .kpi-number, .kpi-row .kpi-number, .kpi-sub-number, " +
+        ".summary-number, .pie-center-number",
+    durationOverride
 ) {
-    const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 450 : 800;
+    const duration = Number.isFinite(durationOverride)
+        ? durationOverride
+        : window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 450 : 800;
+    const animations = [];
     root.querySelectorAll(selector).forEach(element => {
         const target = element.textContent;
         const digitCount = (target.match(/\d/g) || []).length;
@@ -1734,31 +1896,36 @@ function animateBpaDashboardKpiNumbers(
 
         const ariaLabel = element.getAttribute("aria-label");
         element.setAttribute("aria-label", target);
-        const startedAt = performance.now();
+        animations.push(new Promise(resolve => {
+            const startedAt = performance.now();
+            const updateDigits = now => {
+                const progress = Math.min((now - startedAt) / duration, 1);
+                let digitIndex = 0;
+                element.textContent = target.replace(/\d/g, digit => {
+                    const lockAt = .55 + ((digitIndex + 1) / digitCount) * .4;
+                    digitIndex += 1;
+                    if (progress >= lockAt) return digit;
 
-        const updateDigits = now => {
-            const progress = Math.min((now - startedAt) / duration, 1);
-            let digitIndex = 0;
-            element.textContent = target.replace(/\d/g, digit => {
-                const lockAt = .55 + ((digitIndex + 1) / digitCount) * .4;
-                digitIndex += 1;
-                if (progress >= lockAt) return digit;
+                    const randomDigit = Math.floor(Math.random() * 9);
+                    return String(randomDigit >= Number(digit) ? randomDigit + 1 : randomDigit);
+                });
 
-                const randomDigit = Math.floor(Math.random() * 9);
-                return String(randomDigit >= Number(digit) ? randomDigit + 1 : randomDigit);
-            });
+                if (progress < 1) {
+                    window.requestAnimationFrame(updateDigits);
+                } else {
+                    if (ariaLabel === null) {
+                        element.removeAttribute("aria-label");
+                    } else {
+                        element.setAttribute("aria-label", ariaLabel);
+                    }
+                    resolve();
+                }
+            };
 
-            if (progress < 1) {
-                window.requestAnimationFrame(updateDigits);
-            } else if (ariaLabel === null) {
-                element.removeAttribute("aria-label");
-            } else {
-                element.setAttribute("aria-label", ariaLabel);
-            }
-        };
-
-        window.requestAnimationFrame(updateDigits);
+            window.requestAnimationFrame(updateDigits);
+        }));
     });
+    return Promise.all(animations);
 }
 
 function animateBpaDashboardSections(root, { skipKpiSections = false } = {}) {
@@ -1766,11 +1933,14 @@ function animateBpaDashboardSections(root, { skipKpiSections = false } = {}) {
     const titleCard = container?.querySelector(":scope > .d-flex.justify-content-between.align-items-center.mb-3");
     if (!container) return;
 
-    [...container.children].filter(section =>
+    const sections = [...container.children].filter(section =>
         section !== titleCard && !(skipKpiSections && section.querySelector(".card-kpi"))
-    ).forEach(section => {
+    );
+    sections.forEach(section => {
         section.classList.remove("bpa-dashboard-content-enter");
-        void section.offsetWidth;
+    });
+    if (sections.length) void container.offsetWidth;
+    sections.forEach(section => {
         section.classList.add("bpa-dashboard-content-enter");
         const finishTransition = event => {
             if (event.target === section && event.animationName === "bpa-dashboard-fade-in-up") {
@@ -1848,10 +2018,14 @@ function animateBpaDashboardToolbarControls(root) {
     const controls = root.querySelectorAll(
         ".bpa-admin-year-form, .bpa-unit-dashboard-year-form, .bpa-admin-actions, .bpa-unit-dashboard-actions"
     );
+    if (!controls.length) return;
+
     controls.forEach((control, index) => {
         control.classList.remove("bpa-dashboard-toolbar-control-enter");
         control.style.setProperty("--bpa-dashboard-toolbar-enter-delay", `${index * 70}ms`);
-        void control.offsetWidth;
+    });
+    void controls[0].offsetWidth;
+    controls.forEach(control => {
         control.classList.add("bpa-dashboard-toolbar-control-enter");
         control.addEventListener("animationend", () => {
             control.classList.remove("bpa-dashboard-toolbar-control-enter");
@@ -1860,13 +2034,170 @@ function animateBpaDashboardToolbarControls(root) {
     });
 }
 
-async function selectBpaDashboard(unit, toolbar, root) {
+function animateBpaDashboardEntry(
+    root,
+    { includeDashboard = true, includeSelector = true } = {}
+) {
+    if (!root?.classList.contains("bpa-dashboard-content")) return;
+
+    const toolbar = root.parentElement?.querySelector(":scope > .bpa-dashboard-selector");
+    const visibleElements = elements =>
+        [...elements].filter(element => element.getClientRects().length > 0);
+    const targets = [];
+
+    if (includeSelector && toolbar?.matches(".bpa-dashboard-selector")) {
+        targets.push(...visibleElements(toolbar.querySelectorAll(".bpa-dashboard-card")));
+    }
+
+    if (includeDashboard) {
+        const container = root.querySelector(":scope > .container, :scope > .container-fluid");
+        const dashboardToolbar = container?.querySelector(
+            ":scope > .bpa-admin-toolbar, " +
+            ":scope > .bpa-unit-dashboard-toolbar, " +
+            ":scope > .d-flex.justify-content-between.align-items-center.mb-3"
+        );
+        if (dashboardToolbar) targets.push(dashboardToolbar);
+        targets.push(...visibleElements(root.querySelectorAll(
+            ".kpi-row .kpi-card, .row.g-3.mb-3 .card-kpi"
+        )));
+        targets.push(...visibleElements(root.querySelectorAll(
+            ".bpa-admin-chart-grid .bpa-admin-chart-card, " +
+            ".row.g-4.mb-4 > [class*=\"col-\"] > .card"
+        )));
+
+        const skuDashboard = container?.querySelector(":scope > .sku-dashboard");
+        if (skuDashboard?.getClientRects().length > 0) targets.push(skuDashboard);
+    }
+
+    if (!targets.length) targets.push(root);
+
+    if (includeDashboard) animateBpaDashboardKpiNumbers(root);
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    targets.forEach((element, index) => {
+        const animation = element.animate(
+            [
+                { opacity: 0, transform: "translateY(12px)" },
+                { opacity: 1, transform: "translateY(0)" }
+            ],
+            {
+                duration: reducedMotion ? 250 : 750,
+                delay: index * 55,
+                easing: "cubic-bezier(.2, .75, .25, 1)",
+                fill: "both"
+            }
+        );
+        animation.addEventListener("finish", () => animation.cancel(), { once: true });
+    });
+}
+
+function animatePageEntry(root) {
+    if (!root) return;
+
+    const legacyEntryClasses = [
+        "bpa-dashboard-title-enter",
+        "bpa-dashboard-content-enter",
+        "bpa-dashboard-sku-enter",
+        "bpa-dashboard-toolbar-control-enter",
+        "bpa-upp-dashboard-enter",
+        "bpa-upp-chart-area-enter",
+        "bpa-upp-mode-title-enter",
+        "bpa-upp-mode-control-enter",
+        "budget-table-enter",
+        "program-report-enter",
+        "sku-table-enter"
+    ];
+    const legacyEntrySelector = legacyEntryClasses.map(className => `.${className}`).join(", ");
+    const legacyEntryElements = [
+        ...(root.matches(legacyEntrySelector) ? [root] : []),
+        ...root.querySelectorAll(legacyEntrySelector)
+    ];
+    legacyEntryElements.forEach(element => element.classList.remove(...legacyEntryClasses));
+    document.body.classList.remove("app-sidebar-page-navigation");
+
+    const visible = element => element.getClientRects().length > 0;
+    const surfaceSelector = [
+        ".content-card",
+        ".card",
+        ".dataset-card",
+        ".stat-card",
+        ".kpi-card",
+        ".chart-card",
+        ".table-card",
+        ".table-wrapper"
+    ].join(", ");
+    const targetSelector = [
+        ".bpa-dashboard-selector > .bpa-dashboard-card",
+        "[data-recipient-participant-view]",
+        ".recipient-participant-title",
+        ".budget-page-header",
+        ".bpa-admin-toolbar",
+        ".bpa-unit-dashboard-toolbar",
+        ".bpa-upp-dashboard-title",
+        ".dataset-toolbar",
+        ".d-flex.justify-content-between.align-items-center.mb-3",
+        ".budget-filter-heading",
+        ".sku-filter-heading",
+        ".program-filter-heading",
+        "h1, h2, h3, h4",
+        surfaceSelector
+    ].join(", ");
+    const candidates = [...root.querySelectorAll(targetSelector)].filter(visible);
+    const candidateSet = new Set(candidates);
+    const targets = candidates.filter(element => {
+        let ancestor = element.parentElement;
+        while (ancestor && ancestor !== root) {
+            if (candidateSet.has(ancestor)) return false;
+            ancestor = ancestor.parentElement;
+        }
+        return true;
+    });
+
+    if (!targets.length) {
+        targets.push(...[...root.children].filter(visible));
+    }
+
+    targets.sort((first, second) => {
+        if (first === second) return 0;
+        return first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+    });
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    targets.forEach((element, index) => {
+        const animation = element.animate(
+            [
+                { opacity: 0, transform: "translateY(12px)" },
+                { opacity: 1, transform: "translateY(0)" }
+            ],
+            {
+                duration: reducedMotion ? 250 : 750,
+                delay: index * 55,
+                easing: "cubic-bezier(.2, .75, .25, 1)",
+                fill: "both"
+            }
+        );
+        animation.addEventListener("finish", () => animation.cancel(), { once: true });
+    });
+}
+
+async function selectBpaDashboard(unit, toolbar, root, { resetYear = false } = {}) {
     const card = bpaDashboardCards.find(item => item.id === unit);
     if (!card || !toolbar.isConnected || !root.isConnected) return;
     const previousUnit = root.dataset.dashboardUnit || "BPA";
+    const requestedYear = resetYear
+        ? String(new Date().getFullYear())
+        : new URL(window.location.href).searchParams.get("tahun")
+            || String(new Date().getFullYear());
+    const isNonBpaUnitTransition =
+        previousUnit !== unit &&
+        previousUnit !== "BPA" &&
+        previousUnit !== "UPP" &&
+        unit !== "BPA" &&
+        unit !== "UPP";
     const isNonUppUnitTransition =
         previousUnit !== unit && previousUnit !== "UPP" && unit !== "UPP";
-    toolbar.classList.toggle("bpa-dashboard-selector--instant-unit-switch", isNonUppUnitTransition);
+    const isBpaUnitEntryTransition = previousUnit !== "BPA" && unit === "BPA";
+    toolbar.classList.toggle("bpa-dashboard-selector--instant-unit-switch", isNonBpaUnitTransition);
 
     toolbar.querySelectorAll("[data-bpa-dashboard-unit]").forEach(button => {
         button.setAttribute("aria-pressed", String(button.dataset.bpaDashboardUnit === unit));
@@ -1874,7 +2205,7 @@ async function selectBpaDashboard(unit, toolbar, root) {
     });
 
     try {
-        const result = await loadBpaDashboard(unit);
+        const result = await loadBpaDashboard(unit, requestedYear);
 
         Object.values(window.Chart?.instances || {}).forEach(chart => {
             const canvas = chart.canvas;
@@ -1905,6 +2236,22 @@ async function selectBpaDashboard(unit, toolbar, root) {
         }
         document.title = dashboardTitle;
         initializeCustomSelects();
+        if (isBpaUnitEntryTransition) {
+            animateBpaDashboardEntry(root, { includeSelector: false });
+        } else {
+            animateBpaDashboardKpiNumbers(root);
+            if (unit !== "UPP" && previousUnit !== unit) {
+                animateBpaDashboardTitle(root);
+            }
+            if (previousUnit !== unit && !isNonBpaUnitTransition) {
+                animateBpaDashboardToolbarControls(root);
+            }
+            if (previousUnit !== unit && unit !== "UPP") {
+                animateBpaDashboardSections(root, {
+                    skipKpiSections: isNonBpaUnitTransition
+                });
+            }
+        }
         if (unit === "UPP") {
             if (typeof window.initializeDashboard !== "function") {
                 throw new Error("Dashboard BAPIM tidak dapat dimulakan.");
@@ -2022,20 +2369,8 @@ async function selectBpaDashboard(unit, toolbar, root) {
         } else if (previousUnit === "UPP" && typeof window.initializeDashboard === "function") {
             await window.initializeDashboard();
         }
-        animateBpaDashboardKpiNumbers(root);
         if (result.scripts.length) executeBpaInlineScripts(result.scripts);
         refreshBpaDashboardCharts(root, { animate: true });
-        if (unit !== "UPP" && previousUnit !== unit) {
-            animateBpaDashboardTitle(root);
-        }
-        if (previousUnit !== unit && !isNonUppUnitTransition) {
-            animateBpaDashboardToolbarControls(root);
-        }
-        if (previousUnit !== unit && unit !== "UPP") {
-            animateBpaDashboardSections(root, {
-                skipKpiSections: isNonUppUnitTransition
-            });
-        }
         const skuProgressHeading = [...root.querySelectorAll("h1, h2, h3, h4, h5, h6")]
             .find(heading => heading.textContent.includes("Progress SKU"));
         if (!isNonUppUnitTransition && previousUnit !== "BPA" && unit !== "BPA") {
@@ -2047,6 +2382,12 @@ async function selectBpaDashboard(unit, toolbar, root) {
             url.searchParams.delete("unit");
         } else {
             url.searchParams.set("unit", unit);
+        }
+        if (resetYear) {
+            const yearControl = root.querySelector(
+                "#bpa-dashboard-year, #bpa-unit-dashboard-year, #participantYearSelect"
+            );
+            url.searchParams.set("tahun", yearControl?.value || requestedYear);
         }
         window.history.replaceState({}, "", url.href);
     } finally {
@@ -2816,7 +3157,38 @@ async function navigateTo(url, replace = false) {
         return;
     }
 
-    const pageChanged = displayedPagePath !== targetPathname;
+    const targetDashboardUnit = (target.searchParams.get("unit") || "BPA").toUpperCase();
+    const displayedDashboardRoot = displayedPagePath === "/bpa/dashboard"
+        ? pageContent?.querySelector(".bpa-shell-page")
+        : null;
+    const displayedDashboardUnit = displayedDashboardRoot
+        ? (displayedDashboardRoot.dataset.dashboardUnit ||
+            new URL(window.location.href).searchParams.get("unit") ||
+            "BPA").toUpperCase()
+        : null;
+    const dashboardUnitChanged =
+        targetPathname === "/bpa/dashboard" &&
+        displayedDashboardUnit !== null &&
+        displayedDashboardUnit !== targetDashboardUnit;
+    const pageChanged = displayedPagePath !== targetPathname || dashboardUnitChanged;
+    const isSidebarPage = [...document.querySelectorAll("#sidebar a")].some(link =>
+        appPathname(new URL(link.href, window.location.href).pathname) === targetPathname
+    );
+    const hasPageEntryTransition =
+        isSidebarPage ||
+        targetPathname === "/muat-naik" ||
+        targetPathname === "/set-data" ||
+        targetPathname.startsWith("/set-data/") ||
+        targetPathname === "/pengurusan-pengguna" ||
+        targetPathname === "/aktiviti-pengguna" ||
+        targetPathname === "/akaun-pengguna";
+    const suppressPageEntryAnimations = isSidebarPage && pageChanged;
+    const animateBpaDashboardOnEntry =
+        targetPathname === "/bpa/dashboard" &&
+        targetDashboardUnit === "BPA";
+    const shouldAnimatePageEntry =
+        hasPageEntryTransition && !animateBpaDashboardOnEntry;
+    let pageEntryHidden = false;
 
     if (leaveConfirmationPending) return;
 
@@ -2829,19 +3201,20 @@ async function navigateTo(url, replace = false) {
         if (typeof window.resetTableState === "function") window.resetTableState();
     }
 
-    pageContent?.style.removeProperty("transition");
-    const transitionOut = transitionPageOut();
-    beginPageLoading();
     initialPageTasks = [];
     pageLoadTasks = [];
+    if (suppressPageEntryAnimations) {
+        document.body.classList.add("app-sidebar-page-navigation");
+    }
 
     try {
-        await transitionOut;
-
         let parsedPage = null;
         if (targetPathname === "/" && dashboardNode) {
-            removeBpaPageStyles();
-            await replacePageContent(() => pageContent.replaceChildren(dashboardNode));
+            await replacePageContent(() => {
+                removeBpaPageStyles();
+                pageContent.replaceChildren(dashboardNode);
+                if (pageChanged) pageContent.scrollTop = 0;
+            });
             if (pageChanged && pageContent) pageContent.scrollTop = 0;
             displayedPagePath = targetPathname;
             updateHistory(target, replace);
@@ -2891,14 +3264,19 @@ async function navigateTo(url, replace = false) {
             if (!isBpaPage) pageCache.set(cacheKey, markup);
         }
 
-        if (isBpaPage && parsedPage) {
-            installBpaPageStyles(parsedPage);
-        } else if (!isBpaPage) {
-            removeBpaPageStyles();
+        if ((animateBpaDashboardOnEntry || shouldAnimatePageEntry) && pageContent) {
+            pageContent.style.visibility = "hidden";
+            pageEntryHidden = true;
         }
 
         await replacePageContent(() => {
+            if (isBpaPage && parsedPage) {
+                installBpaPageStyles(parsedPage);
+            } else if (!isBpaPage) {
+                removeBpaPageStyles();
+            }
             pageContent.innerHTML = markup;
+            if (pageChanged) pageContent.scrollTop = 0;
         });
         if (pageChanged && pageContent) pageContent.scrollTop = 0;
         displayedPagePath = targetPathname;
@@ -2907,12 +3285,33 @@ async function navigateTo(url, replace = false) {
         }
         updateHistory(target, replace);
         updateActiveNavigation(targetPathname);
+        if (animateBpaDashboardOnEntry) {
+            initializeBpaDashboardSwitcher();
+            document.body.classList.remove("app-sidebar-page-navigation");
+            const root = pageContent?.querySelector(".bpa-dashboard-content");
+            if (!root) {
+                throw new Error("Kandungan papan pemuka BPA tiada selepas pemuatan halaman.");
+            }
+            animateBpaDashboardEntry(root);
+            pageContent.style.removeProperty("visibility");
+            pageEntryHidden = false;
+        }
 
         await notifyPageLoaded();
+        if (shouldAnimatePageEntry) {
+            animatePageEntry(pageContent);
+            pageContent.style.removeProperty("visibility");
+            pageEntryHidden = false;
+        }
         await finishPageLoading();
     } catch (error) {
         await finishPageLoading();
         throw error;
+    } finally {
+        if (pageEntryHidden) {
+            pageContent?.style.removeProperty("visibility");
+        }
+        document.body.classList.remove("app-sidebar-page-navigation");
     }
 }
 
@@ -2924,7 +3323,9 @@ document.addEventListener("click", event => {
         const toolbar = dashboardCard.closest(".bpa-dashboard-selector");
         const root = toolbar?.nextElementSibling;
         if (toolbar && root?.classList.contains("bpa-shell-page")) {
-            selectBpaDashboard(dashboardCard.dataset.bpaDashboardUnit, toolbar, root)
+            selectBpaDashboard(dashboardCard.dataset.bpaDashboardUnit, toolbar, root, {
+                resetYear: true
+            })
                 .catch(error => {
                     console.error("BPA dashboard load error:", error);
                     showBpaDashboardError(root, error);

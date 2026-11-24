@@ -168,21 +168,15 @@
                         </div>
                     </div>
                 </div>
-                <div class="table-wrapper">
-                    <table id="managedUserActivityTable" class="dataset-table audit-history-table">
-                        <thead>
-                            <tr>
-                                <th><span>Pengguna</span></th>
-                                <th><span>Tindakan</span></th>
-                                <th><span>Pada</span></th>
-                                <th><span>Perubahan</span></th>
-                                <th><span>Set Data</span></th>
-                                <th><span>Masa</span></th>
-                            </tr>
-                        </thead>
-                        <tbody id="managedUserActivityBody"></tbody>
-                    </table>
+                <div class="audit-activity-grid-header" aria-hidden="true">
+                    <span>Pengguna</span>
+                    <span>Tindakan</span>
+                    <span>Lokasi</span>
+                    <span>Perubahan <small>Sebelum → Selepas</small></span>
+                    <span>Tarikh &amp; Masa</span>
                 </div>
+                <div id="managedUserActivityBody" class="audit-activity-list" role="list"
+                    aria-label="Sejarah tindakan pengguna"></div>
                 <div class="pagination-bar">
                     <div class="pagination-info-group">
                         <div id="managedUserActivityPaginationInfo" class="pagination-info">Memuatkan tindakan...</div>
@@ -196,7 +190,6 @@
                             aria-label="Halaman sebelumnya">
                             <i class="bi bi-chevron-left" aria-hidden="true"></i>
                         </button>
-                        <div id="managedUserActivityPageNumbers" class="pagination-controls"></div>
                         <button type="button" id="managedUserActivityNextPage" class="page-button"
                             aria-label="Halaman seterusnya">
                             <i class="bi bi-chevron-right" aria-hidden="true"></i>

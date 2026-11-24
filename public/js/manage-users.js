@@ -25,7 +25,6 @@ function initializeUserManagement() {
     const userActivityBody = document.getElementById("managedUserActivityBody");
     const userActivitySearch = document.getElementById("managedUserActivitySearch");
     const userActivityPaginationInfo = document.getElementById("managedUserActivityPaginationInfo");
-    const userActivityPageNumbers = document.getElementById("managedUserActivityPageNumbers");
     const manageUsersPage = form.closest(".manage-users-page");
     const manageUsersLayout = form.closest(".manage-users-layout");
     const manageUsersCard = form.closest(".manage-users-card");
@@ -610,14 +609,17 @@ function initializeUserManagement() {
 
         userActivityBody.replaceChildren();
         if (!pageRows.length) {
-            const row = document.createElement("tr");
-            row.innerHTML = `<td colspan="6" class="audit-empty">${query
+            const emptyMessage = document.createElement("div");
+            emptyMessage.className = "audit-activity-empty";
+            emptyMessage.textContent = query
                 ? "Tiada tindakan sepadan"
-                : "Tiada tindakan pengurusan pengguna"}</td>`;
-            userActivityBody.appendChild(row);
+                : "Tiada tindakan pengurusan pengguna";
+            userActivityBody.appendChild(emptyMessage);
         } else {
             pageRows.forEach(activity => {
-                const row = document.createElement("tr");
+                const item = document.createElement("article");
+                item.className = "audit-activity-item";
+                item.setAttribute("role", "listitem");
                 const username = String(activity.username ?? "");
                 const action = getManagedActivityAction(activity.action);
                 const oldValue = String(activity.old_value || "—");
@@ -625,28 +627,54 @@ function initializeUserManagement() {
                 const createdAt = String(activity.created_at ?? "").trim();
                 const dateTime = createdAt.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
                 const badgeStyle = getManagedActivityUserBadgeStyle(username);
-                const targetName = escapeActivityHtml(activity.new_value || activity.dataset_name || "—");
+                const columnName = String(activity.column_name ?? "").trim();
+                const datasetText = columnName || "Pengurusan Pengguna";
+                const dateLabel = dateTime
+                    ? new Date(`${dateTime[1]}T00:00:00`).toLocaleDateString("ms-MY", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric"
+                    })
+                    : createdAt || "—";
+                const timeLabel = dateTime ? dateTime[2] : "";
+                const oldValueText = escapeActivityHtml(oldValue);
+                const newValueText = escapeActivityHtml(newValue);
+                const changeSummary = `Sebelum: ${oldValue} → Selepas: ${newValue}`;
+                const datetimeValue = dateTime
+                    ? `${dateTime[1]}T${dateTime[2]}`
+                    : createdAt;
 
-                row.innerHTML = `
-                    <td class="audit-user audit-user-cell">
+                item.innerHTML = `
+                    <div class="audit-activity-cell audit-activity-who">
+                        <span class="audit-activity-cell-label">Pengguna</span>
                         <span class="audit-user-badge" style="${badgeStyle}">${escapeActivityHtml(username)}</span>
-                    </td>
-                    <td><span class="audit-action ${action.className}">${escapeActivityHtml(action.label) || "—"}</span></td>
-                    <td class="audit-location-cell">
-                        <div class="audit-location-values">
-                            <span class="audit-location-badge"><span class="audit-location-text">${escapeActivityHtml(activity.column_name || "Pengurusan Pengguna")}</span></span>
+                    </div>
+                    <div class="audit-activity-cell audit-activity-what">
+                        <span class="audit-activity-cell-label">Tindakan</span>
+                        <span class="audit-action ${action.className}">${escapeActivityHtml(action.label) || "—"}</span>
+                    </div>
+                    <div class="audit-activity-cell audit-activity-where">
+                        <span class="audit-activity-cell-label">Lokasi</span>
+                        <span class="audit-activity-dataset" title="${escapeActivityHtml(datasetText)}">${escapeActivityHtml(datasetText)}</span>
+                    </div>
+                    <div class="audit-activity-cell audit-activity-change-cell">
+                        <span class="audit-activity-cell-label">Perubahan</span>
+                        <div class="audit-activity-change-list" title="${escapeActivityHtml(changeSummary)}">
+                            <div class="audit-activity-change-row">
+                                <span class="audit-activity-value audit-activity-value--old" title="Sebelum: ${oldValueText}">${oldValueText}</span>
+                                <span class="audit-activity-change-arrow" aria-hidden="true">→</span>
+                                <span class="audit-activity-value audit-activity-value--new" title="Selepas: ${newValueText}">${newValueText}</span>
+                            </div>
                         </div>
-                    </td>
-                    <td class="audit-change-cell">
-                        <div class="audit-change-values">
-                            <span class="audit-value-badge old" title="${escapeActivityHtml(oldValue)}"><span class="audit-value-text">${escapeActivityHtml(oldValue)}</span></span>
-                            <span class="audit-value-transition" aria-hidden="true">&gt;</span>
-                            <span class="audit-value-badge new" title="${targetName}"><span class="audit-value-text">${targetName}</span></span>
-                        </div>
-                    </td>
-                    <td><span class="audit-dataset-cell">—</span></td>
-                    <td>${escapeActivityHtml(dateTime ? `${dateTime[1]} ${dateTime[2]}` : createdAt || "—")}</td>`;
-                userActivityBody.appendChild(row);
+                    </div>
+                    <div class="audit-activity-cell audit-activity-when">
+                        <span class="audit-activity-cell-label">Tarikh &amp; Masa</span>
+                        <time datetime="${escapeActivityHtml(datetimeValue)}">
+                            <span class="audit-activity-date">${escapeActivityHtml(dateLabel)}</span>
+                            <span class="audit-activity-clock">${escapeActivityHtml(timeLabel || "—")}</span>
+                        </time>
+                    </div>`;
+                userActivityBody.appendChild(item);
             });
         }
 
@@ -655,24 +683,6 @@ function initializeUserManagement() {
         userActivityPaginationInfo.textContent = total
             ? `${firstItem}–${lastItem} daripada ${total} tindakan`
             : "0 tindakan";
-        if (userActivityPageNumbers) {
-            const firstPage = Math.max(1, Math.min(userActivityPage - 2, totalPages - 4));
-            const lastPage = Math.min(totalPages, firstPage + 4);
-            userActivityPageNumbers.replaceChildren();
-            for (let page = firstPage; page <= lastPage; page += 1) {
-                const button = document.createElement("button");
-                button.type = "button";
-                button.className = `page-button${page === userActivityPage ? " active" : ""}`;
-                button.textContent = String(page);
-                button.setAttribute("aria-label", `Halaman ${page}`);
-                button.setAttribute("aria-current", page === userActivityPage ? "page" : "false");
-                button.addEventListener("click", () => {
-                    userActivityPage = page;
-                    renderManagedUserActivity();
-                });
-                userActivityPageNumbers.appendChild(button);
-            }
-        }
 
         [
             ["managedUserActivityFirstPage", userActivityPage === 1],
@@ -687,7 +697,7 @@ function initializeUserManagement() {
 
     async function loadManagedUserActivity() {
         if (!userActivityBody) return;
-        userActivityBody.innerHTML = '<tr><td colspan="6" class="audit-empty">Memuatkan tindakan pengguna...</td></tr>';
+        userActivityBody.innerHTML = '<div class="audit-activity-empty">Memuatkan tindakan pengguna...</div>';
         try {
             const data = await request("/api/admin/user-activity?limit=1000");
             userActivities = Array.isArray(data.activities) ? data.activities : [];
@@ -696,7 +706,7 @@ function initializeUserManagement() {
         } catch (error) {
             console.error("User management activity loading error:", error);
             userActivities = [];
-            userActivityBody.innerHTML = `<tr><td colspan="6" class="audit-empty">${escapeActivityHtml(error.message)}</td></tr>`;
+            userActivityBody.innerHTML = `<div class="audit-activity-empty">${escapeActivityHtml(error.message)}</div>`;
             if (userActivityPaginationInfo) userActivityPaginationInfo.textContent = "Gagal memuatkan tindakan";
         }
     }

@@ -155,7 +155,13 @@ $rows = $stmt->fetchAll();
         </div>
 
         <div class="col-md-1 d-grid">
-          <button class="btn btn-secondary">Cari</button>
+          <button type="submit" class="btn btn-secondary d-flex align-items-center justify-content-center"
+                  aria-label="Cari" title="Cari">
+            <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.8" cy="6.8" r="4.4" stroke="currentColor" stroke-width="1.8"></circle>
+              <path d="m10.2 10.2 3.4 3.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+            </svg>
+          </button>
         </div>
       </form>
     </div>

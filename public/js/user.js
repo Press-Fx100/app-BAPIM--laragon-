@@ -40,7 +40,7 @@ function getUserBadgeStyle(username) {
 
 async function loadActivities() {
     try {
-        const response = await fetch("/api/user/activity?limit=1000", {
+        const response = await fetch("/api/audit", {
             method: "GET",
             credentials: "same-origin",
             cache: "no-store"
@@ -66,7 +66,7 @@ async function loadActivities() {
             data?.earliestActivityMonth || getEarliestProgressMonth()
         );
     } catch (error) {
-        console.error("Failed to load user activity:", error);
+        console.error("Failed to load activity history:", error);
         activities = [];
         statusCount = 0;
         progressChange = 0;
@@ -348,42 +348,6 @@ function parseCreatedAt(createdAt) {
     return parsed;
 }
 
-function formatDateTime(createdAt) {
-    if (!createdAt) {
-        return {
-            date: "",
-            time: ""
-        };
-    }
-
-    const value = String(createdAt).trim();
-
-    const match = value.match(
-        /^(\d{4}-\d{2}-\d{2})\s+(.+)$/
-    );
-
-    if (match) {
-        return {
-            date: match[1],
-            time: match[2]
-        };
-    }
-
-    const parsed = new Date(value);
-
-    if (!Number.isNaN(parsed.getTime())) {
-        return {
-            date: parsed.toLocaleDateString(),
-            time: parsed.toLocaleTimeString()
-        };
-    }
-
-    return {
-        date: value,
-        time: ""
-    };
-}
-
 function getDateKey(date) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
         return "";
@@ -516,17 +480,32 @@ function renderChart() {
     const highestProgress = progressValues.length
         ? Math.max(...progressValues)
         : 0;
-    const progressAxisPadding = highestProgress >= 10
-        ? Math.ceil(highestProgress * 0.05)
-        : 0;
+    const progressAxisPadding = Math.max(
+        1,
+        Math.ceil((highestProgress - lowestProgress) * 0.05)
+    );
+    const progressAxisMinimum = lowestProgress - progressAxisPadding;
     const progressAxisMaximum = Math.max(
         10,
         highestProgress + progressAxisPadding
     );
 
-    if (auditChart) {
+    if (auditChart && auditChart.canvas !== canvas) {
         auditChart.destroy();
         auditChart = null;
+    }
+
+    if (auditChart) {
+        auditChart.data.labels = data.labels;
+        auditChart.data.datasets = data.datasets;
+        auditChart.options.scales.y.min = progressAxisMinimum;
+        auditChart.options.scales.y.max = progressAxisMaximum;
+        auditChart.data.datasets.forEach((_, index) => {
+            auditChart.setDatasetVisibility(index, true);
+        });
+        auditChart.update("reset");
+        auditChart.update();
+        return;
     }
 
     auditChart = new Chart(canvas, {
@@ -582,7 +561,7 @@ function renderChart() {
                     }
                 },
                 y: {
-                    min: lowestProgress - 1,
+                    min: progressAxisMinimum,
                     max: progressAxisMaximum,
                     title: {
                         display: true,
@@ -598,9 +577,9 @@ function renderChart() {
 }
 
 function renderTable() {
-    const tbody =
+    const activityList =
         document.getElementById(
-            "auditTableBody"
+            "auditActivityList"
         );
 
     const info =
@@ -609,7 +588,7 @@ function renderTable() {
         );
 
     if (
-        !tbody ||
+        !activityList ||
         !info
     ) {
         return;
@@ -671,28 +650,42 @@ function renderTable() {
             start + rowsPerPage
         );
 
-    tbody.innerHTML = "";
+    activityList.innerHTML = "";
 
     if (!pageRows.length) {
-        const row =
+        const emptyState =
             document.createElement(
-                "tr"
+                "div"
             );
-
-        row.innerHTML = `<td colspan="5" class="audit-empty">Tiada aktiviti sepadan</td>`;
-
-        tbody.appendChild(row);
+        emptyState.className = "audit-activity-empty";
+        emptyState.textContent = "Tiada aktiviti sepadan";
+        activityList.appendChild(emptyState);
     } else {
         pageRows.forEach(activity => {
-            const row =
+            const item =
                 document.createElement(
-                    "tr"
+                    "article"
                 );
+            item.className = "audit-activity-item";
+            item.setAttribute("role", "listitem");
 
-            const dateTime =
-                formatDateTime(
-                    activity.createdAt
-                );
+            const timestamp = parseCreatedAt(activity.createdAt);
+            const dateLabel = timestamp
+                ? timestamp.toLocaleDateString("ms-MY", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric"
+                })
+                : "—";
+            const timeLabel = timestamp
+                ? timestamp.toLocaleTimeString("ms-MY", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: false
+                })
+                : "";
+            const datetime = timestamp ? timestamp.toISOString() : "";
 
             const actionText = getActivityActionLabel(activity.action);
             const actionClass = getActivityActionBadgeClass(activity.action);
@@ -700,57 +693,55 @@ function renderTable() {
             const user = escapeHTML(activity.username);
             const userBadgeStyle = getUserBadgeStyle(activity.username);
             const metadataChanges = getDatasetMetadataChanges(activity);
-            const previousValue = escapeHTML(activity.oldValue || "—");
-            const nextValue = escapeHTML(activity.newValue || "—");
-            const locationContent = metadataChanges
-                ? `<div class="audit-location-values audit-metadata-fields">${metadataChanges.fields
-                    .map(field => `<span class="audit-location-badge">${escapeHTML(field)}</span>`)
-                    .join("")}</div>`
-                : `<div class="audit-location-values">
-                    <span class="audit-location-badge" title="${escapeHTML(activity.row || "—")}"><span class="audit-location-text">${escapeHTML(activity.row || "—")}</span></span>
-                    <span class="audit-location-transition" aria-hidden="true">, </span>
-                    <span class="audit-location-badge" title="${escapeHTML(activity.column || "—")}"><span class="audit-location-text">${escapeHTML(activity.column || "—")}</span></span>
-                </div>`;
-            const changeContent = metadataChanges
-                ? `<div class="audit-change-values audit-metadata-changes">${metadataChanges.changes
-                    .map(change => `<div class="audit-metadata-change">
-                        <span class="audit-value-badge old" title="${escapeHTML(change.oldValue)}"><span class="audit-value-text">${escapeHTML(change.oldValue)}</span></span>
-                        <span class="audit-value-transition" aria-hidden="true">&gt;</span>
-                        <span class="audit-value-badge new" title="${escapeHTML(change.newValue)}"><span class="audit-value-text">${escapeHTML(change.newValue)}</span></span>
-                    </div>`)
-                    .join("")}</div>`
-                : `<div class="audit-change-values">
-                    <span class="audit-value-badge old" title="${previousValue}"><span class="audit-value-text">${previousValue}</span></span>
-                    <span class="audit-value-transition" aria-hidden="true">&gt;</span>
-                    <span class="audit-value-badge new" title="${nextValue}"><span class="audit-value-text">${nextValue}</span></span>
-                </div>`;
+            const datasetText = String(activity.dataset || "—");
+            const locationText = metadataChanges
+                ? `Medan berubah: ${metadataChanges.fields.join(" · ")}`
+                : `Rekod: ${activity.row || "—"} · Lajur: ${activity.column || "—"}`;
+            const changes = metadataChanges
+                ? metadataChanges.changes
+                : [{ oldValue: activity.oldValue, newValue: activity.newValue }];
+            const changeSummary = changes.map(change =>
+                `Sebelum: ${change.oldValue || "—"} → Selepas: ${change.newValue || "—"}`
+            ).join(" | ");
+            const changeContent = changes.map(change => {
+                const oldValue = String(change.oldValue || "—");
+                const newValue = String(change.newValue || "—");
+                return `
+                    <div class="audit-activity-change-row" title="${escapeHTML(changeSummary)}">
+                        <span class="audit-activity-value audit-activity-value--old" title="Sebelum: ${escapeHTML(oldValue)}">${escapeHTML(oldValue)}</span>
+                        <span class="audit-activity-change-arrow" aria-hidden="true">→</span>
+                        <span class="audit-activity-value audit-activity-value--new" title="Selepas: ${escapeHTML(newValue)}">${escapeHTML(newValue)}</span>
+                    </div>
+                `;
+            }).join("");
 
-            row.innerHTML = `
-                <td class="audit-user audit-user-cell">
-                    <span class="audit-user-badge" style="${userBadgeStyle}">
-                        ${user}
-                    </span>
-                </td>
-
-                <td>
-                    <span class="audit-action ${actionClass}">
-                        ${action || "—"}
-                    </span>
-                </td>
-
-                <td class="audit-location-cell">
-                    ${locationContent}
-                </td>
-
-                <td class="audit-change-cell">
-                    ${changeContent}
-                </td>
-
-                <td>
-                    ${escapeHTML([dateTime.date, dateTime.time].filter(Boolean).join(" ") || "—")}
-                </td>
+            item.innerHTML = `
+                <div class="audit-activity-cell audit-activity-who">
+                    <span class="audit-activity-cell-label">Pengguna</span>
+                    <span class="audit-user-badge" style="${userBadgeStyle}">${user}</span>
+                </div>
+                <div class="audit-activity-cell audit-activity-what">
+                    <span class="audit-activity-cell-label">Tindakan</span>
+                    <span class="audit-action ${actionClass}">${action || "—"}</span>
+                </div>
+                <div class="audit-activity-cell audit-activity-where">
+                    <span class="audit-activity-cell-label">Lokasi</span>
+                    <span class="audit-activity-dataset" title="${escapeHTML(datasetText)}">${escapeHTML(datasetText)}</span>
+                    <span class="audit-activity-location" title="${escapeHTML(locationText)}">${escapeHTML(locationText)}</span>
+                </div>
+                <div class="audit-activity-cell audit-activity-change-cell">
+                    <span class="audit-activity-cell-label">Perubahan</span>
+                    <div class="audit-activity-change-list" title="${escapeHTML(changeSummary)}">${changeContent}</div>
+                </div>
+                <div class="audit-activity-cell audit-activity-when">
+                    <span class="audit-activity-cell-label">Tarikh &amp; Masa</span>
+                    <time datetime="${datetime}">
+                        <span class="audit-activity-date">${escapeHTML(dateLabel)}</span>
+                        <span class="audit-activity-clock">${escapeHTML(timeLabel || "—")}</span>
+                    </time>
+                </div>
             `;
-            tbody.appendChild(row);
+            activityList.appendChild(item);
         });
     }
 
@@ -945,7 +936,7 @@ function renderAuditCalendar() {
 }
 
 function initializeUserPage() {
-    if (document.getElementById("auditTableBody")) {
+    if (document.getElementById("auditActivityList")) {
         const search = document.getElementById("auditSearch");
         if (search && search.dataset.bound !== "true") {
             search.dataset.bound = "true";
@@ -1128,4 +1119,9 @@ document.addEventListener(
     "app:page-loaded",
     () => window.registerAppPageLoadTask(initializeUserPage())
 );
+document.addEventListener("app:page-visible", () => {
+    if (!auditChart?.canvas.isConnected) return;
+    auditChart.reset();
+    auditChart.update();
+});
 })();

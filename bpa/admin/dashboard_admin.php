@@ -420,23 +420,23 @@ body{background:#f4f6f8;padding-top:70px;}
   <div class="kpi-row mb-4">
     <div class="kpi-big">
       <div class="kpi-card gradient-green shadow">
-        <div>Total Peruntukan</div>
-        <div class="kpi-number">RM <?= number_format($totalPeruntukan,2) ?></div>
+        <div>Total Peruntukan (RM)</div>
+        <div class="kpi-number"><?= number_format($totalPeruntukan,2) ?></div>
       </div>
     </div>
 
     <div class="kpi-big">
       <div class="kpi-card gradient-orange shadow">
-        <div>Total Belanja</div>
-        <div class="kpi-number" style="font-size:22px;">RM <?= number_format($totalBelanja,2) ?></div>
-        <div class="kpi-sub">Dana Wakalah: RM <?= number_format($totalWakalah,2) ?></div>
+        <div>Total Belanja (RM)</div>
+        <div class="kpi-number"><?= number_format($totalBelanja,2) ?></div>
+        <div class="kpi-sub">Dana Wakalah: RM <span class="kpi-sub-number"><?= number_format($totalWakalah,2) ?></span></div>
       </div>
     </div>
 
     <div class="kpi-big">
       <div class="kpi-card gradient-purple shadow">
-        <div>Total Baki Peruntukan</div>
-        <div class="kpi-number">RM <?= number_format($totalBaki,2) ?></div>
+        <div>Baki Peruntukan (RM)</div>
+        <div class="kpi-number"><?= number_format($totalBaki,2) ?></div>
       </div>
     </div>
 
@@ -466,7 +466,12 @@ body{background:#f4f6f8;padding-top:70px;}
           </div>
         </div>
         <div class="pie-wrapper">
-            <canvas id="unitChart"></canvas>
+            <canvas
+              id="unitChart"
+              data-chart-labels="<?= safe(json_encode(array_column($unitData, 'nama_unit'))) ?>"
+              data-chart-values="<?= safe(json_encode(array_map('intval', array_column($unitData, 'total')))) ?>"
+              data-chart-colors="<?= safe(json_encode(array_slice($bpaChartPalette, 0, count($unitData)))) ?>"
+            ></canvas>
             <div class="pie-center">
               <div class="pie-center-label">Jumlah Program</div>
               <div class="pie-center-number"><?= number_format((int)array_sum(array_column($unitData, 'total'))) ?></div>
@@ -493,7 +498,15 @@ body{background:#f4f6f8;padding-top:70px;}
           </div>
         </div>
         <div class="chart-wrapper">
-            <canvas id="statusChart"></canvas>
+            <canvas
+              id="statusChart"
+              data-chart-values="<?= safe(json_encode([
+                (int)($statusData['draft'] ?? 0),
+                (int)($statusData['aktif'] ?? 0),
+                (int)($statusData['selesai'] ?? 0),
+                (int)($statusData['batal'] ?? 0)
+              ])) ?>"
+            ></canvas>
         </div>
       </div>
     </div>
@@ -725,7 +738,8 @@ const bpaChartTooltipBlur = {
 };
 
 // ===== UNIT DOUGHNUT =====
-new Chart(document.getElementById('unitChart'),{
+const unitChartCanvas = document.getElementById('unitChart');
+if (!Chart.getChart(unitChartCanvas)) new Chart(unitChartCanvas,{
   type:'doughnut',
   data:{
     labels:[
@@ -783,7 +797,8 @@ const maxStatusValue = Math.max(
 
 const stepSize = maxStatusValue >= 2 ? 2 : 1;
 
-new Chart(document.getElementById('statusChart'),{
+const statusChartCanvas = document.getElementById('statusChart');
+if (!Chart.getChart(statusChartCanvas)) new Chart(statusChartCanvas,{
   type:'bar',
   data:{
     labels:['Draft','Aktif','Selesai','Batal'],
