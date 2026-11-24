@@ -1100,28 +1100,24 @@ document.addEventListener("click", event => {
         ? event.target.closest("[data-program-filter-reset]")
         : null;
     const form = resetButton?.closest("[data-program-filter-form]");
-    const picker = form?.querySelector("[data-program-date-filter]");
-    const startInput = form?.querySelector("[data-program-date-start]");
-    const endInput = form?.querySelector("[data-program-date-end]");
-    if (!resetButton || !form || !picker || !startInput || !endInput) return;
+    if (!resetButton || !form) return;
 
     event.preventDefault();
     window.clearTimeout(programFilterTimer);
     form.dataset.programResetting = "true";
     const search = form.querySelector("input[name='q']");
     if (search) search.value = "";
-    startInput.value = picker.dataset.defaultStart;
-    endInput.value = picker.dataset.defaultEnd;
     form.querySelectorAll("select").forEach(select => {
-        select.value = "";
+        if (select.name === "tahun") {
+            const currentYear = String(new Date().getFullYear());
+            const currentOption = [...select.options].find(option => option.value === currentYear);
+            select.value = currentOption ? currentYear : (select.options[0]?.value || "");
+        } else {
+            select.value = "";
+        }
         select.dispatchEvent(new Event("change", { bubbles: true }));
     });
     delete form.dataset.programResetting;
-    updateProgramDateFilterButton(
-        form.closest(".bpa-shell-page") || document,
-        startInput.value,
-        endInput.value
-    );
     form.requestSubmit();
 });
 

@@ -46,6 +46,24 @@ function getProgramReportUnits(PDO $pdo): array
 }
 
 /**
+ * Ambil senarai tahun tersedia untuk dropdown laporan.
+ */
+function getProgramReportYears(PDO $pdo): array
+{
+    $stmt = $pdo->query("
+        SELECT DISTINCT tahun
+        FROM program
+        WHERE tahun IS NOT NULL
+        ORDER BY tahun DESC
+    ");
+
+    return array_map(
+        static fn(array $row): int => (int)$row['tahun'],
+        $stmt->fetchAll(PDO::FETCH_ASSOC)
+    );
+}
+
+/**
  * Ambil nama unit berdasarkan unit_id.
  */
 function getProgramReportSelectedUnitName(
@@ -100,7 +118,8 @@ function getProgramReport(
     string $tarikhHingga,
     string $unitFilter = '',
     string $statusFilter = '',
-    string $q = ''
+    string $q = '',
+    string $yearFilter = ''
 ): array {
     $allowedStatus = [
         'draft',
@@ -207,16 +226,25 @@ function getProgramReport(
             ON pud.program_id = p.program_id
 
         WHERE
+    ";
+
+    if ($yearFilter !== '' && ctype_digit($yearFilter)) {
+        $sql .= "p.tahun = :tahun";
+        $params = [
+            ':tahun' => (int)$yearFilter
+        ];
+    } else {
+        $sql .= "
             COALESCE(
                 pud.tarikh_masuk,
                 p.tarikh_mula
             ) BETWEEN :tarikh_dari AND :tarikh_hingga
-    ";
-
-    $params = [
-        ':tarikh_dari' => $tarikhDari,
-        ':tarikh_hingga' => $tarikhHingga
-    ];
+        ";
+        $params = [
+            ':tarikh_dari' => $tarikhDari,
+            ':tarikh_hingga' => $tarikhHingga
+        ];
+    }
 
     /*
     |--------------------------------------------------------------------------
@@ -435,6 +463,8 @@ function formatProgramReportMoney(
  */
 function prepareProgramReportFilters(array $input): array
 {
+    $yearFilter = trim((string)($input['tahun'] ?? ''));
+
     $tarikhDari = trim(
         (string)(
             $input['tarikh_dari']
@@ -471,6 +501,14 @@ function prepareProgramReportFilters(array $input): array
     );
 
     $errors = [];
+
+    if ($yearFilter !== '' && ctype_digit($yearFilter)) {
+        $year = (int)$yearFilter;
+        $tarikhDari = sprintf('%04d-01-01', $year);
+        $tarikhHingga = sprintf('%04d-12-31', $year);
+    } elseif ($yearFilter !== '') {
+        $yearFilter = '';
+    }
 
     /*
      * Tarikh tidak sah akan dikembalikan kepada default.
@@ -520,6 +558,7 @@ function prepareProgramReportFilters(array $input): array
     }
 
     return [
+        'tahun' => $yearFilter,
         'tarikh_dari' => $tarikhDari,
         'tarikh_hingga' => $tarikhHingga,
         'unit_id' => $unitFilter,
@@ -537,6 +576,8 @@ function buildProgramReportExportQuery(
     array $filters
 ): string {
     return http_build_query([
+        'tahun' =>
+            $filters['tahun'] ?? '',
         'tarikh_dari' =>
             $filters['tarikh_dari'] ?? '',
 

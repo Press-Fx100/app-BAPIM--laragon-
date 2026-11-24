@@ -134,6 +134,53 @@ if (!BPA_RENDER_IN_APP_SHELL) {
 require_once APP_ROOT . '/db_connect.php';
 require_once APP_ROOT . '/auth.php';
 
+require_once __DIR__ . '/migrations/import_program_big_data_2022_2025.php';
+require_once __DIR__ . '/migrations/remove_excluded_program_big_data_2022_2025.php';
+require_once __DIR__ . '/migrations/correct_excluded_program_big_data_2022_2025.php';
+
+try {
+    $bpaProgramImportResult = importBpaProgramBigData2022To2025($pdo);
+    if (
+        !$bpaProgramImportResult['skipped'] &&
+        ($bpaProgramImportResult['inserted'] > 0 || $bpaProgramImportResult['duplicates'] > 0)
+    ) {
+        error_log(
+            'BPA program 2022-2025 import: inserted=' .
+            $bpaProgramImportResult['inserted'] .
+            ', duplicates=' .
+            $bpaProgramImportResult['duplicates']
+        );
+    }
+} catch (Throwable $error) {
+    error_log('BPA program 2022-2025 import failed: ' . $error->getMessage());
+}
+
+try {
+    $bpaExcludedProgramCleanupResult =
+        removeExcludedBpaProgramBigData2022To2025($pdo);
+    if (!$bpaExcludedProgramCleanupResult['skipped']) {
+        error_log(
+            'BPA excluded program cleanup: deleted=' .
+            $bpaExcludedProgramCleanupResult['deleted']
+        );
+    }
+} catch (Throwable $error) {
+    error_log('BPA excluded program cleanup failed: ' . $error->getMessage());
+}
+
+try {
+    $bpaExcludedProgramCorrectionResult =
+        correctExcludedBpaProgramBigData2022To2025($pdo);
+    if (!$bpaExcludedProgramCorrectionResult['skipped']) {
+        error_log(
+            'BPA excluded program correction: restored=' .
+            $bpaExcludedProgramCorrectionResult['restored']
+        );
+    }
+} catch (Throwable $error) {
+    error_log('BPA excluded program correction failed: ' . $error->getMessage());
+}
+
 function ensureBpaSkuUnitPositionSchema(PDO $pdo): void
 {
     if (!$pdo->query("SHOW COLUMNS FROM sku_aktiviti LIKE 'sasaran_unit_position'")->fetch()) {

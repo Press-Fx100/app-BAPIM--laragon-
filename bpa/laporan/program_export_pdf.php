@@ -33,6 +33,7 @@ $tarikhHingga = $filters['tarikh_hingga'];
 $unitFilter = $filters['unit_id'];
 $statusFilter = $filters['status'];
 $q = $filters['q'];
+$tahun = $filters['tahun'];
 $errors = $filters['errors'];
 
 if ($errors) {
@@ -57,7 +58,8 @@ try {
         $tarikhHingga,
         $unitFilter,
         $statusFilter,
-        $q
+        $q,
+        $tahun
     );
 
     $summary = getProgramReportSummary($rows);

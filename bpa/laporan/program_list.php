@@ -34,6 +34,19 @@ $allowedStatus = $filters['allowed_status'];
    SENARAI UNIT
 ========================================================= */
 $units = getProgramReportUnits($pdo);
+$years = getProgramReportYears($pdo);
+$yearFilter = $filters['tahun'];
+if ($yearFilter === '' && $years) {
+    $yearFilter = (string)date('Y');
+    if (!in_array((int)$yearFilter, $years, true)) {
+        $yearFilter = (string)$years[0];
+    }
+}
+if ($yearFilter !== '') {
+    $filters['tahun'] = $yearFilter;
+    $tarikhDari = $yearFilter . '-01-01';
+    $tarikhHingga = $yearFilter . '-12-31';
+}
 
 $namaUnitDipilih = getProgramReportSelectedUnitName(
     $units,
@@ -53,7 +66,8 @@ if (!$errors) {
             $tarikhHingga,
             $unitFilter,
             $statusFilter,
-            $q
+            $q,
+            $yearFilter
         );
     } catch (Throwable $e) {
         $errors[] = 'Gagal mendapatkan laporan: '
@@ -86,23 +100,9 @@ $exportParams = buildProgramReportExportQuery($filters);
 /* =========================================================
    TAJUK TAHUN
 ========================================================= */
-$tahunMula = date(
-    'Y',
-    strtotime($tarikhDari)
-);
-
-$tahunHingga = date(
-    'Y',
-    strtotime($tarikhHingga)
-);
-
-$tajukTahun = $tahunMula;
-
-if ($tahunMula !== $tahunHingga) {
-    $tajukTahun = $tahunMula
-        . ' - '
-        . $tahunHingga;
-}
+$tajukTahun = $yearFilter !== ''
+    ? $yearFilter
+    : date('Y');
 
 /* =========================================================
    STATUS BADGE
@@ -424,8 +424,7 @@ if ($role === 'admin') {
             </h4>
 
             <small class="text-muted">
-                Senarai program disusun mengikut tarikh
-                pelaksanaan paling awal hingga paling lewat
+                Senarai program ditapis mengikut tahun
             </small>
 
         </div>
@@ -479,7 +478,7 @@ if ($role === 'admin') {
 
             <div class="program-filter-heading">
                 <h5>Carian Program</h5>
-                <p>Cari dan tapis program mengikut unit, status atau tarikh.</p>
+                <p>Cari dan tapis program mengikut tahun, unit atau status.</p>
             </div>
 
             <form
@@ -488,9 +487,6 @@ if ($role === 'admin') {
                 data-program-filter-form
                 role="search"
             >
-                <input type="hidden" name="tarikh_dari" value="<?= htmlspecialchars($tarikhDari) ?>" data-program-date-start>
-                <input type="hidden" name="tarikh_hingga" value="<?= htmlspecialchars($tarikhHingga) ?>" data-program-date-end>
-
                 <div class="search-box program-search-box">
                     <i class="bi bi-search" aria-hidden="true"></i>
                     <input
@@ -504,40 +500,16 @@ if ($role === 'admin') {
                 </div>
 
                 <div class="toolbar-group toolbar-control-cluster program-filter-group" role="group" aria-label="Penapis program">
-                    <div class="program-date-filter" data-program-date-filter
-                         data-default-start="<?= htmlspecialchars(date('Y-01-01')) ?>"
-                         data-default-end="<?= htmlspecialchars(date('Y-m-d')) ?>">
-                        <button type="button" class="toolbar-button icon-button program-date-button"
-                                aria-label="Pilih julat tarikh"
-                                aria-haspopup="dialog"
-                                aria-controls="programDateRangeMenu"
-                                aria-expanded="false">
-                            <i class="bi bi-calendar3" aria-hidden="true"></i>
-                        </button>
-                        <div id="programDateRangeMenu" class="program-date-range-menu" role="dialog" aria-label="Pilih julat tarikh program">
-                            <div class="program-date-range-heading">
-                                <strong data-program-date-preview></strong>
-                            </div>
-                            <div class="audit-calendar-header">
-                                <button type="button" class="audit-calendar-nav" data-program-month-offset="-1" aria-label="Bulan sebelumnya">
-                                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
-                                </button>
-                                <strong data-program-calendar-month></strong>
-                                <button type="button" class="audit-calendar-nav" data-program-month-offset="1" aria-label="Bulan seterusnya">
-                                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            <div class="audit-calendar-weekdays" aria-hidden="true">
-                                <span>Isn</span><span>Sel</span><span>Rab</span><span>Kha</span>
-                                <span>Jum</span><span>Sab</span><span>Aha</span>
-                            </div>
-                            <div class="program-date-range-days" data-program-calendar-days></div>
-                            <div class="program-date-range-footer">
-                                <button type="button" class="program-date-clear" data-program-date-clear>Padam</button>
-                                <button type="button" class="program-date-apply" data-program-date-apply disabled>Gunakan tempoh</button>
-                            </div>
-                        </div>
-                    </div>
+                    <label class="visually-hidden" for="programYearFilter">Tapis mengikut tahun</label>
+                    <select id="programYearFilter" name="tahun" class="program-filter-select"
+                            data-icon="bi-calendar3" data-icon-only="true" aria-label="Pilih tahun">
+                        <?php foreach ($years as $year): ?>
+                            <option value="<?= (int)$year ?>" data-icon="bi-calendar3"
+                                    <?= (string)$yearFilter === (string)$year ? 'selected' : '' ?>>
+                                <?= (int)$year ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
 
                     <?php
                         $unitIcons = [
