@@ -4420,8 +4420,7 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         cursor: pointer;
     }
     .bpa-shell-page .program-filter-card .program-filter-group .custom-select-button,
-    .bpa-shell-page .program-filter-card .program-date-button,
-    .bpa-shell-page .program-filter-card .program-filter-reset {
+    .bpa-shell-page .program-filter-card .program-date-button {
         display: inline-flex;
         height: 36px;
         min-height: 36px;
@@ -4435,8 +4434,7 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         font-size: 17px;
         transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
     }
-    .bpa-shell-page .program-filter-card .program-filter-group .custom-select-button,
-    .bpa-shell-page .program-filter-card .program-filter-reset {
+    .bpa-shell-page .program-filter-card .program-filter-group .custom-select-button {
         width: 38px;
     }
     .bpa-shell-page .program-filter-card .program-filter-group .custom-select-button > i {
@@ -4447,7 +4445,6 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
     }
     .bpa-shell-page .program-filter-card .program-filter-group .custom-select-button:hover:not(:disabled),
     .bpa-shell-page .program-filter-card .program-date-button:hover,
-    .bpa-shell-page .program-filter-card .program-filter-reset:hover,
     .bpa-shell-page .program-filter-card .program-filter-group .custom-select.show .custom-select-button,
     .bpa-shell-page .program-filter-card .program-date-button.active {
         border-color: #cbd6e6;

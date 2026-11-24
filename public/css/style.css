@@ -4203,7 +4203,11 @@ thead .row-select-cell.selection-enabled {
 
 .manage-users-page {
     display: grid;
-    gap: 18px;
+    gap: 16px;
+}
+
+.manage-users-page > .recipient-participant-title {
+    margin-bottom: 0;
 }
 
 .manage-users-layout {

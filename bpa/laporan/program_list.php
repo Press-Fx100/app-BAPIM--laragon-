@@ -551,10 +551,6 @@ if ($role === 'admin') {
                         <?php endforeach; ?>
                     </select>
 
-                    <button type="button" class="toolbar-button icon-button program-filter-reset" data-program-filter-reset
-                       title="Reset penapis" aria-label="Reset penapis">
-                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
-                    </button>
                 </div>
 
             </form>

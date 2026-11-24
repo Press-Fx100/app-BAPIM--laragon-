@@ -313,6 +313,53 @@ document.addEventListener("click", event => {
     event.stopImmediatePropagation();
 }, true);
 
+document.addEventListener("click", event => {
+    if (!(event.target instanceof Element)) return;
+    const option = event.target.closest(".custom-select-option");
+    if (option && !option.disabled) {
+        const wrapper = option.closest(".custom-select");
+        const select = wrapper?.querySelector("select");
+        if (!wrapper || !select) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        select.value = option.dataset.value || "";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+
+        const button = wrapper.querySelector(".custom-select-button");
+        if (button) {
+            button.textContent = option.textContent;
+            button.setAttribute("aria-label", `${select.getAttribute("aria-label") || "Pilih"}: ${option.textContent.trim()}`);
+        }
+        wrapper.querySelectorAll(".custom-select-option").forEach(item => {
+            item.classList.toggle("active", item === option);
+        });
+        closeCustomSelect(wrapper);
+        return;
+    }
+
+    const button = event.target.closest(".custom-select-button");
+    if (!button || button.disabled) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    const wrapper = button.closest(".custom-select");
+    if (!wrapper) return;
+
+    document.querySelectorAll(".custom-select.show").forEach(open => {
+        if (open !== wrapper) closeCustomSelect(open);
+    });
+
+    const opening = !wrapper.classList.contains("show");
+    if (opening) {
+        wrapper.classList.add("show");
+        button.setAttribute("aria-expanded", "true");
+    } else {
+        closeCustomSelect(wrapper);
+    }
+}, true);
+
 function closeCustomSelect(wrapper) {
     wrapper.classList.remove("show", "drop-up");
     wrapper.querySelector(".custom-select-button")
@@ -334,6 +381,18 @@ function closeCustomSelect(wrapper) {
     menu.style.removeProperty("width");
     menu.style.removeProperty("max-height");
     wrapper.insertBefore(menu, select);
+}
+
+function resetCustomSelects(root = document) {
+    root.querySelectorAll(".custom-select.show").forEach(closeCustomSelect);
+    root.querySelectorAll("select[data-custom-select-initialized='true']").forEach(select => {
+        const wrapper = select.closest(".custom-select");
+        if (!wrapper) return;
+        const menu = wrapper.querySelector(".custom-select-menu");
+        wrapper.classList.remove("show", "drop-up");
+        wrapper.querySelector(".custom-select-button")?.setAttribute("aria-expanded", "false");
+        menu?.classList.remove("show");
+    });
 }
 
 function positionCustomSelectPortal(menu, button) {
@@ -1095,30 +1154,25 @@ document.addEventListener("change", event => {
     control.form?.requestSubmit();
 });
 
-document.addEventListener("click", event => {
-    const resetButton = event.target instanceof Element
-        ? event.target.closest("[data-program-filter-reset]")
+document.addEventListener("change", event => {
+    const control = event.target instanceof Element
+        ? event.target.closest("#bpa-dashboard-year, #bpa-unit-dashboard-year")
         : null;
-    const form = resetButton?.closest("[data-program-filter-form]");
-    if (!resetButton || !form) return;
+    if (!control) return;
 
-    event.preventDefault();
-    window.clearTimeout(programFilterTimer);
-    form.dataset.programResetting = "true";
-    const search = form.querySelector("input[name='q']");
-    if (search) search.value = "";
-    form.querySelectorAll("select").forEach(select => {
-        if (select.name === "tahun") {
-            const currentYear = String(new Date().getFullYear());
-            const currentOption = [...select.options].find(option => option.value === currentYear);
-            select.value = currentOption ? currentYear : (select.options[0]?.value || "");
-        } else {
-            select.value = "";
+    const requestedYear = Number(control.value);
+    if (!Number.isFinite(requestedYear) || requestedYear <= 0) return;
+
+    const availableYears = (() => {
+        try {
+            return JSON.parse(control.dataset.availableYears || "[]");
+        } catch {
+            return [];
         }
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    delete form.dataset.programResetting;
-    form.requestSubmit();
+    })();
+    if (availableYears.length && !availableYears.includes(requestedYear)) return;
+
+    window.updateBpaDashboardYear?.(String(requestedYear));
 });
 
 function initializeBpaProgramListSwitcher() {
@@ -1407,7 +1461,7 @@ function animateBpaProgramListTransition(root, previousRoot) {
         previousRoot.dataset.programListUnit !== undefined;
     if (filterGroup && previousFilterGroup && !switchingBetweenUnits) {
         filterGroup.querySelectorAll(
-            ".custom-select-button, .program-date-button, .program-filter-reset"
+            ".custom-select-button, .program-date-button"
         ).forEach((button, index) => {
             animateBpaProgramListElement(
                 button,
@@ -1494,7 +1548,9 @@ function initializeBpaDashboardSwitcher() {
     const inlineDashboardScripts = [...document.querySelectorAll("script[data-bpa-page-script]")]
         .filter(script => !script.src);
     bpaDashboardScripts = inlineDashboardScripts.map(script => script.cloneNode(true));
-    bpaDashboardCache = new Map([[initialUnit === "UPP" ? "BPA" : initialUnit, {
+    const initialUrl = new URL(window.location.href);
+    const initialYear = initialUrl.searchParams.get("tahun");
+    bpaDashboardCache = new Map([[`${initialUnit === "UPP" ? "BPA" : initialUnit}:${initialYear || "default"}`, {
         markup: root.innerHTML,
         styles: bpaDashboardStyles,
         scripts: bpaDashboardScripts
@@ -1539,15 +1595,106 @@ function showBpaDashboardError(root, error) {
     root.append(alert);
 }
 
+let bpaDashboardYearController = null;
+
+async function updateBpaDashboardYear(year) {
+    const root = pageContent?.querySelector(".bpa-shell-page");
+    if (!root) return;
+
+    const unit = root.dataset.dashboardUnit
+        || new URL(window.location.href).searchParams.get("unit")
+        || "BPA";
+    const target = unit === "BPA"
+        ? window.appUrl(`/bpa/dashboard?unit=BPA&tahun=${encodeURIComponent(year)}`)
+        : window.appUrl(`/bpa/${unit.toLowerCase()}/dashboard?tahun=${encodeURIComponent(year)}`);
+
+    bpaDashboardYearController?.abort();
+    const controller = new AbortController();
+    bpaDashboardYearController = controller;
+    root.setAttribute("aria-busy", "true");
+
+    try {
+        resetCustomSelects(root);
+        const response = await fetch(target, {
+            signal: controller.signal,
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-BPA-DASHBOARD-UNIT": unit
+            }
+        });
+        if (!response.ok) {
+            throw new Error(`Dashboard tahun ${year} gagal dimuatkan (HTTP ${response.status}).`);
+        }
+
+        const parsedPage = new DOMParser().parseFromString(await response.text(), "text/html");
+        const incoming = parsedPage.querySelector("main.main-content .bpa-shell-page");
+        if (!incoming) {
+            throw new Error("Kandungan dashboard tahun baharu tidak ditemui.");
+        }
+        if (controller.signal.aborted) return;
+
+        root.querySelectorAll("canvas").forEach(canvas => {
+            const chart = window.Chart?.getChart(canvas);
+            if (chart) chart.destroy();
+        });
+
+        const scrollTop = pageContent?.scrollTop || 0;
+        root.replaceChildren(...Array.from(incoming.childNodes).map(node => node.cloneNode(true)));
+        root.dataset.dashboardUnit = unit;
+        root.dataset.dashboardInitialUnit = unit;
+
+        parsedPage.querySelectorAll("script:not([src])").forEach(script => {
+            new Function(script.textContent)();
+        });
+
+        const url = new URL(window.location.href);
+        url.searchParams.set("tahun", String(year));
+        if (unit !== "BPA") {
+            url.searchParams.set("unit", unit);
+        } else {
+            url.searchParams.delete("unit");
+        }
+        window.history.replaceState(window.history.state, "", url.href);
+
+        if (pageContent) pageContent.scrollTop = scrollTop;
+        [...(bpaDashboardCache?.keys() || [])].forEach(key => {
+            if (String(key).startsWith(`${unit}:`)) {
+                bpaDashboardCache.delete(key);
+            }
+        });
+        initializeCustomSelects();
+        animateBpaDashboardKpiNumbers(root);
+        animateBpaDashboardTitle(root);
+        animateBpaDashboardToolbarControls(root);
+        animateBpaDashboardSections(root);
+        refreshBpaDashboardCharts(root, { animate: true });
+    } catch (error) {
+        if (error.name !== "AbortError") {
+            console.error("Dashboard year update error:", error);
+            showBpaDashboardError(root, error);
+        }
+    } finally {
+        if (bpaDashboardYearController === controller) {
+            bpaDashboardYearController = null;
+            root.removeAttribute("aria-busy");
+        }
+    }
+}
+
+window.updateBpaDashboardYear = updateBpaDashboardYear;
+
 async function loadBpaDashboard(unit) {
-    const cached = bpaDashboardCache.get(unit);
+    const currentUrl = new URL(window.location.href);
+    const currentYear = currentUrl.searchParams.get("tahun");
+    const cacheKey = `${unit}:${currentYear || "default"}`;
+    const cached = bpaDashboardCache.get(cacheKey);
     if (cached) return cached;
 
     const url = unit === "UPP"
         ? window.appUrl("/upp-dashboard")
         : unit === "BPA"
-        ? window.appUrl("/bpa/dashboard?unit=BPA")
-        : window.appUrl(`/bpa/${unit.toLowerCase()}/dashboard`);
+        ? window.appUrl(`/bpa/dashboard?unit=BPA${currentYear ? `&tahun=${encodeURIComponent(currentYear)}` : ""}`)
+        : window.appUrl(`/bpa/${unit.toLowerCase()}/dashboard${currentYear ? `?tahun=${encodeURIComponent(currentYear)}` : ""}`);
     const response = await fetch(url, {
         headers: { "X-BPA-DASHBOARD-UNIT": unit }
     });
@@ -1571,13 +1718,13 @@ async function loadBpaDashboard(unit) {
             .filter(script => !script.src)
             .map(script => script.cloneNode(true))
     };
-    bpaDashboardCache.set(unit, result);
+    bpaDashboardCache.set(cacheKey, result);
     return result;
 }
 
 function animateBpaDashboardKpiNumbers(
     root,
-    selector = ".card-kpi .kpi-number, .kpi-row .kpi-number"
+    selector = ".card-kpi .kpi-number, .kpi-row .kpi-number, .summary-number, .pie-center-number"
 ) {
     const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 450 : 800;
     root.querySelectorAll(selector).forEach(element => {
@@ -1614,12 +1761,14 @@ function animateBpaDashboardKpiNumbers(
     });
 }
 
-function animateBpaDashboardSections(root) {
+function animateBpaDashboardSections(root, { skipKpiSections = false } = {}) {
     const container = root.querySelector(":scope > .container, :scope > .container-fluid");
     const titleCard = container?.querySelector(":scope > .d-flex.justify-content-between.align-items-center.mb-3");
     if (!container) return;
 
-    [...container.children].filter(section => section !== titleCard).forEach(section => {
+    [...container.children].filter(section =>
+        section !== titleCard && !(skipKpiSections && section.querySelector(".card-kpi"))
+    ).forEach(section => {
         section.classList.remove("bpa-dashboard-content-enter");
         void section.offsetWidth;
         section.classList.add("bpa-dashboard-content-enter");
@@ -1741,6 +1890,7 @@ async function selectBpaDashboard(unit, toolbar, root) {
         removeBpaPageStyles();
         result.styles.forEach(style => document.head.append(style.cloneNode(true)));
         root.innerHTML = result.markup;
+        resetCustomSelects(root);
         root.dataset.dashboardUnit = unit;
         root.classList.toggle("dashboard-page", unit === "UPP");
         root.classList.remove("bpa-upp-dashboard-no-preload");
@@ -1754,6 +1904,7 @@ async function selectBpaDashboard(unit, toolbar, root) {
             }
         }
         document.title = dashboardTitle;
+        initializeCustomSelects();
         if (unit === "UPP") {
             if (typeof window.initializeDashboard !== "function") {
                 throw new Error("Dashboard BAPIM tidak dapat dimulakan.");
@@ -1880,8 +2031,10 @@ async function selectBpaDashboard(unit, toolbar, root) {
         if (previousUnit !== unit && !isNonUppUnitTransition) {
             animateBpaDashboardToolbarControls(root);
         }
-        if (previousUnit !== unit && unit !== "UPP" && !isNonUppUnitTransition) {
-            animateBpaDashboardSections(root);
+        if (previousUnit !== unit && unit !== "UPP") {
+            animateBpaDashboardSections(root, {
+                skipKpiSections: isNonUppUnitTransition
+            });
         }
         const skuProgressHeading = [...root.querySelectorAll("h1, h2, h3, h4, h5, h6")]
             .find(heading => heading.textContent.includes("Progress SKU"));
@@ -2609,6 +2762,12 @@ async function notifyPageLoaded() {
 
 async function navigateTo(url, replace = false) {
     const target = new URL(url, window.location.origin);
+    const targetAppPath = appPathname(target.pathname);
+    if (targetAppPath !== "/bpa/dashboard") {
+        bpaDashboardCache?.clear();
+    } else if (!target.searchParams.has("tahun")) {
+        bpaDashboardCache?.clear();
+    }
     if (
         window.APP_BASE_PATH &&
         target.origin === window.location.origin &&

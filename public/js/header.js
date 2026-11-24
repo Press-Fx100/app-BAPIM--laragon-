@@ -332,6 +332,9 @@ function setupUserDropdown() {
     const accountButton =
         document.getElementById("accountButton");
 
+    const activityButton =
+        document.getElementById("activityButton");
+
     const manageUsersButton =
         document.getElementById("manageUsersButton");
 
@@ -386,6 +389,18 @@ function setupUserDropdown() {
                 window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: accountUrl } }));
             } else {
                 window.location.assign(accountUrl);
+            }
+        });
+    }
+
+    if (activityButton) {
+        activityButton.addEventListener("click", () => {
+            closeDropdown();
+            const activityUrl = typeof window.appUrl === "function" ? window.appUrl("/aktiviti-pengguna") : "/aktiviti-pengguna";
+            if (typeof window.appUrl === "function") {
+                window.dispatchEvent(new CustomEvent("app:navigate", { detail: { url: activityUrl } }));
+            } else {
+                window.location.assign(activityUrl);
             }
         });
     }

@@ -65,7 +65,6 @@ async function loadActivities() {
         earliestActivityMonth = String(
             data?.earliestActivityMonth || getEarliestProgressMonth()
         );
-        selectLatestProgressMonth();
     } catch (error) {
         console.error("Failed to load user activity:", error);
         activities = [];
@@ -104,11 +103,6 @@ function getEarliestProgressMonth() {
     return getProgressMonths()[0] || "";
 }
 
-function getLatestProgressMonth() {
-    const months = getProgressMonths();
-    return months[months.length - 1] || "";
-}
-
 function getProgressMonths() {
     return activities
         .map(normalizeActivity)
@@ -116,18 +110,6 @@ function getProgressMonths() {
         .map(activity => String(activity.createdAt).slice(0, 7))
         .filter(month => /^\d{4}-\d{2}$/.test(month))
         .sort();
-}
-
-function selectLatestProgressMonth() {
-    const latestMonth = getLatestProgressMonth();
-    const currentMonth = formatMonthKey(
-        new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    );
-
-    if (!latestMonth || latestMonth > currentMonth) return;
-
-    const [year, month] = latestMonth.split("-").map(Number);
-    chartMonth = new Date(year, month - 1, 1);
 }
 
 function getProgressActivitiesForMonth(month) {
@@ -444,6 +426,11 @@ function createChartData() {
         chartMonth.getMonth() + 1,
         0
     ).getDate();
+    const today = new Date();
+    const visibleDays = chartMonth.getFullYear() === today.getFullYear() &&
+        chartMonth.getMonth() === today.getMonth()
+        ? today.getDate()
+        : daysInMonth;
     const labels = Array.from({ length: daysInMonth }, (_, index) => {
         const date = new Date(chartMonth.getFullYear(), chartMonth.getMonth(), index + 1);
         return date.toLocaleDateString("ms-MY", {
@@ -483,9 +470,9 @@ function createChartData() {
 
             return {
                 label: username,
-                data: dailyValues.map(value => {
+                data: dailyValues.map((value, index) => {
                     cumulative += value;
-                    return cumulative;
+                    return index < visibleDays ? cumulative : null;
                 }),
                 borderColor: lineColor,
                 backgroundColor: fillColor,
@@ -520,19 +507,21 @@ function renderChart() {
     const data =
         createChartData();
 
-    const highestProgress = Math.max(
-        0,
-        ...data.datasets.flatMap(dataset =>
-            dataset.data.map(value => Number(value) || 0)
-        )
+    const progressValues = data.datasets.flatMap(dataset =>
+        dataset.data.filter(Number.isFinite)
     );
+    const lowestProgress = progressValues.length
+        ? Math.min(...progressValues)
+        : 0;
+    const highestProgress = progressValues.length
+        ? Math.max(...progressValues)
+        : 0;
+    const progressAxisPadding = highestProgress >= 10
+        ? Math.ceil(highestProgress * 0.05)
+        : 0;
     const progressAxisMaximum = Math.max(
-        25,
-        Math.ceil(highestProgress / 5) * 5
-    );
-    const progressAxisPadding = Math.max(
-        5,
-        Math.ceil(progressAxisMaximum * 0.05 / 5) * 5
+        10,
+        highestProgress + progressAxisPadding
     );
 
     if (auditChart) {
@@ -593,15 +582,14 @@ function renderChart() {
                     }
                 },
                 y: {
-                    min: -progressAxisPadding,
-                    max: progressAxisMaximum + progressAxisPadding,
+                    min: lowestProgress - 1,
+                    max: progressAxisMaximum,
                     title: {
                         display: true,
                         text: "PROGRES"
                     },
                     ticks: {
-                        stepSize: 5,
-                        callback: value => value < 0 ? "" : value
+                        callback: value => value
                     }
                 }
             }

@@ -30,14 +30,19 @@
             </button>
 
             <div class="user-dropdown-menu" id="userDropdownMenu" aria-hidden="true">
+                <button type="button" class="dropdown-item" id="accountButton" data-access-page="account">
+                    <i class="bi bi-person-gear" aria-hidden="true"></i>
+                    <span>Profil Pengguna</span>
+                </button>
+
                 <button type="button" class="dropdown-item" id="manageUsersButton" data-access-page="manageUsers" hidden>
                     <i class="bi bi-people" aria-hidden="true"></i>
                     <span>Pengurusan Pengguna</span>
                 </button>
 
-                <button type="button" class="dropdown-item" id="accountButton" data-access-page="account">
-                    <i class="bi bi-person-gear" aria-hidden="true"></i>
-                    <span>Profil Pengguna</span>
+                <button type="button" class="dropdown-item" id="activityButton" data-access-page="activity">
+                    <i class="bi bi-activity" aria-hidden="true"></i>
+                    <span>Aktiviti Pengguna</span>
                 </button>
 
                 <button type="button" class="dropdown-item logout-item" id="logoutButton">

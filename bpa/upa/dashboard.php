@@ -41,7 +41,14 @@ $years = $pdo->prepare("
 ");
 $years->execute([':uid'=>$UPA_UNIT_ID]);
 $years = array_map('intval', $years->fetchAll(PDO::FETCH_COLUMN));
-$tahun = in_array($requestedYear, $years, true) ? $requestedYear : ($years[0] ?? (int)date('Y'));
+$currentYear = (int)date('Y');
+$previousYears = array_filter($years, static fn(int $year): bool => $year < $currentYear);
+$defaultYear = in_array($currentYear, $years, true)
+    ? $currentYear
+    : (max($previousYears) ?: $currentYear);
+$tahun = $requestedYear !== null && in_array($requestedYear, $years, true)
+    ? $requestedYear
+    : $defaultYear;
 if (!$years) $years = [$tahun];
 
 // ===== Helpers =====
@@ -500,29 +507,5 @@ if ($role === 'admin') {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-(() => {
-  const yearInput = document.getElementById('bpa-unit-dashboard-year');
-  if (!yearInput) return;
-
-  yearInput.addEventListener('change', () => {
-    const availableYears = JSON.parse(yearInput.dataset.availableYears);
-    const currentYear = Number(yearInput.dataset.currentYear);
-    const requestedYear = Number(yearInput.value);
-    let nextYear = requestedYear;
-
-    if (!availableYears.includes(requestedYear)) {
-      const direction = requestedYear > currentYear ? 1 : -1;
-      const candidates = availableYears
-        .filter(year => direction > 0 ? year > currentYear : year < currentYear)
-        .sort((a, b) => direction * (a - b));
-      nextYear = candidates[0] ?? currentYear;
-    }
-
-    yearInput.value = String(nextYear);
-    if (nextYear !== currentYear) yearInput.form.submit();
-  });
-})();
-</script>
 </body>
 </html>
