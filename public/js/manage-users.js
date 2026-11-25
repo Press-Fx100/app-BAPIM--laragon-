@@ -40,6 +40,7 @@ function initializeUserManagement() {
         { key: "manageUsers", label: "Pengurusan Pengguna", editable: false }
     ];
     const bpaUnits = [
+        { code: "UPP", label: "Unit Pentadbiran dan Pemantauan" },
         { code: "UAK", label: "Unit Akademik dan Kerohanian" },
         { code: "UPU", label: "Unit Pembangunan Usahawan" },
         { code: "UPA", label: "Unit Pengurusan Agro" },

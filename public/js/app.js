@@ -340,24 +340,6 @@ document.addEventListener("click", event => {
 
     const button = event.target.closest(".custom-select-button");
     if (!button || button.disabled) return;
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    const wrapper = button.closest(".custom-select");
-    if (!wrapper) return;
-
-    document.querySelectorAll(".custom-select.show").forEach(open => {
-        if (open !== wrapper) closeCustomSelect(open);
-    });
-
-    const opening = !wrapper.classList.contains("show");
-    if (opening) {
-        wrapper.classList.add("show");
-        button.setAttribute("aria-expanded", "true");
-    } else {
-        closeCustomSelect(wrapper);
-    }
 }, true);
 
 function closeCustomSelect(wrapper) {
@@ -374,12 +356,21 @@ function closeCustomSelect(wrapper) {
     }
     if (!menu || !select) return;
     customSelectPortalMenus.delete(wrapper);
-    menu.classList.remove("custom-select-menu-portal", "recipient-add-select-menu");
+    menu.classList.remove(
+        "custom-select-menu-portal",
+        "custom-select-menu-dialog-portal",
+        "custom-select-menu-card-portal",
+        "recipient-add-select-menu"
+    );
     menu.style.removeProperty("left");
     menu.style.removeProperty("top");
     menu.style.removeProperty("bottom");
     menu.style.removeProperty("width");
     menu.style.removeProperty("max-height");
+    menu.style.removeProperty("right");
+    wrapper.closest("dialog")?.classList.remove("bpa-create-dialog--select-open");
+    wrapper.closest(".dataset-upload-card")
+        ?.classList.remove("dataset-upload-card--select-open");
     wrapper.insertBefore(menu, select);
 }
 
@@ -398,19 +389,82 @@ function resetCustomSelects(root = document) {
 function positionCustomSelectPortal(menu, button) {
     const bounds = button.getBoundingClientRect();
     const menuHeight = Math.min(260, menu.children.length * 34 + 12);
-    const dialog = button.closest("dialog");
-    const dialogBounds = dialog?.getBoundingClientRect();
-    const viewportBottom = Math.min(window.innerHeight, dialogBounds?.bottom ?? window.innerHeight);
-    const viewportTop = Math.max(0, dialogBounds?.top ?? 0);
+    const container = button.closest("dialog, .dataset-upload-card");
+    const containerBounds = container?.getBoundingClientRect();
+    const viewportBottom = Math.min(window.innerHeight, containerBounds?.bottom ?? window.innerHeight);
+    const viewportTop = Math.max(0, containerBounds?.top ?? 0);
     const availableBelow = Math.max(0, viewportBottom - bounds.bottom - 8);
     const availableAbove = Math.max(0, bounds.top - viewportTop - 8);
     const dropUp = availableBelow < menuHeight && availableAbove > availableBelow;
     const available = dropUp ? availableAbove : availableBelow;
-    menu.style.left = `${bounds.left}px`;
+    const menuLeft = container
+        ? bounds.left - containerBounds.left - container.clientLeft
+        : bounds.left;
+    const menuTop = container
+        ? bounds.bottom + 7 - containerBounds.top - container.clientTop
+        : bounds.bottom + 7;
+    menu.style.left = `${menuLeft}px`;
+    menu.style.right = "auto";
     menu.style.width = `${bounds.width}px`;
     menu.style.maxHeight = `${Math.max(60, Math.min(260, available))}px`;
-    menu.style.top = dropUp ? "auto" : `${bounds.bottom + 7}px`;
-    menu.style.bottom = dropUp ? `${window.innerHeight - bounds.top + 7}px` : "auto";
+    menu.style.top = dropUp ? "auto" : `${menuTop}px`;
+    const menuBottom = container
+        ? container.clientHeight - (bounds.top - containerBounds.top - container.clientTop) + 7
+        : window.innerHeight - bounds.top + 7;
+    menu.style.bottom = dropUp ? `${menuBottom}px` : "auto";
+}
+
+function openCustomSelect(wrapper, button) {
+    wrapper.classList.add("show");
+    button.setAttribute("aria-expanded", "true");
+
+    const menu = wrapper.querySelector(".custom-select-menu");
+    const modalRoot = wrapper.closest(
+        "#recipientAddForm, .bpa-create-dialog, .dataset-upload-card"
+    );
+    if (modalRoot && modalRoot.id !== "datasetEditOverlay") {
+        menu.classList.add("custom-select-menu-portal");
+        const dialog = button.closest("dialog");
+        const uploadCard = button.closest(".dataset-upload-card");
+        const portalRoot = dialog || uploadCard || modalRoot;
+        if (dialog) {
+            menu.classList.add("custom-select-menu-dialog-portal");
+            dialog.classList.add("bpa-create-dialog--select-open");
+        }
+        if (uploadCard) {
+            menu.classList.add("custom-select-menu-card-portal");
+            uploadCard.classList.add("dataset-upload-card--select-open");
+        }
+        if (modalRoot.id === "recipientAddForm") {
+            menu.classList.add("recipient-add-select-menu");
+        }
+        portalRoot.appendChild(menu);
+        customSelectPortalMenus.set(wrapper, menu);
+        positionCustomSelectPortal(menu, button);
+        const reposition = () => {
+            if (menu.classList.contains("custom-select-menu-portal")) {
+                positionCustomSelectPortal(menu, button);
+            }
+        };
+        customSelectPortalPositions.set(wrapper, reposition);
+        window.addEventListener("resize", reposition);
+        window.addEventListener("scroll", reposition, true);
+        return;
+    }
+
+    const card = wrapper.closest(".dataset-upload-card.dataset-add-card");
+    if (!card) return;
+    const buttonBounds = button.getBoundingClientRect();
+    const menuHeight = Math.min(260, menu.children.length * 34 + 12);
+    const availableBelow = Math.max(0, window.innerHeight - buttonBounds.bottom - 20);
+    const availableAbove = Math.max(0, buttonBounds.top - 20);
+    const dropUp = availableBelow < menuHeight && availableAbove > availableBelow;
+    const available = dropUp ? availableAbove : availableBelow;
+    wrapper.classList.toggle("drop-up", dropUp);
+    menu.style.setProperty(
+        "--custom-select-max-height",
+        `${Math.max(60, Math.min(260, available))}px`
+    );
 }
 
 function initializeCustomSelects() {
@@ -516,52 +570,16 @@ function initializeCustomSelects() {
         };
 
         button.addEventListener("click", event => {
+            event.preventDefault();
             event.stopPropagation();
             document.querySelectorAll(".custom-select.show").forEach(open => {
-                if (open !== wrapper) {
-                    closeCustomSelect(open);
-                }
+                if (open !== wrapper) closeCustomSelect(open);
             });
-            const opening = !wrapper.classList.contains("show");
-            if (!opening) {
+            if (wrapper.classList.contains("show")) {
                 closeCustomSelect(wrapper);
                 return;
             }
-            wrapper.classList.add("show");
-            button.setAttribute("aria-expanded", "true");
-            const modalRoot = wrapper.closest("#recipientAddForm, .bpa-create-dialog");
-            if (modalRoot && modalRoot.id !== "datasetEditOverlay") {
-                menu.classList.add("custom-select-menu-portal");
-                if (modalRoot.id === "recipientAddForm") {
-                    menu.classList.add("recipient-add-select-menu");
-                }
-                modalRoot.appendChild(menu);
-                customSelectPortalMenus.set(wrapper, menu);
-                positionCustomSelectPortal(menu, button);
-                const reposition = () => {
-                    if (menu.classList.contains("custom-select-menu-portal")) {
-                        positionCustomSelectPortal(menu, button);
-                    }
-                };
-                customSelectPortalPositions.set(wrapper, reposition);
-                window.addEventListener("resize", reposition);
-                window.addEventListener("scroll", reposition, true);
-            } else {
-                const card = wrapper.closest(".dataset-upload-card.dataset-add-card");
-                if (card) {
-                    const buttonBounds = button.getBoundingClientRect();
-                    const menuHeight = Math.min(260, menu.children.length * 34 + 12);
-                    const availableBelow = Math.max(0, window.innerHeight - buttonBounds.bottom - 20);
-                    const availableAbove = Math.max(0, buttonBounds.top - 20);
-                    const dropUp = availableBelow < menuHeight && availableAbove > availableBelow;
-                    const available = dropUp ? availableAbove : availableBelow;
-                    wrapper.classList.toggle("drop-up", dropUp);
-                    menu.style.setProperty(
-                        "--custom-select-max-height",
-                        `${Math.max(60, Math.min(260, available))}px`
-                    );
-                }
-            }
+            openCustomSelect(wrapper, button);
         });
 
         select.dataset.customSelectInitialized = "true";
@@ -900,6 +918,7 @@ const bpaDashboardCards = [
 ];
 const bpaProgramListCards = [
     { id: "BPA", label: "BPA", detail: "Bahagian Pembangunan Asnaf", icon: "bi-diagram-3", color: "red" },
+    { id: "UPP", label: "UPP", detail: "Unit Pentadbiran dan Pemantauan", icon: "bi-clipboard2-check", color: "teal" },
     { id: "UPU", label: "UPU", detail: "Usahawan", icon: "bi-briefcase", color: "blue" },
     { id: "ULK", label: "ULK", detail: "Latihan Kerjaya", icon: "bi-mortarboard", color: "purple" },
     { id: "UAK", label: "UAK", detail: "Agama Islam", icon: "bi-moon-stars", color: "green" },
@@ -1131,6 +1150,87 @@ document.addEventListener("change", event => {
     if (!control || control.form?.dataset.programResetting === "true") return;
     window.clearTimeout(programFilterTimer);
     control.form?.requestSubmit();
+});
+
+function getProgramReportValue(row, key) {
+    const value = Number.parseFloat(row.dataset[key] || "0");
+    return Number.isFinite(value) ? value : 0;
+}
+
+function updateProgramReportSummary(table) {
+    const rows = [...table.querySelectorAll("tbody tr[data-program-row]")];
+    const selectedRows = rows.filter(row => row.classList.contains("is-selected"));
+    const summaryRows = selectedRows.length ? selectedRows : rows;
+    const totals = summaryRows.reduce((summary, row) => {
+        summary.participants += getProgramReportValue(row, "programParticipants");
+        summary.allocation += getProgramReportValue(row, "programAllocation");
+        summary.spending += getProgramReportValue(row, "programSpending");
+        summary.wakalah += getProgramReportValue(row, "programWakalah");
+        return summary;
+    }, {
+        programs: summaryRows.length,
+        participants: 0,
+        allocation: 0,
+        spending: 0,
+        wakalah: 0
+    });
+
+    const summary = table.closest("[data-program-results]");
+    if (!summary) return;
+
+    const countFormatter = new Intl.NumberFormat("en-US", {
+        maximumFractionDigits: 0
+    });
+    const moneyFormatter = new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+    const values = {
+        programs: countFormatter.format(totals.programs),
+        participants: countFormatter.format(totals.participants),
+        allocation: `RM ${moneyFormatter.format(totals.allocation)}`,
+        spending: `RM ${moneyFormatter.format(totals.spending)}`,
+        wakalah: `RM ${moneyFormatter.format(totals.wakalah)}`
+    };
+
+    summary.querySelectorAll("[data-program-summary]").forEach(cardValue => {
+        const key = cardValue.dataset.programSummary;
+        if (Object.hasOwn(values, key)) {
+            cardValue.textContent = values[key];
+        }
+    });
+    animateBpaDashboardKpiNumbers(summary, "[data-program-summary]");
+}
+
+function toggleProgramReportRow(row) {
+    const table = row.closest("table.table-report");
+    if (!table) return;
+
+    const isSelected = !row.classList.contains("is-selected");
+    row.classList.toggle("is-selected", isSelected);
+    row.setAttribute("aria-selected", String(isSelected));
+    updateProgramReportSummary(table);
+}
+
+document.addEventListener("click", event => {
+    if (!(event.target instanceof Element)) return;
+    const row = event.target.closest("tr[data-program-row]");
+    if (!row || event.target.closest("a, button, input, select, textarea")) return;
+    toggleProgramReportRow(row);
+});
+
+document.addEventListener("keydown", event => {
+    if (!(event.target instanceof Element)) return;
+    const row = event.target.closest("tr[data-program-row]");
+    if (
+        !row ||
+        event.target !== row ||
+        (event.key !== "Enter" && event.key !== " ")
+    ) {
+        return;
+    }
+    event.preventDefault();
+    toggleProgramReportRow(row);
 });
 
 document.addEventListener("change", event => {
@@ -2411,19 +2511,19 @@ function resolveBpaPageLinks(container, baseUrl) {
 }
 
 function isBpaProgramModalPath(pathname) {
-    return /^\/bpa\/(?:uak|upu|upa|ulk)\/program_(?:view|edit)$/.test(pathname);
+    return /^\/bpa\/(?:upp|uak|upu|upa|ulk)\/program_(?:view|edit)$/.test(pathname);
 }
 
 function isBpaUnitProgramAddPath(pathname) {
-    return /^\/bpa\/(?:uak|upu|upa|ulk)\/program_add(?:\.php)?$/.test(pathname);
+    return /^\/bpa\/(?:upp|uak|upu|upa|ulk)\/program_add(?:\.php)?$/.test(pathname);
 }
 
 function getBpaUnitProgramModalMode(pathname) {
-    return pathname.match(/^\/bpa\/(?:uak|upu|upa|ulk)\/program_(add|edit|view)(?:\.php)?$/)?.[1] || "";
+    return pathname.match(/^\/bpa\/(?:upp|uak|upu|upa|ulk)\/program_(add|edit|view)(?:\.php)?$/)?.[1] || "";
 }
 
 function isBpaProgramListPath(pathname) {
-    return /^\/bpa\/(?:uak|upu|upa|ulk)\/program_list$/.test(pathname);
+    return /^\/bpa\/(?:upp|uak|upu|upa|ulk)\/program_list$/.test(pathname);
 }
 
 function closeBpaAddModal() {
@@ -2736,27 +2836,195 @@ function prepareBpaUnitProgramModal(dialog, mode) {
     if (mode === "view") {
         const cardBody = container.querySelector(".card .card-body");
         if (!cardBody) return;
-        const editLink = heading?.parentElement?.querySelector('a[href*="program_edit"]');
-        const footer = document.createElement("footer");
-        footer.className = "bpa-unit-program-modal-footer";
-        if (editLink) {
-            editLink.className = "budget-list-action budget-list-action--primary bpa-budget-save-button";
-            editLink.innerHTML = '<span class="budget-list-action-icon"><i class="bi bi-pencil" aria-hidden="true"></i></span><span>Edit</span>';
-            footer.append(editLink);
-        }
-        cardBody.classList.add("bpa-unit-program-details-content");
-        cardBody.querySelectorAll(".row").forEach(row => {
-            row.classList.add("unit-program-detail-grid");
-            row.querySelectorAll(":scope > [class*='col-']").forEach(field => {
-                field.classList.add("unit-program-detail-field");
-            });
-        });
-        cardBody.querySelectorAll(".kv").forEach(field => {
+        const title = cardBody.querySelector("h5");
+        let status = "";
+        let year = "";
+        let currentSection = "";
+        const programFields = [];
+        const financialFields = [];
+        const notesFields = [];
+        const additionalSections = new Map();
+        const normalizeLabel = label => label
+            .replace(/[:：]/g, "")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "");
+        const getFieldLabel = field => field.querySelector(".label, .k");
+        const getFieldValue = (field, label) => [...field.childNodes]
+            .filter(node => node !== label)
+            .map(node => node.textContent)
+            .join(" ")
+            .trim();
+        const addAdditionalField = field => {
             field.classList.add("unit-program-detail-field");
-        });
+            const section = currentSection || "Maklumat Tambahan";
+            if (!additionalSections.has(section)) additionalSections.set(section, []);
+            additionalSections.get(section).push(field);
+        };
+        const classifyField = field => {
+            const label = getFieldLabel(field);
+            if (!label) {
+                addAdditionalField(field);
+                return;
+            }
+
+            const fieldName = normalizeLabel(label.textContent);
+            const value = getFieldValue(field, label);
+            if (["sku", "linksku"].includes(fieldName)) {
+                field.remove();
+                return;
+            }
+            if (fieldName === "status") {
+                status = status || value;
+                field.remove();
+                return;
+            }
+            if (fieldName === "tahun") {
+                year = year || value;
+                field.remove();
+                return;
+            }
+            if (fieldName === "catatan") {
+                field.classList.add("unit-program-detail-field");
+                notesFields.push(field);
+                field.remove();
+                return;
+            }
+
+            field.classList.add("unit-program-detail-field");
+            if ([
+                "nkjkb",
+                "tarikhtempoh",
+                "tarikhkontrakasal",
+                "tempat",
+                "tempatpengajian",
+                "kerjasamakonsultan",
+                "bilpeserta",
+                "bilanganpeserta"
+            ].includes(fieldName)) {
+                programFields.push(field);
+            } else if (
+                fieldName.startsWith("peruntukan")
+                || fieldName.startsWith("perbelanjaan")
+                || fieldName.startsWith("danawakalah")
+                || fieldName.startsWith("bakibelanja")
+            ) {
+                financialFields.push(field);
+            } else {
+                addAdditionalField(field);
+            }
+            field.remove();
+        };
+
+        for (const child of [...cardBody.children]) {
+            if (child === title) continue;
+            if (child.matches("h6")) {
+                currentSection = child.textContent.trim();
+                continue;
+            }
+            if (child.matches("hr")) continue;
+
+            for (const badge of [...child.querySelectorAll(".badge")]) {
+                if (badge.classList.contains("bg-dark")) {
+                    status = status || badge.textContent.trim();
+                    badge.remove();
+                } else if (badge.classList.contains("bg-secondary")) {
+                    year = year || badge.textContent.trim().replace(/^Tahun\s*/i, "");
+                    badge.remove();
+                }
+            }
+
+            if (child.matches(".row")) {
+                for (const field of [...child.children]) classifyField(field);
+            } else if (child.textContent.trim()) {
+                classifyField(child);
+            }
+            child.remove();
+        }
+
+        const metadata = document.createElement("div");
+        metadata.className = "bpa-unit-program-detail-meta";
+        const statusColor = {
+            draft: "secondary",
+            aktif: "primary",
+            selesai: "success",
+            batal: "danger"
+        }[status.trim().toLowerCase()] || "secondary";
+        if (status) {
+            const statusBadge = document.createElement("span");
+            statusBadge.className = `status-badge bg-${statusColor}`;
+            statusBadge.textContent = status;
+            metadata.append(statusBadge);
+        }
+        if (year) {
+            const yearBadge = document.createElement("span");
+            yearBadge.className = "badge bpa-unit-program-detail-year-badge";
+            yearBadge.textContent = `Tahun ${year}`;
+            metadata.append(yearBadge);
+        }
+
+        const createSection = (heading, iconName) => {
+            const section = document.createElement("section");
+            section.className = "bpa-unit-program-detail-section";
+            const sectionHeading = document.createElement("h6");
+            sectionHeading.className = "bpa-unit-program-detail-section-title";
+            const icon = document.createElement("span");
+            icon.className = "bpa-unit-program-detail-section-icon";
+            icon.setAttribute("aria-hidden", "true");
+            icon.innerHTML = `<i class="bi ${iconName}"></i>`;
+            const headingText = document.createElement("span");
+            headingText.textContent = heading;
+            sectionHeading.append(icon, headingText);
+            section.append(sectionHeading);
+            return section;
+        };
+        const createFieldGrid = fields => {
+            const grid = document.createElement("div");
+            grid.className = "unit-program-detail-grid";
+            grid.append(...fields);
+            return grid;
+        };
+
+        cardBody.replaceChildren();
+        const hero = document.createElement("div");
+        hero.className = "bpa-unit-program-detail-hero";
+        if (status) hero.classList.add(`bpa-unit-program-detail-hero--${statusColor}`);
+        if (title) hero.append(title);
+        if (status || year) hero.append(metadata);
+        cardBody.append(hero);
+
+        if (programFields.length) {
+            const section = createSection("Maklumat Program", "bi-card-text");
+            section.append(createFieldGrid(programFields));
+            cardBody.append(section);
+        }
+        if (financialFields.length) {
+            const section = createSection("Maklumat Kewangan", "bi-cash-stack");
+            section.append(createFieldGrid(financialFields));
+            cardBody.append(section);
+        }
+        if (additionalSections.size) {
+            const section = createSection("Maklumat Tambahan", "bi-info-circle");
+            for (const [heading, fields] of additionalSections) {
+                if (heading !== "Maklumat Tambahan") {
+                    const sectionTitle = document.createElement("h6");
+                    sectionTitle.className = "bpa-unit-program-detail-subheading";
+                    sectionTitle.textContent = heading;
+                    section.append(sectionTitle);
+                }
+                section.append(createFieldGrid(fields));
+            }
+            cardBody.append(section);
+        }
+        if (notesFields.length) {
+            const section = createSection("Catatan", "bi-chat-left-text");
+            section.append(createFieldGrid(notesFields));
+            cardBody.append(section);
+        }
+
+        cardBody.classList.add("bpa-unit-program-details-content");
         body.replaceChildren(...alerts, cardBody);
         dialog.querySelector(".bpa-unit-program-modal-footer")?.remove();
-        dialog.append(footer);
         dialog.classList.add("bpa-create-dialog--unit-program-details");
         return;
     }
@@ -2766,8 +3034,110 @@ function prepareBpaUnitProgramModal(dialog, mode) {
     const actionRow = submitButton?.closest(".col-12");
     actionRow?.remove();
 
+    const formSections = [
+        { key: "program", title: "Maklumat Program", icon: "bi-card-text", fields: [] },
+        { key: "implementation", title: "Pelaksanaan Program", icon: "bi-calendar2-week", fields: [] },
+        { key: "participants", title: "Maklumat Peserta", icon: "bi-people", fields: [] },
+        { key: "finance", title: "Maklumat Kewangan", icon: "bi-cash-stack", fields: [] },
+        { key: "status", title: "Status & Catatan", icon: "bi-clipboard-check", fields: [] },
+        { key: "additional", title: "Maklumat Tambahan", icon: "bi-info-circle", fields: [] }
+    ];
+    const sectionsByKey = new Map(formSections.map(section => [section.key, section]));
+    const normalizeFieldName = value => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const classifyFormField = (field, control) => {
+        const name = normalizeFieldName(control?.name || "");
+        const label = normalizeFieldName(
+            field.querySelector(".form-label, label")?.textContent?.trim() || ""
+        );
+        if (name === "tahun" || name === "namaprogram" || name === "nkjkb") return "program";
+        if (name === "status" || name === "catatan") return "status";
+        if (
+            name.includes("peruntukan")
+            || name.includes("perbelanjaan")
+            || name.includes("danawakalah")
+            || name.includes("bakibelanja")
+            || label.includes("peruntukan")
+            || label.includes("perbelanjaan")
+            || label.includes("wakalah")
+            || label.includes("bakibelanja")
+        ) return "finance";
+        if (
+            name.includes("peserta")
+            || name.includes("kuota")
+            || name.includes("sektor")
+            || name.includes("siribatch")
+            || name.includes("jumlahsediaada")
+            || label.includes("peserta")
+            || label.includes("kuota")
+            || label.includes("sektor")
+            || label.includes("batch")
+        ) return "participants";
+        if (
+            name.startsWith("tarikh")
+            || name.includes("tempoh")
+            || name === "tempat"
+            || name === "tempatpengajian"
+            || name.includes("kerjasama")
+            || label.includes("tarikh")
+            || label.includes("tempoh")
+            || label.includes("tempat")
+            || label.includes("kerjasama")
+        ) return "implementation";
+        return "additional";
+    };
+    const hiddenFormElements = [];
+    for (const child of [...form.children]) {
+        const controls = [...child.querySelectorAll("input, select, textarea")];
+        const hasVisibleControl = controls.some(control => control.type !== "hidden");
+        if (hasVisibleControl) {
+            child.classList.add("bpa-unit-program-form-field");
+            if (child.querySelector("textarea")) child.classList.add("bpa-unit-program-form-field--wide");
+            if (child.querySelector('[name="nama_program"], [name="sektor_perniagaan_peserta"]')) {
+                child.classList.add("bpa-unit-program-form-field--wide");
+            }
+            sectionsByKey.get(classifyFormField(child, controls.find(control => control.type !== "hidden"))).fields.push(child);
+            child.remove();
+            continue;
+        }
+
+        if (controls.length || child.matches('input[type="hidden"]')) {
+            hiddenFormElements.push(child);
+        } else if (
+            child.matches("hr, p, .w-100")
+            || (child.matches('[class*="col-"]') && child.querySelector("h1, h2, h3, h4, h5, h6"))
+        ) {
+            child.remove();
+        } else if (child.textContent.trim()) {
+            sectionsByKey.get("additional").fields.push(child);
+            child.remove();
+        }
+    }
+
+    const sectionElements = formSections
+        .filter(section => section.fields.length)
+        .map(section => {
+            const sectionElement = document.createElement("section");
+            sectionElement.className = "bpa-unit-program-form-section";
+            const heading = document.createElement("h6");
+            heading.className = "bpa-unit-program-form-section-title";
+            const icon = document.createElement("span");
+            icon.className = "bpa-unit-program-form-section-icon";
+            icon.setAttribute("aria-hidden", "true");
+            icon.innerHTML = `<i class="bi ${section.icon}"></i>`;
+            const title = document.createElement("span");
+            title.textContent = section.title;
+            heading.append(icon, title);
+            const grid = document.createElement("div");
+            grid.className = "bpa-unit-program-form-grid";
+            grid.append(...section.fields);
+            sectionElement.append(heading, grid);
+            return sectionElement;
+        });
+
     form.id = `bpa-unit-program-${mode}-form`;
-    form.classList.add("bpa-unit-program-add-form");
+    form.classList.remove("row", "g-3");
+    form.classList.add("bpa-unit-program-add-form", "bpa-unit-program-form");
+    form.replaceChildren(...hiddenFormElements, ...sectionElements);
     const footer = document.createElement("footer");
     footer.className = "bpa-unit-program-modal-footer";
     const saveButton = document.createElement("button");
@@ -2935,14 +3305,17 @@ async function openBpaAddModal(url, trigger) {
         "/bpa/admin/bajet_edit": "Edit Bajet",
         "/bpa/admin/sku_add": "Tambah SKU",
         "/bpa/admin/sku_edit": "Edit SKU",
+        "/bpa/upp/program_add": "Tambah Program UPP",
         "/bpa/uak/program_add": "Tambah Program UAK",
         "/bpa/upu/program_add": "Tambah Program UPU",
         "/bpa/upa/program_add": "Tambah Program UPA",
         "/bpa/ulk/program_add": "Tambah Program ULK",
+        "/bpa/upp/program_view": "Detail Program UPP",
         "/bpa/uak/program_view": "Detail Program UAK",
         "/bpa/upu/program_view": "Detail Program UPU",
         "/bpa/upa/program_view": "Detail Program UPA",
         "/bpa/ulk/program_view": "Detail Program ULK",
+        "/bpa/upp/program_edit": "Edit Program UPP",
         "/bpa/uak/program_edit": "Edit Program UAK",
         "/bpa/upu/program_edit": "Edit Program UPU",
         "/bpa/upa/program_edit": "Edit Program UPA",
@@ -3128,7 +3501,7 @@ async function navigateTo(url, replace = false) {
             target.searchParams.set("unit", unitDashboard[1].toUpperCase());
             targetPathname = "/bpa/dashboard";
         } else {
-            const unitProgramList = targetPathname.match(/^\/bpa\/(uak|upu|upa|ulk)\/program_list$/i);
+            const unitProgramList = targetPathname.match(/^\/bpa\/(upp|uak|upu|upa|ulk)\/program_list$/i);
             if (unitProgramList) {
                 target.pathname = window.appUrl("/bpa/laporan/program_list");
                 target.searchParams.set("unit", unitProgramList[1].toUpperCase());

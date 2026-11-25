@@ -34,16 +34,6 @@ $ok  = '';
 $tahun = (int)($_GET['tahun'] ?? date('Y'));
 if ($tahun < 2000 || $tahun > 2100) $tahun = (int)date('Y');
 
-// SKU list ikut tahun
-$stmtSku = $pdo->prepare("
-    SELECT sku_aktiviti_id, bil, nama_aktiviti
-    FROM sku_aktiviti
-    WHERE tahun = :tahun
-    ORDER BY bil ASC
-");
-$stmtSku->execute([':tahun' => $tahun]);
-$skuList = $stmtSku->fetchAll(PDO::FETCH_ASSOC);
-
 // default form values
 $form = [
   'tahun' => $tahun,
@@ -60,7 +50,6 @@ $form = [
   'peruntukan_rm' => 0,
   'perbelanjaan_rm' => 0,
   'dana_wakalah_rm' => 0,
-  'sku_aktiviti_id' => '',
   'status' => 'draft',
   'catatan' => '',
 ];
@@ -101,9 +90,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $catatan = trim($form['catatan']);
 
-    $sku_raw = $form['sku_aktiviti_id'] ?? '';
-    $sku_aktiviti_id = ($sku_raw === '' ? null : (ctype_digit($sku_raw) ? (int)$sku_raw : null));
-
     // ===== validation =====
     if ($nama_program === '') $err = "Nama program wajib diisi.";
 
@@ -133,13 +119,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    tempat, kerjasama_konsultan, bil_peserta,
                    peruntukan_rm, perbelanjaan_rm, dana_wakalah_rm, status, catatan)
                 VALUES
-                  (:unit_id, :sku_aktiviti_id, :tahun, :nama_program, :nk_jkb, :tarikh_mula, :tarikh_tamat, :tempoh_kontrak,
+                  (:unit_id, NULL, :tahun, :nama_program, :nk_jkb, :tarikh_mula, :tarikh_tamat, :tempoh_kontrak,
                    :tempat, :kerjasama, :bil_peserta,
                    :peruntukan, :perbelanjaan, :wakalah, :status, :catatan)
             ");
             $stmt1->execute([
                 ':unit_id' => $upa_id,
-                ':sku_aktiviti_id' => $sku_aktiviti_id,
                 ':tahun' => $tahun,
                 ':nama_program' => $nama_program,
                 ':nk_jkb' => ($nk_jkb===''?null:$nk_jkb),
@@ -192,9 +177,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // refresh sku list bila tahun berubah
-    $stmtSku->execute([':tahun' => $tahun]);
-    $skuList = $stmtSku->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
@@ -330,18 +312,6 @@ if ($role === 'editor') {
           <label class="form-label">Dana Wakalah (RM)</label>
           <input type="number" step="0.01" name="dana_wakalah_rm" class="form-control"
                  value="<?= htmlspecialchars($form['dana_wakalah_rm']) ?>">
-        </div>
-
-        <div class="col-md-6">
-          <label class="form-label">Link ke SKU Aktiviti (optional)</label>
-          <select name="sku_aktiviti_id" class="form-select">
-            <option value="">-- Luar SKU (tidak dikira) --</option>
-            <?php foreach ($skuList as $s): ?>
-              <option value="<?= (int)$s['sku_aktiviti_id'] ?>" <?= ((string)$form['sku_aktiviti_id']===(string)$s['sku_aktiviti_id'])?'selected':'' ?>>
-                [<?= (int)$s['bil'] ?>] <?= htmlspecialchars(mb_strimwidth($s['nama_aktiviti'],0,90,'...')) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
         </div>
 
         <div class="col-12">

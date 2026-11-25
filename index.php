@@ -134,6 +134,7 @@ function defaultPagePermissions(int $accessLevel, string $unit = ''): array
         'bpaSku' => ['access' => $accessLevel <= 1, 'edit' => $editable],
         'bpaPrograms' => ['access' => false, 'edit' => false],
         'bpaProgramsBPA' => ['access' => $accessLevel <= 1, 'edit' => false],
+        'bpaProgramsUPP' => ['access' => $accessLevel <= 1 || $unit === 'UPP', 'edit' => $editable || $unit === 'UPP'],
         'bpaProgramsUAK' => ['access' => $accessLevel <= 1 || $unit === 'UAK', 'edit' => $editable || $unit === 'UAK'],
         'bpaProgramsUPU' => ['access' => $accessLevel <= 1 || $unit === 'UPU', 'edit' => $editable || $unit === 'UPU'],
         'bpaProgramsUPA' => ['access' => $accessLevel <= 1 || $unit === 'UPA', 'edit' => $editable || $unit === 'UPA'],
@@ -147,6 +148,7 @@ function defaultPagePermissions(int $accessLevel, string $unit = ''): array
         || $permissions['bpaDashboardUPA']['access']
         || $permissions['bpaDashboardULK']['access'];
     $permissions['bpaPrograms']['access'] = $permissions['bpaProgramsBPA']['access']
+        || $permissions['bpaProgramsUPP']['access']
         || $permissions['bpaProgramsUAK']['access']
         || $permissions['bpaProgramsUPU']['access']
         || $permissions['bpaProgramsUPA']['access']
@@ -190,7 +192,7 @@ function userPagePermissions(array $user): array
                 : (is_array($stored['bpa'] ?? null) ? $stored['bpa'] : null);
             $unitCodes = $section === 'bpaDashboard'
                 ? ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK']
-                : ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+                : ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
             foreach ($unitCodes as $unitCode) {
                 $child = $section . $unitCode;
                 if ($section === 'bpaDashboard' && $unitCode === 'UPP') {
@@ -211,7 +213,7 @@ function userPagePermissions(array $user): array
         $permissions[$section]['access'] = false;
         $unitCodes = $section === 'bpaDashboard'
             ? ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK']
-            : ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+            : ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
         foreach ($unitCodes as $unitCode) {
             $permissions[$section]['access'] = $permissions[$section]['access']
                 || $permissions[$section . $unitCode]['access'];
@@ -248,7 +250,7 @@ function normalizeSubmittedPagePermissions(
             : ($fallback[$page] ?? []);
         if (in_array($page, [
             'bpaDashboardBPA', 'bpaDashboardUPP', 'bpaDashboardUAK', 'bpaDashboardUPU', 'bpaDashboardUPA', 'bpaDashboardULK',
-            'bpaProgramsBPA', 'bpaProgramsUAK', 'bpaProgramsUPU', 'bpaProgramsUPA', 'bpaProgramsULK',
+            'bpaProgramsBPA', 'bpaProgramsUPP', 'bpaProgramsUAK', 'bpaProgramsUPU', 'bpaProgramsUPA', 'bpaProgramsULK',
         ], true) && !isset($provided['access'])) {
             $section = str_starts_with($page, 'bpaDashboard') ? 'bpaDashboard' : 'bpaPrograms';
             $legacy = is_array($submitted) ? ($submitted[$section] ?? null) : null;
@@ -283,7 +285,7 @@ function normalizeSubmittedPagePermissions(
         $normalized[$section]['access'] = false;
         $unitCodes = $section === 'bpaDashboard'
             ? ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK']
-            : ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+            : ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
         foreach ($unitCodes as $unitCode) {
             $normalized[$section]['access'] = $normalized[$section]['access']
                 || $normalized[$section . $unitCode]['access'];
@@ -306,7 +308,7 @@ function deriveAccessLevelFromPermissions(array $permissions, int $requestedLeve
     }
     $unitCode = strtoupper(trim($unit));
     $unitProgramKey = 'bpaPrograms' . $unitCode;
-    $hasOnlyAssignedUnitProgramEdit = in_array($unitCode, ['UAK', 'UPU', 'UPA', 'ULK'], true)
+    $hasOnlyAssignedUnitProgramEdit = in_array($unitCode, ['UPP', 'UAK', 'UPU', 'UPA', 'ULK'], true)
         && !empty($permissions[$unitProgramKey]['access'])
         && !empty($permissions[$unitProgramKey]['edit']);
     if ($hasOnlyAssignedUnitProgramEdit) {
@@ -366,12 +368,12 @@ function requiredBpaPageForPath(string $path, ?PDO $pdo = null): string
     if (preg_match('#^/bpa/admin/sku(?:_|/|\\.|$)#i', $route)) {
         return 'bpaSku';
     }
-    if (preg_match('#^/bpa/(uak|upu|upa|ulk)/program_#i', $route, $match)) {
+    if (preg_match('#^/bpa/(upp|uak|upu|upa|ulk)/program_#i', $route, $match)) {
         return 'bpaPrograms' . strtoupper($match[1]);
     }
     if (preg_match('#^/bpa/laporan/program_list(?:\\.php)?$#i', $route)) {
         $unit = strtoupper((string)($_GET['unit'] ?? $_SERVER['HTTP_X_BPA_PROGRAM_LIST_UNIT'] ?? ''));
-        return in_array($unit, ['UAK', 'UPU', 'UPA', 'ULK'], true)
+        return in_array($unit, ['UPP', 'UAK', 'UPU', 'UPA', 'ULK'], true)
             ? 'bpaPrograms' . $unit
             : ($unit === 'BPA' ? 'bpaProgramsBPA' : 'bpaPrograms');
     }
@@ -385,7 +387,7 @@ function requiredBpaPageForPath(string $path, ?PDO $pdo = null): string
                 $unit = (string)($statement->fetchColumn() ?: '');
             }
         }
-        return in_array($unit, ['UAK', 'UPU', 'UPA', 'ULK'], true)
+        return in_array($unit, ['UPP', 'UAK', 'UPU', 'UPA', 'ULK'], true)
             ? 'bpaPrograms' . $unit
             : 'bpaProgramsBPA';
     }
@@ -1711,7 +1713,7 @@ if (preg_match('#^(/bpa/.+)\.php$#i', $path, $extensionPath)
         }
         $queryParameters['unit'] = strtoupper($unitDashboard[1]);
         $query = http_build_query($queryParameters);
-    } elseif (preg_match('#^/bpa/(uak|upu|upa|ulk)/program_list$#i', $cleanPath, $unitProgramList)) {
+    } elseif (preg_match('#^/bpa/(upp|uak|upu|upa|ulk)/program_list$#i', $cleanPath, $unitProgramList)) {
         $cleanPath = '/bpa/laporan/program_list';
         $queryParameters = [];
         if (is_string($query)) {
@@ -1745,7 +1747,7 @@ if (preg_match('#^/bpa/(uak|upu|upa|ulk)/dashboard$#i', $path, $unitDashboard)
     header('Location: ' . $location, true, 302);
     exit;
 }
-if (preg_match('#^/bpa/(uak|upu|upa|ulk)/program_list$#i', $path, $unitProgramList)
+if (preg_match('#^/bpa/(upp|uak|upu|upa|ulk)/program_list$#i', $path, $unitProgramList)
     && !isset($_SERVER['HTTP_X_BPA_PROGRAM_LIST_UNIT'])
     && in_array($method, ['GET', 'HEAD'], true)) {
     $queryParameters = [];
@@ -1872,7 +1874,7 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
     $bpaInitialProgramUnit = null;
     if ($isUnifiedBpaProgramList) {
         $requestedUnit = strtoupper((string)($_GET['unit'] ?? $_SERVER['HTTP_X_BPA_PROGRAM_LIST_UNIT'] ?? ''));
-        $programUnits = ['BPA', 'UAK', 'UPU', 'UPA', 'ULK'];
+        $programUnits = ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
         $bpaInitialProgramUnit = in_array($requestedUnit, $programUnits, true) ? $requestedUnit : null;
         if ($bpaInitialProgramUnit === null) {
             foreach ($programUnits as $unitCode) {
@@ -1893,7 +1895,7 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         ? 'bpaPrograms' . $bpaInitialProgramUnit
         : $requiredBpaPermission;
     $bpaCanEdit = (bool)(userPagePermissions($user)[$effectiveBpaPermission]['edit'] ?? false);
-    if (preg_match('#^/bpa/(uak|upu|upa|ulk)/program_edit(?:\\.php)?$#i', $path) && !$bpaCanEdit) {
+    if (preg_match('#^/bpa/(upp|uak|upu|upa|ulk)/program_edit(?:\\.php)?$#i', $path) && !$bpaCanEdit) {
         http_response_code(403);
         echo 'Anda tidak mempunyai kebenaran untuk menyunting program.';
         exit;
@@ -1924,7 +1926,7 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
     $bpaUnitDescriptions = [];
     if ($isUnifiedBpaDashboard || $isUnifiedBpaProgramList) {
         $unitDescriptions = $pdo->query(
-            "SELECT nama_unit, keterangan FROM unit WHERE nama_unit IN ('UAK', 'UPU', 'UPA', 'ULK')"
+            "SELECT nama_unit, keterangan FROM unit WHERE nama_unit IN ('UPP', 'UAK', 'UPU', 'UPA', 'ULK')"
         )->fetchAll(PDO::FETCH_KEY_PAIR);
         foreach ($unitDescriptions as $unitCode => $description) {
             $bpaUnitDescriptions[strtoupper((string)$unitCode)] = (string)$description;

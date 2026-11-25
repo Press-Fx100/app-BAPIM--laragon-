@@ -137,6 +137,7 @@ require_once APP_ROOT . '/auth.php';
 require_once __DIR__ . '/migrations/import_program_big_data_2022_2025.php';
 require_once __DIR__ . '/migrations/remove_excluded_program_big_data_2022_2025.php';
 require_once __DIR__ . '/migrations/correct_excluded_program_big_data_2022_2025.php';
+require_once __DIR__ . '/migrations/add_upp_unit.php';
 
 try {
     $bpaProgramImportResult = importBpaProgramBigData2022To2025($pdo);
@@ -179,6 +180,14 @@ try {
     }
 } catch (Throwable $error) {
     error_log('BPA excluded program correction failed: ' . $error->getMessage());
+}
+
+try {
+    if (addBpaUppUnit($pdo)) {
+        error_log('BPA UPP unit added to the unit table.');
+    }
+} catch (Throwable $error) {
+    error_log('BPA UPP unit migration failed: ' . $error->getMessage());
 }
 
 function ensureBpaSkuUnitPositionSchema(PDO $pdo): void

@@ -176,7 +176,7 @@ if ($role === 'editor') {
 
       <hr>
 
-      <h6 class="fw-bold mb-2">📌 Maklumat Kemasukan</h6>
+      <h6 class="fw-bold mb-2">Maklumat Kemasukan</h6>
       <div class="row g-3">
         <div class="col-md-3 kv">
           <div class="k">Siri / Batch</div>

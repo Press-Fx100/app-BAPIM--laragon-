@@ -183,7 +183,7 @@ function reportStatusBadge($status): string
         }
 
         .table-report {
-            min-width: 1850px;
+            min-width: 1040px;
             table-layout: fixed;
             border-collapse: separate;
             border-spacing: 0;
@@ -230,6 +230,26 @@ function reportStatusBadge($status): string
             background-color: #eef4ff !important;
         }
 
+        .table-report tbody tr.program-report-row {
+            cursor: pointer;
+        }
+
+        .bpa-shell-page [data-bpa-list-page="program"] table.table-report tbody tr.program-report-row.is-selected td,
+        .bpa-shell-page [data-bpa-list-page="program"] table.table-report tbody tr.program-report-row.is-selected:nth-child(even) td,
+        .bpa-shell-page [data-bpa-list-page="program"] table.table-report tbody tr.program-report-row.is-selected:hover td {
+            background-color: #c7d2fe !important;
+            color: #172554 !important;
+        }
+
+        .bpa-shell-page [data-bpa-list-page="program"] table.table-report tbody tr.program-report-row.is-selected td:first-child {
+            border-left: 4px solid #4f46e5 !important;
+        }
+
+        .table-report tbody tr.program-report-row:focus-visible {
+            outline: 2px solid #4f6df5;
+            outline-offset: -2px;
+        }
+
         .report-table-wrapper {
             max-height: 650px;
             border: 1px solid #e5e7eb;
@@ -258,35 +278,38 @@ function reportStatusBadge($status): string
         }
 
         .col-program {
-            width: 310px;
-        }
-
-        .col-nk {
-            width: 105px;
-        }
-
-        .col-tarikh {
-            width: 180px;
-        }
-
-        .col-tempat {
-            width: 180px;
-        }
-
-        .col-kerjasama {
-            width: 175px;
+            width: 300px;
         }
 
         .col-peserta {
-            width: 100px;
+            width: 95px;
         }
 
         .col-wang {
-            width: 135px;
+            width: 140px;
         }
 
-        .col-catatan {
-            width: 92px;
+        .col-action {
+            width: 70px;
+        }
+
+        .program-detail-action {
+            display: inline-grid;
+            width: 32px;
+            height: 32px;
+            place-items: center;
+            border: 1px solid #dbe3ee;
+            border-radius: 9px;
+            color: #53647a;
+            background: #fff;
+            text-decoration: none;
+            transition: background .15s ease, border-color .15s ease, color .15s ease;
+        }
+
+        .program-detail-action:hover {
+            border-color: #aabcf9;
+            background: #edf3ff;
+            color: #4f6df5;
         }
 
         .summary-card {
@@ -513,6 +536,7 @@ if ($role === 'admin') {
 
                     <?php
                         $unitIcons = [
+                            'UPP' => 'bi-clipboard2-check',
                             'UAK' => 'bi-moon-stars',
                             'UPU' => 'bi-briefcase',
                             'ULK' => 'bi-mortarboard',
@@ -575,7 +599,7 @@ if ($role === 'admin') {
                         Jumlah Program
                     </small>
 
-                    <div class="summary-number">
+                    <div class="summary-number" data-program-summary="programs">
                         <?= number_format($jumlahProgram) ?>
                     </div>
 
@@ -597,7 +621,7 @@ if ($role === 'admin') {
                         Jumlah Peserta
                     </small>
 
-                    <div class="summary-number">
+                    <div class="summary-number" data-program-summary="participants">
                         <?= number_format($jumlahPeserta) ?>
                     </div>
 
@@ -619,7 +643,7 @@ if ($role === 'admin') {
                         Jumlah Peruntukan
                     </small>
 
-                    <div class="summary-number">
+                    <div class="summary-number" data-program-summary="allocation">
                         RM <?= number_format(
                             $jumlahPeruntukan,
                             2
@@ -644,7 +668,7 @@ if ($role === 'admin') {
                         Jumlah Perbelanjaan
                     </small>
 
-                    <div class="summary-number">
+                    <div class="summary-number" data-program-summary="spending">
                         RM <?= number_format(
                             $jumlahPerbelanjaan,
                             2
@@ -669,7 +693,7 @@ if ($role === 'admin') {
                         Dana Wakalah
                     </small>
 
-                    <div class="summary-number">
+                    <div class="summary-number" data-program-summary="wakalah">
                         RM <?= number_format(
                             $jumlahDanaWakalah,
                             2
@@ -730,24 +754,8 @@ if ($role === 'admin') {
                                 PROGRAM
                             </th>
 
-                            <th class="col-nk">
-                                NK / JKB
-                            </th>
-
-                            <th class="col-tarikh">
-                                TARIKH PELAKSANAAN / TEMPOH
-                            </th>
-
-                            <th class="col-tempat">
-                                TEMPAT
-                            </th>
-
-                            <th class="col-kerjasama">
-                                KERJASAMA / KONSULTAN
-                            </th>
-
                             <th class="col-peserta">
-                                BIL. PESERTA
+                                PESERTA
                             </th>
 
                             <th class="col-wang">
@@ -762,7 +770,7 @@ if ($role === 'admin') {
                                 DANA WAKALAH
                             </th>
 
-                            <th class="col-catatan" aria-label="Catatan"></th>
+                            <th class="col-action" aria-label="Tindakan"></th>
 
                         </tr>
 
@@ -775,7 +783,7 @@ if ($role === 'admin') {
                         <tr>
 
                             <td
-                                colspan="12"
+                                colspan="8"
                                 class="text-center text-muted py-4"
                             >
                                 Tiada program dijumpai
@@ -788,7 +796,16 @@ if ($role === 'admin') {
 
                         <?php foreach ($rows as $index => $row): ?>
 
-                            <tr>
+                            <tr
+                                class="program-report-row"
+                                data-program-row
+                                data-program-participants="<?= (int)($row['bil_peserta_paparan'] ?? 0) ?>"
+                                data-program-allocation="<?= number_format((float)($row['peruntukan_rm'] ?? 0), 2, '.', '') ?>"
+                                data-program-spending="<?= number_format((float)($row['perbelanjaan_rm'] ?? 0), 2, '.', '') ?>"
+                                data-program-wakalah="<?= number_format((float)($row['dana_wakalah_rm'] ?? 0), 2, '.', '') ?>"
+                                tabindex="0"
+                                aria-selected="false"
+                            >
 
                                 <td class="center">
 
@@ -838,60 +855,6 @@ if ($role === 'admin') {
 
                                 <td class="center">
 
-                                    <?= htmlspecialchars(
-                                        formatProgramReportText(
-                                            $row['nk_jkb']
-                                                ?? null
-                                        )
-                                    ) ?>
-
-                                </td>
-
-                                <td class="center">
-
-                                    <?= htmlspecialchars(
-                                        formatProgramReportDate(
-                                            $row['tarikh_paparan_mula']
-                                                ?? null,
-
-                                            $row['tarikh_paparan_tamat']
-                                                ?? null,
-
-                                            $row['tempoh_paparan']
-                                                ?? null
-                                        )
-                                    ) ?>
-
-                                </td>
-
-                                <td>
-
-                                    <?= nl2br(
-                                        htmlspecialchars(
-                                            formatProgramReportText(
-                                                $row['tempat_paparan']
-                                                    ?? null
-                                            )
-                                        )
-                                    ) ?>
-
-                                </td>
-
-                                <td>
-
-                                    <?= nl2br(
-                                        htmlspecialchars(
-                                            formatProgramReportText(
-                                                $row['kerjasama_konsultan']
-                                                    ?? null
-                                            )
-                                        )
-                                    ) ?>
-
-                                </td>
-
-                                <td class="center">
-
                                     <?= number_format(
                                         (int)(
                                             $row['bil_peserta_paparan']
@@ -903,119 +866,41 @@ if ($role === 'admin') {
 
                                 <td class="money">
 
-                                    <?= htmlspecialchars(
-                                        formatProgramReportMoney(
-                                            $row['peruntukan_rm']
-                                                ?? 0
-                                        )
-                                    ) ?>
+                                    <?= htmlspecialchars(number_format((float)($row['peruntukan_rm'] ?? 0), 2)) ?>
 
                                 </td>
 
                                 <td class="money">
 
-                                    <?= htmlspecialchars(
-                                        formatProgramReportMoney(
-                                            $row['perbelanjaan_rm']
-                                                ?? 0
-                                        )
-                                    ) ?>
+                                    <?= htmlspecialchars(number_format((float)($row['perbelanjaan_rm'] ?? 0), 2)) ?>
 
                                 </td>
 
                                 <td class="money">
 
-                                    <?= htmlspecialchars(
-                                        formatProgramReportMoney(
-                                            $row['dana_wakalah_rm']
-                                                ?? null,
-                                            false
-                                        )
-                                    ) ?>
+                                    <?= htmlspecialchars(number_format((float)($row['dana_wakalah_rm'] ?? 0), 2)) ?>
 
                                 </td>
 
-                                <td class="text-end col-catatan">
+                                <td class="center col-action">
                                     <?php
-                                    $catatan = trim((string)($row['catatan'] ?? ''));
-                                    if ($catatan !== ''):
-                                        $noteDialogId = 'program-note-dialog-' . (int)$row['program_id'];
+                                    $unitCode = strtoupper(trim((string)($row['nama_unit'] ?? '')));
+                                    $programViewUnits = ['UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
+                                    if (in_array($unitCode, $programViewUnits, true)):
+                                        $viewUrl = '/bpa/' . strtolower($unitCode) . '/program_view?id=' . (int)$row['program_id'];
                                     ?>
-                                        <button type="button" class="budget-row-action sku-note-action"
-                                                aria-label="Lihat catatan program" title="Lihat catatan"
-                                                data-sku-note-open="<?= htmlspecialchars($noteDialogId) ?>">
-                                            <i class="bi bi-three-dots" aria-hidden="true"></i>
-                                        </button>
-                                        <dialog class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--note bpa-note-dialog"
-                                                id="<?= htmlspecialchars($noteDialogId) ?>"
-                                                aria-labelledby="<?= htmlspecialchars($noteDialogId) ?>-title">
-                                            <header class="bpa-create-dialog__header">
-                                                <div class="bpa-create-dialog__heading">
-                                                    <h2 id="<?= htmlspecialchars($noteDialogId) ?>-title">Catatan Program</h2>
-                                                    <p class="bpa-create-dialog__subtitle">Catatan berkaitan dengan program ini.</p>
-                                                </div>
-                                                <button type="button" class="bpa-create-dialog__close"
-                                                        aria-label="Tutup catatan" data-sku-note-close>&times;</button>
-                                            </header>
-                                            <div class="bpa-create-dialog__body bpa-note-dialog__body">
-                                                <p><?= nl2br(htmlspecialchars($catatan)) ?></p>
-                                            </div>
-                                        </dialog>
+                                        <a class="program-detail-action"
+                                           href="<?= htmlspecialchars($viewUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                           aria-label="Lihat perincian program"
+                                           title="Lihat perincian">
+                                            <i class="bi bi-eye" aria-hidden="true"></i>
+                                        </a>
                                     <?php endif; ?>
                                 </td>
 
                             </tr>
 
                         <?php endforeach; ?>
-
-                        <!-- JUMLAH KESELURUHAN -->
-                        <tr class="fw-bold">
-
-                            <td
-                                colspan="7"
-                                class="text-end align-middle"
-                            >
-                                JUMLAH KESELURUHAN
-                            </td>
-
-                            <td class="center">
-
-                                <?= number_format(
-                                    $jumlahPeserta
-                                ) ?>
-
-                            </td>
-
-                            <td class="money">
-
-                                RM <?= number_format(
-                                    $jumlahPeruntukan,
-                                    2
-                                ) ?>
-
-                            </td>
-
-                            <td class="money">
-
-                                RM <?= number_format(
-                                    $jumlahPerbelanjaan,
-                                    2
-                                ) ?>
-
-                            </td>
-
-                            <td class="money">
-
-                                RM <?= number_format(
-                                    $jumlahDanaWakalah,
-                                    2
-                                ) ?>
-
-                            </td>
-
-                            <td></td>
-
-                        </tr>
 
                     <?php endif; ?>
 

@@ -77,9 +77,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $catatan = trim($_POST['catatan'] ?? '');
 
-    $sku_aktiviti_id_raw = $_POST['sku_aktiviti_id'] ?? '';
-    $sku_aktiviti_id = ($sku_aktiviti_id_raw === '' ? null : (ctype_digit($sku_aktiviti_id_raw) ? (int)$sku_aktiviti_id_raw : null));
-
     // ===== validation =====
     if ($nama_program === '') $err = "Nama program wajib diisi.";
 
@@ -116,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  peruntukan_rm, perbelanjaan_rm, dana_wakalah_rm,
                  status, catatan)
                 VALUES
-                (:unit_id, :sku_aktiviti_id, :tahun, :nama_program, :nk_jkb,
+                (:unit_id, NULL, :tahun, :nama_program, :nk_jkb,
                  :tarikh_mula, :tarikh_tamat, :tempoh_kontrak,
                  :tempat, :kerjasama, :bil_peserta,
                  :peruntukan, :perbelanjaan, :wakalah,
@@ -124,7 +121,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmt->execute([
                 ':unit_id' => $upu_id,
-                ':sku_aktiviti_id' => $sku_aktiviti_id,
                 ':tahun' => $tahun,
                 ':nama_program' => $nama_program,
                 ':nk_jkb' => ($nk_jkb===''?null:$nk_jkb),
@@ -180,16 +176,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// SKU list ikut tahun form
-$formYear = (int)($_POST['tahun'] ?? date('Y'));
-$stmtSku = $pdo->prepare("
-  SELECT sku_aktiviti_id, bil, nama_aktiviti
-  FROM sku_aktiviti
-  WHERE tahun = :tahun
-  ORDER BY bil ASC
-");
-$stmtSku->execute([':tahun' => $formYear]);
-$skuList = $stmtSku->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="ms">
@@ -344,19 +330,6 @@ if ($role === 'editor') {
             <option value="aktif" <?= $st==='aktif'?'selected':'' ?>>aktif</option>
             <option value="selesai" <?= $st==='selesai'?'selected':'' ?>>selesai</option>
             <option value="batal" <?= $st==='batal'?'selected':'' ?>>batal</option>
-          </select>
-        </div>
-
-        <div class="col-md-6">
-          <label class="form-label">Link ke SKU Aktiviti (optional)</label>
-          <select name="sku_aktiviti_id" class="form-select">
-            <option value="">-- Luar SKU (tidak dikira) --</option>
-            <?php foreach ($skuList as $s): ?>
-              <option value="<?= (int)$s['sku_aktiviti_id'] ?>"
-                <?= ((string)($_POST['sku_aktiviti_id'] ?? '') === (string)$s['sku_aktiviti_id'])?'selected':'' ?>>
-                [<?= (int)$s['bil'] ?>] <?= htmlspecialchars(mb_strimwidth($s['nama_aktiviti'],0,90,'...')) ?>
-              </option>
-            <?php endforeach; ?>
           </select>
         </div>
 
