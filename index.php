@@ -50,6 +50,15 @@ function ensureUserAccessSchema(PDO $pdo): void
 
 ensureUserAccessSchema($pdo);
 
+function ensureUserApprovalSchema(PDO $pdo): void
+{
+    if (!$pdo->query("SHOW COLUMNS FROM users LIKE 'approval_status'")->fetch()) {
+        $pdo->exec('ALTER TABLE users ADD COLUMN approval_status TINYINT(1) NOT NULL DEFAULT 1 AFTER active');
+    }
+}
+
+ensureUserApprovalSchema($pdo);
+
 function ensureDatasetUnitSchema(PDO $pdo): void
 {
     if (!$pdo->query("SHOW COLUMNS FROM datasets LIKE 'unit_incharge'")->fetch()) {
@@ -85,7 +94,7 @@ function currentUser(PDO $pdo): ?array
     }
 
     $statement = $pdo->prepare(
-        'SELECT id, username, display_name, email, unit, active, access_level, page_permissions FROM users WHERE username = ? AND active = 1'
+        'SELECT id, username, display_name, email, unit, active, access_level, page_permissions FROM users WHERE username = ? AND active = 1 AND approval_status = 1'
     );
     $statement->execute([$_SESSION['username']]);
     return $statement->fetch() ?: null;
@@ -120,7 +129,7 @@ function defaultPagePermissions(int $accessLevel, string $unit = ''): array
         'upload' => ['access' => true, 'edit' => $editable],
         'dataset' => ['access' => true, 'edit' => $editable],
         'activity' => ['access' => true, 'edit' => false],
-        'account' => ['access' => true, 'edit' => $editable],
+        'account' => ['access' => true, 'edit' => true],
         'updates' => ['access' => true, 'edit' => false],
         'bpa' => ['access' => true, 'edit' => false],
         'bpaDashboard' => ['access' => false, 'edit' => false],
@@ -219,6 +228,8 @@ function userPagePermissions(array $user): array
                 || $permissions[$section . $unitCode]['access'];
         }
     }
+    $permissions['account']['access'] = true;
+    $permissions['account']['edit'] = true;
     $permissions['bpa']['access'] = $permissions['bpaDashboard']['access']
         || $permissions['bpaBudget']['access']
         || $permissions['bpaSku']['access']
@@ -291,6 +302,8 @@ function normalizeSubmittedPagePermissions(
                 || $normalized[$section . $unitCode]['access'];
         }
     }
+    $normalized['account']['access'] = true;
+    $normalized['account']['edit'] = true;
     $normalized['bpa']['access'] = $normalized['bpaDashboard']['access']
         || $normalized['bpaBudget']['access']
         || $normalized['bpaSku']['access']
@@ -347,6 +360,95 @@ function canAccessUserPage(array $user, string $page): bool
     return (bool)($permissions[$page]['access'] ?? false);
 }
 
+function defaultUserLandingPath(array $user): ?string
+{
+    $unitOrder = ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
+    $userUnit = strtoupper(trim((string)($user['unit'] ?? '')));
+    if (in_array($userUnit, $unitOrder, true)) {
+        $unitOrder = array_merge([$userUnit], array_values(array_diff($unitOrder, [$userUnit])));
+    }
+
+    foreach ($unitOrder as $unitCode) {
+        if (canAccessUserPage($user, 'bpaDashboard' . $unitCode)) {
+            return '/bpa/dashboard?unit=' . rawurlencode($unitCode);
+        }
+    }
+    foreach ($unitOrder as $unitCode) {
+        if (canAccessUserPage($user, 'bpaPrograms' . $unitCode)) {
+            return '/bpa/laporan/program_list?unit=' . rawurlencode($unitCode);
+        }
+    }
+    if (canAccessUserPage($user, 'bpaBudget')) return '/bpa/admin/bajet_list';
+    if (canAccessUserPage($user, 'bpaSku')) return '/bpa/admin/sku_list';
+    if (canAccessUserPage($user, 'recipientParticipants')) return '/penerima-peserta';
+    if (canAccessUserPage($user, 'recipients')) return '/penerima-bantuan';
+    if (canAccessUserPage($user, 'participants')) return '/peserta-program';
+    if (canAccessUserPage($user, 'upload')) return '/muat-naik';
+    if (canAccessUserPage($user, 'dataset')) return '/set-data';
+    if (canAccessUserPage($user, 'activity')) return '/aktiviti-pengguna';
+    if (canAccessUserPage($user, 'manageUsers')) return '/pengurusan-pengguna';
+
+    return null;
+}
+
+function isAppNavigationRequest(): bool
+{
+    foreach ([
+        'HTTP_X_APP_FRAGMENT',
+        'HTTP_X_APP_NAVIGATION',
+        'HTTP_X_APP_MODAL',
+        'HTTP_X_BPA_DASHBOARD_UNIT',
+        'HTTP_X_BPA_PROGRAM_LIST_UNIT',
+    ] as $header) {
+        if (isset($_SERVER[$header])) {
+            return true;
+        }
+    }
+
+    return strcasecmp((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''), 'XMLHttpRequest') === 0;
+}
+
+function denyPageAccessOrRedirect(string $basePath, string $path, string $message): void
+{
+    if (!isAppNavigationRequest() && ($path !== '/bpa/dashboard' || isset($_GET['unit']))) {
+        header('Location: ' . $basePath . '/bpa/dashboard', true, 302);
+        exit;
+    }
+
+    http_response_code(403);
+    echo $message;
+    exit;
+}
+
+function isNavigableBpaPagePath(string $path): bool
+{
+    $route = preg_replace('#^/app-bapim#', '', $path) ?? $path;
+    $route = preg_replace('#\.php$#i', '', $route) ?? $route;
+
+    return in_array($route, [
+        '/bpa/dashboard',
+        '/bpa/admin/bajet_list',
+        '/bpa/admin/sku_list',
+        '/bpa/admin/user_list',
+        '/bpa/admin/user_edit',
+        '/bpa/admin/dashboard_admin_export_pdf',
+        '/bpa/admin/sku_export_excel',
+        '/bpa/admin/sku_export_pdf',
+        '/bpa/laporan/program_list',
+        '/bpa/laporan/program_export_excel',
+        '/bpa/laporan/program_export_pdf',
+    ], true);
+}
+
+function isBpaModalActionPath(string $path): bool
+{
+    $route = preg_replace('#^/app-bapim#', '', $path) ?? $path;
+    $route = preg_replace('#\.php$#i', '', $route) ?? $route;
+
+    return preg_match('#^/bpa/admin/(?:user_add|bajet_add|bajet_edit|sku_add|sku_edit)$#i', $route) === 1
+        || preg_match('#^/bpa/(?:upp|uak|upu|upa|ulk)/program_(?:add|edit|view)$#i', $route) === 1;
+}
+
 function requiredBpaPageForPath(string $path, ?PDO $pdo = null): string
 {
     $route = preg_replace('#^/app-bapim#', '', $path) ?? $path;
@@ -361,6 +463,9 @@ function requiredBpaPageForPath(string $path, ?PDO $pdo = null): string
         return in_array($unit, ['UPP', 'UAK', 'UPU', 'UPA', 'ULK'], true)
             ? 'bpaDashboard' . $unit
             : ($unit === 'BPA' ? 'bpaDashboardBPA' : 'bpaDashboard');
+    }
+    if (preg_match('#^/bpa/admin/user_(?:add|list|edit)(?:\\.php)?$#i', $route)) {
+        return 'manageUsers';
     }
     if (preg_match('#^/bpa/admin/bajet(?:_|/|\\.|$)#i', $route)) {
         return 'bpaBudget';
@@ -489,6 +594,33 @@ function normalizeRows(array $rows): array
     }
     $width = max(array_map('count', $rows));
     return array_map(static fn(array $row): array => array_pad(array_slice($row, 0, $width), $width, ''), $rows);
+}
+
+function usahawan10kHeaderIndexes(array $headers): ?array
+{
+    $normalizedHeaders = array_map(
+        static fn($value): string => strtoupper(trim((string)$value)),
+        $headers
+    );
+    $requiredHeaders = [
+        'NAMA' => 'nama',
+        'KAD PENGENALAN' => 'kadPengenalan',
+        'TELEFON' => 'telefon',
+        'LOKASI' => 'lokasi',
+        'PRODUK' => 'produk',
+        'TARIKH SESI' => 'tarikhSesi',
+        'STATUS' => 'status',
+        'CATATAN' => 'catatan',
+    ];
+    $indexes = [];
+    foreach ($requiredHeaders as $header => $field) {
+        $index = array_search($header, $normalizedHeaders, true);
+        if ($index === false) {
+            return null;
+        }
+        $indexes[$field] = $index;
+    }
+    return $indexes;
 }
 
 function ensureRecipientEmploymentStatusColumn(array $rows): array
@@ -904,17 +1036,26 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             if (strlen($loginName) > 254 || filter_var($loginName, FILTER_VALIDATE_EMAIL) === false) {
                 jsonResponse(['success' => false, 'error' => 'Sila masukkan username atau alamat e-mel yang sah.'], 400);
             }
-            $statement = $pdo->prepare('SELECT username, display_name, password_hash, active FROM users WHERE email = ? LIMIT 1');
+            $statement = $pdo->prepare('SELECT username, display_name, password_hash, active, approval_status, unit, access_level, page_permissions FROM users WHERE email = ? LIMIT 1');
         } else {
             if (!isValidUsername($loginName)) {
                 jsonResponse(['success' => false, 'error' => 'Username hanya boleh mengandungi huruf kecil, nombor, titik (.) dan garis bawah (_).'], 400);
             }
-            $statement = $pdo->prepare('SELECT username, display_name, password_hash, active FROM users WHERE username = ? LIMIT 1');
+            $statement = $pdo->prepare('SELECT username, display_name, password_hash, active, approval_status, unit, access_level, page_permissions FROM users WHERE username = ? LIMIT 1');
         }
         $statement->execute([$loginName]);
         $account = $statement->fetch();
-        if (!$account || !(int)$account['active'] || !password_verify($password, $account['password_hash'])) {
+        if (!$account || !password_verify($password, (string)$account['password_hash'])) {
             jsonResponse(['success' => false, 'error' => 'Invalid username or password.'], 401);
+        }
+        if (!(int)$account['approval_status']) {
+            jsonResponse(['success' => false, 'status' => 'pending_approval'], 403);
+        }
+        if (!(int)$account['active']) {
+            jsonResponse(['success' => false, 'status' => 'deactivated'], 403);
+        }
+        if (defaultUserLandingPath($account) === null) {
+            jsonResponse(['success' => false, 'status' => 'no_access'], 403);
         }
         session_regenerate_id(true);
         $_SESSION['username'] = $account['username'];
@@ -935,6 +1076,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             'displayName' => $user['display_name'],
             'unit' => $user['unit'],
             'permissions' => userPagePermissions($user),
+            'landingPath' => defaultUserLandingPath($user),
         ]);
     }
     if ($path === '/api/auth/create-account' && $method === 'POST') {
@@ -955,7 +1097,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             jsonResponse(['success' => false, 'error' => 'Sila masukkan alamat e-mel yang sah.'], 400);
         }
         try {
-            $statement = $pdo->prepare('INSERT INTO users (username, display_name, email, password_hash, access_level) VALUES (?, ?, ?, ?, 3)');
+            $statement = $pdo->prepare('INSERT INTO users (username, display_name, email, password_hash, active, approval_status, access_level) VALUES (?, ?, ?, ?, 0, 0, 3)');
             $statement->execute([$name, $displayName, $email, password_hash($password, PASSWORD_DEFAULT)]);
         } catch (PDOException $error) {
             if ($error->getCode() === '23000') {
@@ -963,9 +1105,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
             }
             throw $error;
         }
-        session_regenerate_id(true);
-        $_SESSION['username'] = $name;
-        jsonResponse(['success' => true, 'username' => $name, 'displayName' => $displayName, 'email' => $email], 201);
+        jsonResponse(['success' => true, 'status' => 'pending_approval', 'username' => $name, 'displayName' => $displayName, 'email' => $email], 201);
     }
     if ($path === '/api/auth/logout' && $method === 'POST') {
         $_SESSION = [];
@@ -1002,7 +1142,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
     }
     if ($path === '/api/admin/users' && $method === 'GET') {
         requirePageCapability($pdo, 'manageUsers');
-        $users = $pdo->query('SELECT id, username, display_name AS displayName, email, unit, active, access_level AS accessLevel, page_permissions AS pagePermissions, created_at AS createdAt FROM users ORDER BY active DESC, display_name, username')->fetchAll();
+        $users = $pdo->query('SELECT id, username, display_name AS displayName, email, unit, active, approval_status AS approvalStatus, access_level AS accessLevel, page_permissions AS pagePermissions, created_at AS createdAt FROM users ORDER BY active DESC, display_name, username')->fetchAll();
         foreach ($users as &$managedUser) {
             $managedUser['accessLevel'] = (int)$managedUser['accessLevel'];
             $managedUser['permissions'] = userPagePermissions([
@@ -1088,7 +1228,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         $manager = requirePageCapability($pdo, 'manageUsers', true);
         requireCsrfToken($payload);
         $targetId = (int)$matches[1];
-        $statement = $pdo->prepare('SELECT id, username, email, unit, active, access_level, page_permissions FROM users WHERE id = ? LIMIT 1');
+        $statement = $pdo->prepare('SELECT id, username, email, unit, active, approval_status, access_level, page_permissions FROM users WHERE id = ? LIMIT 1');
         $statement->execute([$targetId]);
         $target = $statement->fetch();
         if (!$target) {
@@ -1143,6 +1283,7 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ($active === null) {
             jsonResponse(['success' => false, 'error' => 'User status is invalid.'], 400);
         }
+        $approvalStatus = $active ? 1 : (int)$target['approval_status'];
         if (!$active && (int)$target['id'] === (int)$manager['id']) {
             jsonResponse(['success' => false, 'error' => 'You cannot deactivate your own account.'], 400);
         }
@@ -1159,11 +1300,11 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         try {
             $pdo->beginTransaction();
             if ($password !== '') {
-                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, email = ?, unit = ?, password_hash = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
-                $statement->execute([$newUsername, $displayName, $email, $unit, password_hash($password, PASSWORD_DEFAULT), (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, email = ?, unit = ?, password_hash = ?, active = ?, approval_status = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+                $statement->execute([$newUsername, $displayName, $email, $unit, password_hash($password, PASSWORD_DEFAULT), (int)$active, $approvalStatus, $accessLevel, $encodedPermissions, $targetId]);
             } else {
-                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, email = ?, unit = ?, active = ?, access_level = ?, page_permissions = ? WHERE id = ?');
-                $statement->execute([$newUsername, $displayName, $email, $unit, (int)$active, $accessLevel, $encodedPermissions, $targetId]);
+                $statement = $pdo->prepare('UPDATE users SET username = ?, display_name = ?, email = ?, unit = ?, active = ?, approval_status = ?, access_level = ?, page_permissions = ? WHERE id = ?');
+                $statement->execute([$newUsername, $displayName, $email, $unit, (int)$active, $approvalStatus, $accessLevel, $encodedPermissions, $targetId]);
             }
             if ($usernameChanged) {
                 $statement = $pdo->prepare('UPDATE login_history SET username = ? WHERE username = ?');
@@ -1355,6 +1496,109 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         jsonResponse(['success' => true, 'participants' => $output]);
     }
+    if ($path === '/api/usahawan-10k' && $method === 'GET') {
+        $user = requireApiUser($pdo);
+        if (!canAccessUserPage($user, 'recipientParticipants') && !canAccessUserPage($user, 'dashboard')) {
+            jsonResponse(['success' => false, 'error' => 'You do not have permission to view Usahawan 10K records.'], 403);
+        }
+        $records = [];
+        $datasets = $pdo->query(
+            "SELECT id, name, filename, filepath FROM datasets WHERE dataset_type = 'usahawan10k' ORDER BY updated_at DESC, id DESC"
+        )->fetchAll();
+        $datasetOptions = [];
+        foreach ($datasets as $dataset) {
+            $datasetOptions[] = [
+                'id' => (int)$dataset['id'],
+                'name' => (string)$dataset['name'],
+                'filename' => (string)$dataset['filename'],
+            ];
+            if (!is_file($dataset['filepath'])) {
+                error_log('Usahawan 10K dataset file is missing for dataset ' . (int)$dataset['id'] . '.');
+                continue;
+            }
+            $rows = csvRowsFromFile($dataset['filepath']);
+            if ($rows === []) {
+                continue;
+            }
+            $indexes = usahawan10kHeaderIndexes($rows[0]);
+            if ($indexes === null) {
+                error_log('Usahawan 10K dataset has invalid headers for dataset ' . (int)$dataset['id'] . '.');
+                jsonResponse([
+                    'success' => false,
+                    'error' => 'An Usahawan 10K dataset has invalid columns. Check the uploaded file headers.',
+                ], 422);
+            }
+            foreach (array_slice($rows, 1, null, true) as $rowIndex => $row) {
+                $records[] = [
+                    'nama' => trim($row[$indexes['nama']] ?? ''),
+                    'kadPengenalan' => trim($row[$indexes['kadPengenalan']] ?? ''),
+                    'telefon' => trim($row[$indexes['telefon']] ?? ''),
+                    'lokasi' => trim($row[$indexes['lokasi']] ?? ''),
+                    'produk' => trim($row[$indexes['produk']] ?? ''),
+                    'tarikhSesi' => trim($row[$indexes['tarikhSesi']] ?? ''),
+                    'status' => trim($row[$indexes['status']] ?? ''),
+                    'catatan' => trim($row[$indexes['catatan']] ?? ''),
+                    'datasetId' => (int)$dataset['id'],
+                    'rowIndex' => (int)$rowIndex,
+                ];
+            }
+        }
+        jsonResponse(['success' => true, 'records' => $records, 'datasets' => $datasetOptions]);
+    }
+    if ($path === '/api/usahawan-10k/records' && in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
+        $account = requireApiUser($pdo);
+        $permissions = userPagePermissions($account);
+        if (
+            !canAccessUserPage($account, 'recipientParticipants')
+            || empty($permissions['participants']['edit'])
+        ) {
+            jsonResponse(['success' => false, 'error' => 'You do not have permission to edit Usahawan 10K records.'], 403);
+        }
+
+        if ($method === 'POST') {
+            $datasetId = filter_var($payload['datasetId'] ?? null, FILTER_VALIDATE_INT);
+            $dataset = $datasetId ? datasetById($pdo, (int)$datasetId) : null;
+            if (!$dataset || strtolower((string)($dataset['dataset_type'] ?? '')) !== 'usahawan10k' || !is_file($dataset['filepath'])) {
+                jsonResponse(['success' => false, 'error' => 'Select a valid Usahawan 10K source dataset.'], 400);
+            }
+            $rows = csvRowsFromFile($dataset['filepath']);
+            $indexes = $rows === [] ? null : usahawan10kHeaderIndexes($rows[0]);
+            if ($indexes === null) {
+                jsonResponse(['success' => false, 'error' => 'The source dataset has invalid Usahawan 10K columns.'], 422);
+            }
+            $changes = is_array($payload['changes'] ?? null) ? $payload['changes'] : [];
+            foreach (['nama', 'kadPengenalan', 'telefon'] as $requiredField) {
+                if (trim((string)($changes[$requiredField] ?? '')) === '') {
+                    jsonResponse(['success' => false, 'error' => ucfirst($requiredField) . ' is required.'], 400);
+                }
+            }
+            $row = array_fill(0, count($rows[0]), '');
+            foreach ($indexes as $field => $columnIndex) {
+                $row[$columnIndex] = trim((string)($changes[$field] ?? ''));
+            }
+            $rowIndex = count($rows);
+            $rows[] = $row;
+            updateCsvDataset($pdo, $dataset, normalizeRows($rows), $account['username']);
+            jsonResponse(['success' => true, 'datasetId' => (int)$dataset['id'], 'rowIndex' => $rowIndex], 201);
+        }
+
+        $record = is_array($payload['record'] ?? null) ? $payload['record'] : $payload;
+        $source = $record['sourceRecords'][0] ?? $record;
+        $datasetId = filter_var($source['datasetId'] ?? $record['datasetId'] ?? null, FILTER_VALIDATE_INT);
+        $dataset = $datasetId ? datasetById($pdo, (int)$datasetId) : null;
+        if (
+            !$dataset
+            || strtolower((string)($dataset['dataset_type'] ?? '')) !== 'usahawan10k'
+            || !is_file($dataset['filepath'])
+        ) {
+            jsonResponse(['success' => false, 'error' => 'Source dataset is not a Usahawan 10K dataset.'], 400);
+        }
+        $sourceRows = csvRowsFromFile($dataset['filepath']);
+        if ($sourceRows === [] || usahawan10kHeaderIndexes($sourceRows[0]) === null) {
+            jsonResponse(['success' => false, 'error' => 'The source dataset has invalid Usahawan 10K columns.'], 422);
+        }
+        editMappedRecord($pdo, $payload, $account['username'], false, $method === 'DELETE');
+    }
     if ($path === '/api/penerima-bantuan' && $method === 'GET') {
         $user = requireApiUser($pdo);
         if (!canAccessUserPage($user, 'recipients') && !canAccessUserPage($user, 'dashboard')) {
@@ -1362,6 +1606,9 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         }
         $recipients = [];
         foreach ($pdo->query('SELECT * FROM datasets ORDER BY updated_at DESC')->fetchAll() as $dataset) {
+            if (strtolower((string)($dataset['dataset_type'] ?? '')) === 'usahawan10k') {
+                continue;
+            }
             if (!is_file($dataset['filepath'])) {
                 continue;
             }
@@ -1482,13 +1729,21 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ($rows === []) {
             jsonResponse(['success' => false, 'error' => 'CSV is empty.'], 400);
         }
-        $datasetType = ($payload['datasetType'] ?? '') === 'peserta' ? 'peserta' : 'penerima';
+        $datasetType = strtolower(trim((string)($payload['datasetType'] ?? 'penerima')));
+        if (!in_array($datasetType, ['penerima', 'peserta', 'usahawan10k'], true)) {
+            jsonResponse(['success' => false, 'error' => 'Invalid dataset type.'], 400);
+        }
         $unitInCharge = strtoupper(trim((string)($payload['unitInCharge'] ?? '')));
         if (!in_array($unitInCharge, ['UPP', 'UPU', 'ULK', 'UAK', 'UPA'], true)) {
             jsonResponse(['success' => false, 'error' => 'A valid unit is required.'], 400);
         }
         if ($datasetType === 'penerima') {
             $rows = ensureRecipientEmploymentStatusColumn($rows);
+        } elseif ($datasetType === 'usahawan10k' && usahawan10kHeaderIndexes($rows[0]) === null) {
+            jsonResponse([
+                'success' => false,
+                'error' => 'Usahawan 10K data must include Nama, Kad Pengenalan, Telefon, Lokasi, Produk, Tarikh Sesi, Status and Catatan columns.',
+            ], 400);
         }
         $safeOriginal = preg_replace('/[^A-Za-z0-9._ -]/', '_', basename($file['name'])) ?: 'dataset.csv';
         $storedName = bin2hex(random_bytes(16)) . '.csv';
@@ -1575,11 +1830,23 @@ function runApi(PDO $pdo, string $path, string $method, string $storageDirectory
         if ($name === '' || $nameLength > 255) {
             jsonResponse(['success' => false, 'error' => 'Dataset name must be between 1 and 255 characters.'], 400);
         }
-        if (!in_array($datasetType, ['penerima', 'peserta'], true)) {
+        if (!in_array($datasetType, ['penerima', 'peserta', 'usahawan10k'], true)) {
             jsonResponse(['success' => false, 'error' => 'Invalid dataset type.'], 400);
         }
         if (!in_array($unitInCharge, ['', 'UPP', 'UPU', 'ULK', 'UAK', 'UPA'], true)) {
             jsonResponse(['success' => false, 'error' => 'Invalid unit.'], 400);
+        }
+        if ($datasetType === 'usahawan10k') {
+            if (!is_file($dataset['filepath'])) {
+                jsonResponse(['success' => false, 'error' => 'Dataset source file not found.'], 404);
+            }
+            $rows = csvRowsFromFile($dataset['filepath']);
+            if ($rows === [] || usahawan10kHeaderIndexes($rows[0]) === null) {
+                jsonResponse([
+                    'success' => false,
+                    'error' => 'Usahawan 10K data must include Nama, Kad Pengenalan, Telefon, Lokasi, Produk, Tarikh Sesi, Status and Catatan columns.',
+                ], 400);
+            }
         }
 
         $oldMetadata = json_encode([
@@ -1795,7 +2062,18 @@ if ($legacyDestination !== null) {
 }
 
 if ($path === '/') {
-    header('Location: ' . $basePath . '/bpa/dashboard', true, 302);
+    $user = currentUser($pdo);
+    if (!$user) {
+        header('Location: ' . $basePath . '/log-masuk', true, 302);
+        exit;
+    }
+    $landingPath = defaultUserLandingPath($user);
+    if ($landingPath === null) {
+        unset($_SESSION['username']);
+        header('Location: ' . $basePath . '/log-masuk?status=no_access', true, 302);
+        exit;
+    }
+    header('Location: ' . $basePath . $landingPath, true, 302);
     exit;
 }
 
@@ -1818,6 +2096,13 @@ if ($path === '/bpa/logout.php') {
 }
 
 if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
+    $isBpaModalRequest = ($_SERVER['HTTP_X_APP_MODAL'] ?? '') === 'true'
+        && isBpaModalActionPath($path);
+    if (!isNavigableBpaPagePath($path) && !$isBpaModalRequest) {
+        header('Location: ' . $basePath . '/bpa/dashboard', true, 302);
+        exit;
+    }
+
     $isUnifiedBpaDashboard = $bpaMatch[1] === 'dashboard';
     $isUnifiedBpaProgramList = $bpaMatch[1] === 'laporan/program_list';
     $bpaFile = $isUnifiedBpaDashboard
@@ -1840,9 +2125,21 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
 
     $requiredBpaPermission = requiredBpaPageForPath($path, $pdo);
     if (!canAccessUserPage($user, $requiredBpaPermission)) {
-        http_response_code(403);
-        echo 'Anda tidak mempunyai kebenaran untuk mengakses sistem BPA.';
-        exit;
+        if (!isAppNavigationRequest()) {
+            $landingPath = defaultUserLandingPath($user);
+            if ($landingPath === null) {
+                unset($_SESSION['username']);
+                header('Location: ' . $basePath . '/log-masuk?status=no_access', true, 302);
+                exit;
+            }
+            header('Location: ' . $basePath . $landingPath, true, 302);
+            exit;
+        }
+        denyPageAccessOrRedirect(
+            $basePath,
+            $path,
+            'Anda tidak mempunyai kebenaran untuk mengakses sistem BPA.'
+        );
     }
     if (preg_match('/^bpa(?:Dashboard|Programs)(UAK|UPU|UPA|ULK)$/', $requiredBpaPermission, $authorizedUnit)) {
         define('BPA_AUTHORIZED_UNIT', $authorizedUnit[1]);
@@ -1853,6 +2150,12 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         $requestedUnit = strtoupper((string)($_GET['unit'] ?? $_SERVER['HTTP_X_BPA_DASHBOARD_UNIT'] ?? ''));
         $dashboardUnits = ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
         $bpaInitialDashboardUnit = in_array($requestedUnit, $dashboardUnits, true) ? $requestedUnit : null;
+        $userUnit = strtoupper(trim((string)($user['unit'] ?? '')));
+        if ($bpaInitialDashboardUnit === null
+            && in_array($userUnit, $dashboardUnits, true)
+            && canAccessUserPage($user, 'bpaDashboard' . $userUnit)) {
+            $bpaInitialDashboardUnit = $userUnit;
+        }
         if ($bpaInitialDashboardUnit === null) {
             foreach ($dashboardUnits as $unitCode) {
                 if (canAccessUserPage($user, 'bpaDashboard' . $unitCode)) {
@@ -1876,6 +2179,12 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         $requestedUnit = strtoupper((string)($_GET['unit'] ?? $_SERVER['HTTP_X_BPA_PROGRAM_LIST_UNIT'] ?? ''));
         $programUnits = ['BPA', 'UPP', 'UAK', 'UPU', 'UPA', 'ULK'];
         $bpaInitialProgramUnit = in_array($requestedUnit, $programUnits, true) ? $requestedUnit : null;
+        $userUnit = strtoupper(trim((string)($user['unit'] ?? '')));
+        if ($bpaInitialProgramUnit === null
+            && in_array($userUnit, $programUnits, true)
+            && canAccessUserPage($user, 'bpaPrograms' . $userUnit)) {
+            $bpaInitialProgramUnit = $userUnit;
+        }
         if ($bpaInitialProgramUnit === null) {
             foreach ($programUnits as $unitCode) {
                 if (canAccessUserPage($user, 'bpaPrograms' . $unitCode)) {
@@ -1896,9 +2205,11 @@ if (preg_match('#^(?:/app-bapim)?/bpa/(.+)$#', $path, $bpaMatch)) {
         : $requiredBpaPermission;
     $bpaCanEdit = (bool)(userPagePermissions($user)[$effectiveBpaPermission]['edit'] ?? false);
     if (preg_match('#^/bpa/(upp|uak|upu|upa|ulk)/program_edit(?:\\.php)?$#i', $path) && !$bpaCanEdit) {
-        http_response_code(403);
-        echo 'Anda tidak mempunyai kebenaran untuk menyunting program.';
-        exit;
+        denyPageAccessOrRedirect(
+            $basePath,
+            $path,
+            'Anda tidak mempunyai kebenaran untuk menyunting program.'
+        );
     }
     if (!is_file($bpaFile)) {
         http_response_code(404);
@@ -5776,6 +6087,11 @@ $pages = [
     '/sidebar' => 'components/sidebar.html',
     '/header' => 'components/header.html',
 ];
+if (in_array($path, ['/sidebar', '/header'], true)
+    && ($_SERVER['HTTP_X_APP_COMPONENT'] ?? '') !== 'true') {
+    header('Location: ' . $basePath . '/bpa/dashboard', true, 302);
+    exit;
+}
 $page = $pages[$path] ?? null;
 if ($page === null && preg_match('#^/set-data/(\d+)$#', $path, $matches)) {
     header('Location: ' . $basePath . '/set-data?id=' . rawurlencode($matches[1]), true, 302);
@@ -5792,9 +6108,11 @@ if ($path !== '/log-masuk' && $path !== '/cipta-akaun' && $path !== '/sidebar' &
     exit;
 }
 if ($user && ($requiredPage = requiredPageForPath($path)) !== null && !canAccessUserPage($user, $requiredPage)) {
-    http_response_code(403);
-    echo 'You do not have permission to access this page.';
-    exit;
+    denyPageAccessOrRedirect(
+        $basePath,
+        $path,
+        'You do not have permission to access this page.'
+    );
 }
 
 $viewPath = __DIR__ . '/views/' . $page;

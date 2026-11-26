@@ -1005,10 +1005,9 @@ function openChartFilter(columnIndex, value) {
         }
     });
 
+    params.set("view", dashboardMode === "participants" ? "participants" : "recipients");
     const query = params.toString();
-    const destination = dashboardMode === "participants"
-        ? "/peserta-program"
-        : "/penerima-bantuan";
+    const destination = "/penerima-peserta";
     const url = `${destination}${query ? `?${query}` : ""}`;
 
     window.dispatchEvent(

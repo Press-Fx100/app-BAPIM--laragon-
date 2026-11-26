@@ -8,7 +8,7 @@
     <title>Log Masuk BPA</title>
 
     <link rel="icon" href="/app.ico" type="image/x-icon">
-    <link rel="stylesheet" href="/css/style.css?v=20261119-62">
+    <link rel="stylesheet" href="/css/style.css?v=20261126-64">
 </head>
 
 <body>
@@ -40,6 +40,19 @@
                 </div>
 
                 <div id="message" class="message" hidden></div>
+                <section id="loginStatusCard" class="login-status-card" role="status" aria-live="polite" hidden>
+                    <div class="login-status-icon" aria-hidden="true">
+                        <span class="login-status-icon-mark"></span>
+                    </div>
+                    <div class="login-status-copy">
+                        <span id="loginStatusKicker" class="login-status-kicker"></span>
+                        <h2 id="loginStatusTitle"></h2>
+                        <p id="loginStatusDescription"></p>
+                    </div>
+                    <button type="button" id="loginStatusReturnButton" class="secondary-button">
+                        Kembali ke Log Masuk
+                    </button>
+                </section>
 
                 <section id="accountSelection" class="login-section" hidden>
 
@@ -106,7 +119,7 @@
 
     <script src="/js/auth-transition.js?v=20261119-9"></script>
     <script src="/js/confirmation-dialog.js?v=20261119-1"></script>
-    <script src="/js/login.js?v=20261119-4"></script>
+    <script src="/js/login.js?v=20261126-7"></script>
 
 </body>
 

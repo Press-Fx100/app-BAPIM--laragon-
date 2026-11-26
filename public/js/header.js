@@ -12,6 +12,7 @@ document.addEventListener("app:page-loaded", updatePageInfo);
 function canAccessAppPage(page) {
     const user = window.appCurrentUser;
     if (!user) return false;
+    if (page === "account") return true;
     if (Number(user.accessLevel) === 0) return true;
     if (page === "recipientParticipants") {
         return canAccessAppPage("recipients") && canAccessAppPage("participants");
@@ -22,6 +23,7 @@ function canAccessAppPage(page) {
 function canEditAppPage(page) {
     const user = window.appCurrentUser;
     if (!user) return false;
+    if (page === "account") return true;
     if (page === "recipientParticipants") {
         return canEditAppPage("recipients") && canEditAppPage("participants");
     }

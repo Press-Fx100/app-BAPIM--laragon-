@@ -28,6 +28,21 @@ const backToAccountsButton =
 const message =
     document.getElementById("message");
 
+const loginStatusCard =
+    document.getElementById("loginStatusCard");
+
+const loginStatusKicker =
+    document.getElementById("loginStatusKicker");
+
+const loginStatusTitle =
+    document.getElementById("loginStatusTitle");
+
+const loginStatusDescription =
+    document.getElementById("loginStatusDescription");
+
+const loginStatusReturnButton =
+    document.getElementById("loginStatusReturnButton");
+
 const usernameHelp =
     document.querySelector(".username-help");
 
@@ -84,6 +99,16 @@ document.addEventListener(
 
 async function startLogin() {
     clearMessage();
+
+    const statusQuery = new URLSearchParams(window.location.search).get("status");
+    const loginStatusByQuery = {
+        pending: "pending_approval",
+        no_access: "no_access",
+        deactivated: "deactivated"
+    };
+    if (statusQuery && showLoginStatus(loginStatusByQuery[statusQuery])) {
+        return;
+    }
 
     console.log("[AUTH] Connecting...");
 
@@ -171,6 +196,7 @@ function showAccountSelection() {
 
     loginFormSection.hidden = true;
     accountSelection.hidden = false;
+    if (loginStatusCard) loginStatusCard.hidden = true;
 
     if (backToAccountsButton) {
         backToAccountsButton.hidden = false;
@@ -191,6 +217,7 @@ function showLoginForm() {
 
     accountSelection.hidden = true;
     loginFormSection.hidden = false;
+    if (loginStatusCard) loginStatusCard.hidden = true;
 
     if (backToAccountsButton) {
         backToAccountsButton.hidden =
@@ -200,6 +227,15 @@ function showLoginForm() {
     if (usernameInput) {
         usernameInput.focus();
     }
+}
+
+if (loginStatusReturnButton) {
+    loginStatusReturnButton.addEventListener("click", () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("status");
+        window.history.replaceState(null, "", url);
+        showLoginForm();
+    });
 }
 
 
@@ -574,6 +610,14 @@ async function handleLogin(event) {
         const data =
             await response.json();
 
+        if (data.status && showLoginStatus(data.status)) {
+            if (loginButton) {
+                loginButton.disabled = false;
+                loginButton.textContent = "Log Masuk";
+            }
+            return;
+        }
+
         if (
             !response.ok ||
             !data.success
@@ -630,20 +674,6 @@ async function handleLogin(event) {
 // ============================================================
 // LOGIN SUCCESS
 // ============================================================
-
-function getPostLoginDashboardPath(unit, permissions) {
-    const unitCode = String(unit || "").trim().toUpperCase();
-    if (unitCode === "UPP" && permissions?.bpaDashboardUPP?.access === true) {
-        return "/bpa/dashboard?unit=UPP";
-    }
-
-    const dashboardUnits = ["BPA", "UAK", "UPU", "UPA", "ULK"];
-    if (dashboardUnits.includes(unitCode) && permissions?.[`bpaDashboard${unitCode}`]?.access === true) {
-        return `/bpa/dashboard?unit=${encodeURIComponent(unitCode)}`;
-    }
-
-    return "/";
-}
 
 async function loginSuccess(data) {
     const username =
@@ -713,12 +743,9 @@ async function loginSuccess(data) {
             console.error("Could not save the login transition state:", error);
         }
 
-        const dashboardPath = getPostLoginDashboardPath(
-            sessionData.unit,
-            sessionData.permissions
-        );
+        const landingPath = sessionData.landingPath || "/";
         window.location.replace(
-            typeof window.appUrl === "function" ? window.appUrl(dashboardPath) : dashboardPath
+            typeof window.appUrl === "function" ? window.appUrl(landingPath) : landingPath
         );
 
     } catch (error) {
@@ -776,6 +803,51 @@ function clearMessage() {
     message.hidden = true;
     message.textContent = "";
     message.className = "message";
+}
+
+function showLoginStatus(status) {
+    const statuses = {
+        no_access: {
+            className: "no-access",
+            kicker: "AKSES SISTEM",
+            title: "Tiada akses ke halaman",
+            description: "Akaun anda belum diberikan akses ke mana-mana halaman. Sila hubungi pentadbir untuk mendapatkan kebenaran."
+        },
+        deactivated: {
+            className: "deactivated",
+            kicker: "STATUS AKAUN",
+            title: "Akaun dinyahaktifkan",
+            description: "Akaun anda telah dinyahaktifkan. Sila hubungi pentadbir jika anda memerlukan bantuan."
+        },
+        pending_approval: {
+            className: "pending",
+            kicker: "PENGESAHAN AKAUN",
+            title: "Menunggu kelulusan admin",
+            description: "Profil anda telah dicipta dan sedang menunggu kelulusan pentadbir. Anda boleh log masuk selepas akaun diluluskan."
+        }
+    };
+    const statusDetails = statuses[status];
+    if (
+        !statusDetails
+        || !loginStatusCard
+        || !loginStatusKicker
+        || !loginStatusTitle
+        || !loginStatusDescription
+    ) {
+        return false;
+    }
+
+    clearMessage();
+    if (loginFormSection) loginFormSection.hidden = true;
+    if (accountSelection) accountSelection.hidden = true;
+    if (backToAccountsButton) backToAccountsButton.hidden = true;
+    if (passwordInput) passwordInput.value = "";
+    loginStatusCard.className = `login-status-card login-status-card--${statusDetails.className}`;
+    loginStatusKicker.textContent = statusDetails.kicker;
+    loginStatusTitle.textContent = statusDetails.title;
+    loginStatusDescription.textContent = statusDetails.description;
+    loginStatusCard.hidden = false;
+    return true;
 }
 
 

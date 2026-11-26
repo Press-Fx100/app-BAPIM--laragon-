@@ -21,6 +21,16 @@
                 </span>
                 <i class="bi bi-people" aria-hidden="true"></i>
             </button>
+            <button type="button" class="bpa-dashboard-card bpa-dashboard-card--teal"
+                data-recipient-participant-view="usahawan10k"
+                aria-controls="recipientParticipantUsahawan10k" aria-pressed="false">
+                <span class="bpa-dashboard-card__accent" aria-hidden="true"></span>
+                <span class="bpa-dashboard-card__copy">
+                    <strong>Usahawan 10K</strong>
+                    <small>Senarai usahawan 10K</small>
+                </span>
+                <i class="bi bi-briefcase" aria-hidden="true"></i>
+            </button>
         </div>
 
         <header class="recipient-participant-title">
@@ -38,5 +48,185 @@
         <section id="recipientParticipantParticipants" class="recipient-participant-view" aria-label="Peserta Program" hidden>
             <p class="recipient-participant-loading" data-view-status role="status">Memuatkan senarai peserta...</p>
         </section>
+        <section id="recipientParticipantUsahawan10k" class="recipient-participant-view" aria-label="Usahawan 10K" hidden>
+            <div class="dashboard-content participant-page usahawan10k-page">
+                <div class="usahawan10k-title-actions">
+                    <button type="button" id="usahawan10kAddButton" data-permission-edit="participants"
+                        class="recipient-participant-title-action recipient-participant-title-action--add">
+                        <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                            <i class="bi bi-plus-lg"></i>
+                        </span>
+                        <span>Tambah</span>
+                    </button>
+                    <button type="button" id="usahawan10kExportButton"
+                        class="recipient-participant-title-action recipient-participant-title-action--excel">
+                        <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                            <i class="bi bi-file-earmark-spreadsheet"></i>
+                        </span>
+                        <span>Excel</span>
+                    </button>
+                    <a id="usahawan10kUploadButton" href="/muat-naik" data-app-navigation data-access-page="upload"
+                        class="recipient-participant-title-action recipient-participant-title-action--upload">
+                        <span class="recipient-participant-title-action-icon" aria-hidden="true">
+                            <i class="bi bi-cloud-arrow-up"></i>
+                        </span>
+                        <span>Muat Naik</span>
+                    </a>
+                </div>
+                <div class="content-card mb-4 dataset-page-header sku-search-card-standard">
+                    <div>
+                        <h4>Carian Usahawan 10K</h4>
+                        <p>Cari rekod dan tapis mengikut maklumat usahawan.</p>
+                    </div>
+                    <div class="dataset-header-controls">
+                        <div class="search-toolbar-group">
+                            <div class="search-box">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                                <input type="search" id="usahawan10kSearch" placeholder="Cari usahawan..." autocomplete="off">
+                            </div>
+                            <div class="toolbar-group toolbar-control-cluster">
+                                <div class="toolbar-filter">
+                                    <div class="column-menu-wrapper">
+                                        <button type="button" id="usahawan10kColumnButton" class="toolbar-button icon-button"
+                                            title="Lajur" aria-controls="usahawan10kColumnMenu" aria-expanded="false">
+                                            <i class="bi bi-layout-three-columns" aria-hidden="true"></i>
+                                        </button>
+                                        <div id="usahawan10kColumnMenu" class="column-menu">
+                                            <div class="column-menu-header">
+                                                <button type="button" id="usahawan10kSelectAllColumns">Pilih Semua</button>
+                                            </div>
+                                            <div id="usahawan10kColumnChecklist"></div>
+                                        </div>
+                                    </div>
+                                    <div class="filter-menu-wrapper">
+                                        <button type="button" id="usahawan10kFilterButton" class="toolbar-button icon-button"
+                                            title="Tapis" aria-controls="usahawan10kFilterMenu" aria-expanded="false">
+                                            <i class="bi bi-funnel" aria-hidden="true"></i>
+                                        </button>
+                                        <div id="usahawan10kFilterMenu" class="filter-menu"></div>
+                                    </div>
+                                </div>
+                                <div class="toolbar-actions">
+                                    <button type="button" id="usahawan10kSaveButton" data-permission-edit="participants"
+                                        class="toolbar-button icon-button dataset-save-button" disabled
+                                        title="Disimpan" aria-label="Disimpan">
+                                        <i class="bi bi-floppy" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="content-card mb-4 participant-table-card usahawan10k-table-card">
+                    <div class="participant-table-card-header">
+                        <div>
+                            <h5>Senarai Usahawan 10K</h5>
+                            <span>Maklumat usahawan program 10K.</span>
+                        </div>
+                        <span id="usahawan10kRecordCount" class="participant-record-count">0 rekod</span>
+                    </div>
+                    <div id="usahawan10kLoading" class="loading" role="status">Memuatkan usahawan...</div>
+                    <div id="usahawan10kEmpty" class="empty-datasets" hidden>
+                        <div class="empty-datasets-icon"><i class="bi bi-briefcase" aria-hidden="true"></i></div>
+                        <h5>Tiada rekod Usahawan 10K</h5>
+                        <p>Muat naik set data Usahawan 10K untuk melihat senarai.</p>
+                    </div>
+                    <div id="usahawan10kTableWrapper" class="table-wrapper" hidden>
+                        <table class="dataset-table participant-table usahawan10k-table">
+                            <thead>
+                                <tr id="usahawan10kTableHeader">
+                                    <th class="row-select-cell"></th>
+                                    <th>NAMA</th>
+                                    <th>KAD PENGENALAN</th>
+                                    <th>TELEFON</th>
+                                    <th>LOKASI</th>
+                                    <th>PRODUK</th>
+                                    <th>TARIKH SESI</th>
+                                    <th>STATUS</th>
+                                    <th>CATATAN</th>
+                                    <th class="row-action-column"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="usahawan10kTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="usahawan10kNoResults" class="empty-datasets" hidden>
+                        <div class="empty-datasets-icon"><i class="bi bi-search" aria-hidden="true"></i></div>
+                        <h5>Usahawan tidak dijumpai</h5>
+                        <p>Tiada rekod sepadan dengan carian anda.</p>
+                    </div>
+                    <div id="usahawan10kPagination" class="pagination-bar" hidden>
+                        <div class="pagination-info-group">
+                            <div id="usahawan10kPaginationInfo" class="pagination-info"></div>
+                            <div id="usahawan10kSelectionInfo" class="selection-info">0 baris, 0 lajur, 0 sel dipilih</div>
+                        </div>
+                        <div class="pagination-controls">
+                            <button type="button" id="usahawan10kFirstPage" class="page-button" title="Halaman pertama" aria-label="Halaman pertama">
+                                <i class="bi bi-chevron-double-left" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="usahawan10kPreviousPage" class="page-button" title="Halaman sebelumnya" aria-label="Halaman sebelumnya">
+                                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                            </button>
+                            <div id="usahawan10kPageNumbers" class="pagination-controls"></div>
+                            <button type="button" id="usahawan10kNextPage" class="page-button" title="Halaman seterusnya" aria-label="Halaman seterusnya">
+                                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="usahawan10kLastPage" class="page-button" title="Halaman terakhir" aria-label="Halaman terakhir">
+                                <i class="bi bi-chevron-double-right" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p id="usahawan10kError" class="recipient-participant-loading recipient-participant-load-error" role="alert" hidden>
+                        Gagal memuatkan senarai Usahawan 10K. Pilih kad ini untuk cuba semula.
+                    </p>
+                </div>
+            </div>
+        </section>
     </div>
+<dialog id="usahawan10kAddForm" class="bpa-create-dialog bpa-create-dialog--structured bpa-create-dialog--form"
+    aria-labelledby="usahawan10kAddTitle">
+    <header class="bpa-create-dialog__header">
+        <div class="bpa-create-dialog__heading">
+            <h2 id="usahawan10kAddTitle">Tambah Usahawan 10K</h2>
+            <p class="bpa-create-dialog__subtitle">Nama, Kad Pengenalan dan Telefon wajib diisi.</p>
+        </div>
+        <button type="button" id="usahawan10kCloseAdd" class="bpa-create-dialog__close"
+            aria-label="Tutup borang tambah rekod">&times;</button>
+    </header>
+    <div class="bpa-create-dialog__body dataset-add-body">
+        <div class="form-grid">
+            <div class="form-field full"><label for="usahawan10kAddDataset">Fail sumber</label><select id="usahawan10kAddDataset" required></select></div>
+            <div class="form-field"><label for="usahawan10kAddNama">Nama *</label><input id="usahawan10kAddNama" autocomplete="off" required></div>
+            <div class="form-field"><label for="usahawan10kAddKP">Kad Pengenalan *</label><input id="usahawan10kAddKP" autocomplete="off" required></div>
+            <div class="form-field"><label for="usahawan10kAddTelefon">Telefon *</label><input id="usahawan10kAddTelefon" autocomplete="off" required></div>
+            <div class="form-field"><label for="usahawan10kAddLokasi">Lokasi</label><input id="usahawan10kAddLokasi" autocomplete="off"></div>
+            <div class="form-field"><label for="usahawan10kAddProduk">Produk</label><input id="usahawan10kAddProduk" autocomplete="off"></div>
+            <div class="form-field"><label for="usahawan10kAddTarikhSesi">Tarikh Sesi</label><input id="usahawan10kAddTarikhSesi" autocomplete="off"></div>
+            <div class="form-field"><label for="usahawan10kAddStatus">Status</label><input id="usahawan10kAddStatus" autocomplete="off"></div>
+            <div class="form-field full"><label for="usahawan10kAddCatatan">Catatan</label><textarea id="usahawan10kAddCatatan"></textarea></div>
+        </div>
+    </div>
+    <footer class="bpa-budget-modal-footer">
+        <button type="button" id="usahawan10kConfirmAdd" data-permission-edit="participants"
+            class="budget-list-action bpa-budget-save-button">
+            <span class="budget-list-action-icon"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
+            <span>Tambah</span>
+        </button>
+    </footer>
+</dialog>
+<div id="usahawan10kDeleteOverlay" class="delete-confirmation-overlay" aria-hidden="true"></div>
+<div id="usahawan10kDeleteConfirmation" class="delete-confirmation sku-delete-confirmation" role="alertdialog"
+    aria-modal="true" aria-labelledby="usahawan10kDeleteTitle"
+    aria-describedby="usahawan10kDeleteMessage" aria-hidden="true">
+    <div class="delete-confirmation-icon">!</div>
+    <div class="delete-confirmation-content">
+        <h6 id="usahawan10kDeleteTitle">Padam rekod?</h6>
+        <p id="usahawan10kDeleteMessage"></p>
+        <div class="delete-confirmation-actions">
+            <button type="button" id="usahawan10kCancelDelete" class="cancel-delete">Batal</button>
+            <button type="button" id="usahawan10kConfirmDelete" data-permission-edit="participants"
+                class="confirm-delete">Padam</button>
+        </div>
+    </div>
+</div>
 </main>

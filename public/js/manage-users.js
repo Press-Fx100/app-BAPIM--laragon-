@@ -56,7 +56,6 @@ function initializeUserManagement() {
             label: "Dashboard",
             children: [
                 { key: "bpaDashboardBPA", label: "BPA Dashboard" },
-                { key: "bpaDashboardUPP", label: "UPP Dashboard" },
                 ...bpaUnits.map(unit => ({ key: `bpaDashboard${unit.code}`, label: `${unit.code} Dashboard` }))
             ]
         },
@@ -228,6 +227,7 @@ function initializeUserManagement() {
             access: bpaPageDefinitions.some(page => permissions[page.key]?.access),
             edit: false
         };
+        permissions.account.edit = true;
         return permissions;
     }
 
@@ -252,6 +252,8 @@ function initializeUserManagement() {
                     : page.editable && access && (typeof provided?.edit === "boolean" ? provided.edit : defaults[page.key].edit)
             };
         });
+        result.account.access = true;
+        result.account.edit = true;
         bpaAccessSections.forEach(section => {
             result[section.key] = {
                 access: section.children.some(child => result[child.key].access),
@@ -469,9 +471,12 @@ function initializeUserManagement() {
             item.type = "button";
             item.className = "managed-user-list-item";
             item.disabled = !canManageTarget(user);
+            const inactiveDescription = Number(user.approvalStatus) === 0
+                ? "menunggu kelulusan admin"
+                : "akaun dinyahaktifkan";
             item.setAttribute(
                 "aria-label",
-                `Kemaskini ${user.displayName}, ${user.username}, akses ${accessDetails.label}${Number(user.active) === 1 ? "" : ", akaun dinyahaktifkan"}`
+                `Kemaskini ${user.displayName}, ${user.username}, akses ${accessDetails.label}${Number(user.active) === 1 ? "" : `, ${inactiveDescription}`}`
             );
 
             const userDetails = document.createElement("span");
@@ -494,8 +499,8 @@ function initializeUserManagement() {
                 statusIcons.appendChild(accessIcon);
             } else {
                 const inactiveIcon = document.createElement("i");
-                inactiveIcon.className = "bi bi-person-x-fill managed-user-inactive-icon";
-                inactiveIcon.title = "Akaun dinyahaktifkan";
+                inactiveIcon.className = `bi ${Number(user.approvalStatus) === 0 ? "bi-hourglass-split" : "bi-person-x-fill"} managed-user-inactive-icon`;
+                inactiveIcon.title = inactiveDescription.charAt(0).toUpperCase() + inactiveDescription.slice(1);
                 inactiveIcon.setAttribute("aria-hidden", "true");
                 statusIcons.appendChild(inactiveIcon);
             }
@@ -788,7 +793,7 @@ function initializeUserManagement() {
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
         checkbox.checked = permission.access;
-        checkbox.disabled = level === 0;
+        checkbox.disabled = level === 0 || page.key === "account";
         checkbox.addEventListener("change", () => {
             permission.access = checkbox.checked;
             row.classList.toggle("is-disabled", !permission.access);
@@ -808,7 +813,7 @@ function initializeUserManagement() {
             switchInput.type = "checkbox";
             switchInput.setAttribute("role", "switch");
             switchInput.checked = permission.edit;
-            switchInput.disabled = !permission.access || !canConfigureEdits;
+            switchInput.disabled = page.key === "account" || !permission.access || !canConfigureEdits;
             switchInput.setAttribute("aria-label", page.action);
             switchInput.addEventListener("change", () => {
                 permission.edit = switchInput.checked;
@@ -819,7 +824,7 @@ function initializeUserManagement() {
             row.appendChild(actionLabel);
             actionSwitch = switchInput;
             checkbox.addEventListener("change", () => {
-                actionSwitch.disabled = !page.editable || !permission.access || !canConfigureEdits;
+                actionSwitch.disabled = page.key === "account" || !page.editable || !permission.access || !canConfigureEdits;
             });
         } else {
             const readOnly = document.createElement("span");

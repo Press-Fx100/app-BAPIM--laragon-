@@ -334,7 +334,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
         if (sidebarContainer) {
             const response =
-                await fetch("/sidebar");
+                await fetch("/sidebar", {
+                    headers: { "X-App-Component": "true" }
+                });
 
             if (!response.ok) {
                 throw new Error(
@@ -349,7 +351,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (headerContainer) {
             const response =
-                await fetch("/header");
+                await fetch("/header", {
+                    headers: { "X-App-Component": "true" }
+                });
 
             if (!response.ok) {
                 throw new Error(

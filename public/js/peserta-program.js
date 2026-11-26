@@ -210,7 +210,7 @@
             .forEach(dataset => {
                 const option = document.createElement("option");
                 option.value = dataset.id;
-                option.textContent = dataset.filename;
+                option.textContent = dataset.name || dataset.filename;
                 select.appendChild(option);
             });
     }

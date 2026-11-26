@@ -350,7 +350,7 @@
             String(item.dataset_type ?? item.datasetType ?? "").toLowerCase() === "penerima"
         ).forEach(item => {
             const option = document.createElement("option");
-            option.value = item.id; option.textContent = item.filename; select.appendChild(option);
+            option.value = item.id; option.textContent = item.name || item.filename; select.appendChild(option);
         });
     }
     function buildColumns() {

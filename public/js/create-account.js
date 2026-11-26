@@ -135,12 +135,14 @@ form.addEventListener("submit", async event => {
         }
 
         showMessage(
-            "Profil berjaya dicipta. Sedang log masuk...",
+            "Profil berjaya dicipta. Menunggu kelulusan admin...",
             "success"
         );
 
         window.location.replace(
-            typeof window.appUrl === "function" ? window.appUrl("/") : "/"
+            typeof window.appUrl === "function"
+                ? window.appUrl("/log-masuk?status=pending")
+                : "/log-masuk?status=pending"
         );
 
     } catch (error) {

@@ -37,12 +37,16 @@ function getDatasetType(dataset) {
         ""
     ).toLowerCase();
 
-    if (storedType === "peserta" || storedType === "penerima") {
+    if (["peserta", "penerima", "usahawan10k"].includes(storedType)) {
         return storedType;
     }
 
     const searchableText = `${dataset.name || ""} ${dataset.filename || ""}`
         .toLowerCase();
+
+    if (searchableText.includes("usahawan 10k") || searchableText.includes("usahawan10k")) {
+        return "usahawan10k";
+    }
 
     return searchableText.includes("peserta")
         ? "peserta"
@@ -293,9 +297,11 @@ function createDatasetCard(dataset) {
         String(dataset.filename || "").replace(/\.(?:csv|xlsx?)$/i, "") ||
         "Tanpa Nama"
     );
-    const datasetTypeLabel = getDatasetType(dataset) === "peserta"
-        ? "Peserta Program"
-        : "Penerima Bantuan";
+    const datasetTypeLabel = {
+        peserta: "Peserta Program",
+        penerima: "Penerima Bantuan",
+        usahawan10k: "Usahawan 10K"
+    }[getDatasetType(dataset)];
     const unitInCharge = String(
         dataset.unit_incharge ??
         dataset.unitInCharge ??
@@ -606,6 +612,7 @@ let originalRows = [];
 let sourceHeaders = [];
 let sourceRows = [];
 let filteredRows = [];
+let participantDisplayColumns = null;
 let visibleColumns = [];
 let columnWidths = [];
 let currentPage = 1;
@@ -633,6 +640,10 @@ let deleteMode = false;
 let pendingDeleteRowIndex = null;
 let newRows = new Set();
 let mouseSelecting = false;
+let datasetProgramsRow = null;
+let datasetProgramsSourceIndex = -1;
+let datasetProgramsOriginalValue = "";
+let datasetProgramsParticipantName = "";
 
 let chartFilterColumn = "";
 let chartFilterValue = "";
@@ -682,6 +693,68 @@ function normalizeDatasetHeader(value) {
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "");
+}
+
+function isParticipantDataset() {
+    return getDatasetType(dataset || {}) === "peserta";
+}
+
+function getTableColumns() {
+    return participantDisplayColumns || headers.map((header, sourceIndex) => ({
+        header,
+        sourceIndex
+    }));
+}
+
+function createParticipantDisplayColumns() {
+    const findSourceIndex = (...aliases) =>
+        headers.findIndex(header =>
+            aliases.includes(normalizeDatasetHeader(header))
+        );
+
+    return [
+        { header: "NAMA", sourceIndex: findSourceIndex("nama") },
+        { header: "KAD PENGENALAN", sourceIndex: findSourceIndex("kadpengenalan") },
+        { header: "KATEGORI", sourceIndex: findSourceIndex("kategori", "ketegori") },
+        { header: "PENDAPATAN AWAL/SEBELUM", sourceIndex: findSourceIndex("pendapatanawalsebelum") },
+        { header: "PENDAPATAN SEMASA/SELEPAS", sourceIndex: findSourceIndex("pendapatansemasaselepas") },
+        { header: "STATUS", sourceIndex: findSourceIndex("status") },
+        { header: "CATATAN", sourceIndex: findSourceIndex("catatan") },
+        {
+            header: "PROGRAM",
+            sourceIndex: findSourceIndex("program"),
+            derived: "program-count"
+        }
+    ];
+}
+
+function getTableColumnValue(row, column) {
+    if (column.sourceIndex < 0) return "";
+    const value = String(row[column.sourceIndex] ?? "");
+    if (column.derived !== "program-count") return value;
+
+    const programs = new Set(
+        value.split(",").map(program => program.trim()).filter(Boolean)
+    );
+    return `${programs.size} Program`;
+}
+
+function getSourceColumnIndexForCell(cell) {
+    return Number(
+        cell.dataset.sourceColumnIndex ?? cell.dataset.columnIndex
+    );
+}
+
+function initializeTableColumns() {
+    participantDisplayColumns = isParticipantDataset()
+        ? createParticipantDisplayColumns()
+        : null;
+
+    const columns = getTableColumns();
+    visibleColumns = columns.map(column =>
+        normalizeDatasetHeader(column.header) !== "pic"
+    );
+    columnWidths = columns.map(() => 160);
 }
 
 function normalizeDatasetHeaders() {
@@ -756,7 +829,7 @@ function initializeAddRecordForm() {
     if (!source || !fieldsContainer || !dataset) return;
 
     const sourceId = String(dataset.id || getDatasetId());
-    const sourceName = dataset.filename || dataset.name || "Set Data";
+    const sourceName = dataset.name || dataset.filename || "Set Data";
     source.replaceChildren(new Option(sourceName, sourceId, true, true));
     source.disabled = true;
 
@@ -891,10 +964,7 @@ function discardDatasetTableChanges() {
         rows = sourceRows.map(row => [...row]);
         originalRows = rows.map(row => [...row]);
         schemaNeedsSave = false;
-        visibleColumns = headers.map(
-            header => String(header).trim().toLowerCase() !== "pic"
-        );
-        columnWidths = headers.map(() => 160);
+        initializeTableColumns();
         const columnCount = document.getElementById("columnCount");
         if (columnCount) {
             columnCount.textContent = headers.length.toLocaleString();
@@ -973,6 +1043,8 @@ function initializeDataset() {
     if (loading) loading.style.display = "none";
     if (content) content.style.display = "block";
 
+    updateDatasetPageTypeStyles();
+
     const parsed = parseCSV(dataset.csv || "");
 
     headers = parsed.length ? [...parsed[0]] : [];
@@ -987,11 +1059,7 @@ function initializeDataset() {
     filteredRows = [...rows];
     initializeAddRecordForm();
 
-    visibleColumns = headers.map(
-        header => String(header).trim().toLowerCase() !== "pic"
-    );
-
-    columnWidths = headers.map(() => 160);
+    initializeTableColumns();
 
     selectedRows.clear();
     selectedCell = null;
@@ -1029,6 +1097,47 @@ function initializeDataset() {
     updateSaveButton();
     updateUndoRedoButtons();
     renderTable();
+}
+
+function updateDatasetPageTypeStyles() {
+    const isParticipant = isParticipantDataset();
+
+    document.getElementById("datasetDetailView")
+        ?.classList.toggle("participant-page", isParticipant);
+    document.getElementById("datasetTable")
+        ?.classList.toggle("participant-table", isParticipant);
+    document.querySelector(".dataset-detail-table-card")
+        ?.classList.toggle("participant-table-card", isParticipant);
+    document.querySelector(".dataset-detail-table-card-header")
+        ?.classList.toggle("participant-table-card-header", isParticipant);
+    document.getElementById("datasetRecordCount")
+        ?.classList.toggle("participant-record-count", isParticipant);
+
+    const searchTitle = document.getElementById("datasetSearchTitle");
+    const searchDescription = document.getElementById("datasetSearchDescription");
+    const searchInput = document.getElementById("searchInput");
+    const tableTitle = document.getElementById("datasetTableCardTitle");
+    const tableDescription = document.getElementById("datasetTableCardDescription");
+
+    if (searchTitle) {
+        searchTitle.textContent = isParticipant ? "Peserta Program" : "Carian Set Data";
+    }
+    if (searchDescription) {
+        searchDescription.textContent = isParticipant
+            ? "Senarai peserta dan program yang disertai."
+            : "Cari dan tapis rekod dalam set data ini.";
+    }
+    if (searchInput) {
+        searchInput.placeholder = isParticipant ? "Cari peserta..." : "Cari rekod...";
+    }
+    if (tableTitle) {
+        tableTitle.textContent = isParticipant ? "Senarai Peserta Program" : "Senarai Rekod";
+    }
+    if (tableDescription) {
+        tableDescription.textContent = isParticipant
+            ? "Maklumat peserta program dan program yang disertai."
+            : "Rekod dalam set data ini.";
+    }
 }
 
 function updateDatasetHeader() {
@@ -1117,7 +1226,7 @@ function createColumnChecklist() {
 
     checklist.innerHTML = "";
 
-    headers.forEach((header, index) => {
+    getTableColumns().forEach((column, index) => {
         const label = document.createElement("label");
         label.className = "column-checkbox";
 
@@ -1132,7 +1241,7 @@ function createColumnChecklist() {
         });
 
         const text = document.createElement("span");
-        text.textContent = header || `Lajur ${index + 1}`;
+        text.textContent = column.header || `Lajur ${index + 1}`;
 
         label.append(checkbox, text);
         checklist.appendChild(label);
@@ -1146,7 +1255,7 @@ function toggleAllColumns() {
         visibleColumns.length > 0 &&
         visibleColumns.every(Boolean);
 
-    visibleColumns = headers.map(() => !allSelected);
+    visibleColumns = getTableColumns().map(() => !allSelected);
 
     updateColumnCheckboxes();
     updateSelectAllColumnsButton();
@@ -1179,23 +1288,17 @@ function createFilterOptions() {
     const fields = document.getElementById("datasetFilterFields");
     if (!fields) return;
     fields.replaceChildren();
-    const isParticipantDataset = getDatasetType(dataset || {}) === "peserta";
 
-    headers.forEach((header, columnIndex) => {
+    getTableColumns().forEach((column, columnIndex) => {
         const counts = new Map();
         let hasEmpty = false;
-        const isParticipantProgramColumn =
-            isParticipantDataset &&
-            normalizeDatasetHeader(header) === "program";
         rows.forEach(row => {
-            const values = isParticipantProgramColumn
-                ? String(row[columnIndex] ?? "").split(",").map(value => value.trim()).filter(Boolean)
-                : [String(row[columnIndex] ?? "").trim()].filter(Boolean);
-            if (!values.length) {
+            const value = getTableColumnValue(row, column).trim();
+            if (!value) {
                 hasEmpty = true;
                 return;
             }
-            values.forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
+            counts.set(value, (counts.get(value) || 0) + 1);
         });
 
         const repeatedValues = [...counts]
@@ -1207,7 +1310,7 @@ function createFilterOptions() {
         const field = document.createElement("div");
         field.className = "filter-field";
         const label = document.createElement("label");
-        label.textContent = header || `Lajur ${columnIndex + 1}`;
+        label.textContent = column.header || `Lajur ${columnIndex + 1}`;
         const select = document.createElement("select");
         select.dataset.columnIndex = String(columnIndex);
         select.appendChild(new Option("Semua", ""));
@@ -1233,7 +1336,11 @@ function applyURLFilters() {
 }
 
 function setDatasetColumnFilter(header, requestedValue) {
-    const columnIndex = findColumnIndex(header);
+    const sourceColumnIndex = findColumnIndex(header);
+    const columnIndex = getTableColumns().findIndex(column =>
+        normalizeDatasetHeader(column.header) === normalizeDatasetHeader(header) ||
+        (sourceColumnIndex >= 0 && column.sourceIndex === sourceColumnIndex)
+    );
     if (columnIndex === -1) return;
 
     const requested = requestedValue.trim();
@@ -1260,12 +1367,12 @@ function applyFilters() {
     const selectedFilters = Object.entries(datasetColumnFilters)
         .filter(([, value]) => value)
         .map(([index, value]) => [Number(index), value]);
-    const isParticipantDataset = getDatasetType(dataset || {}) === "peserta";
+    const tableColumns = getTableColumns();
 
     filteredRows = rows.filter(row => {
         if (search) {
-            const matchesSearch = row.some(value =>
-                String(value ?? "")
+            const matchesSearch = tableColumns.some(column =>
+                getTableColumnValue(row, column)
                     .toLowerCase()
                     .includes(search)
             );
@@ -1274,16 +1381,13 @@ function applyFilters() {
         }
 
         for (const [columnIndex, filterValue] of selectedFilters) {
-            const value = String(row[columnIndex] ?? "").trim();
-            const isParticipantProgramColumn =
-                isParticipantDataset &&
-                normalizeDatasetHeader(headers[columnIndex]) === "program";
-            const values = isParticipantProgramColumn
-                ? value.split(",").map(item => item.trim()).filter(Boolean)
-                : [value];
+            const value = getTableColumnValue(
+                row,
+                tableColumns[columnIndex] || { sourceIndex: -1 }
+            ).trim();
             const matchesFilter = filterValue === "__EMPTY__"
-                ? values.length === 0
-                : values.includes(filterValue);
+                ? value === ""
+                : value === filterValue;
             if (!matchesFilter) {
                 return false;
             }
@@ -1326,12 +1430,15 @@ function getChartFilter() {
 function rowMatchesChartFilter(row) {
     if (!chartFilterColumn) return true;
 
-    const columnIndex = findColumnIndex(chartFilterColumn);
-
-    if (columnIndex === -1) return true;
+    const sourceColumnIndex = findColumnIndex(chartFilterColumn);
+    const displayColumn = getTableColumns().find(column =>
+        normalizeDatasetHeader(column.header) === normalizeDatasetHeader(chartFilterColumn) ||
+        (sourceColumnIndex >= 0 && column.sourceIndex === sourceColumnIndex)
+    );
+    if (!displayColumn) return true;
 
     const rowValue =
-        String(row[columnIndex] ?? "").trim();
+        getTableColumnValue(row, displayColumn).trim();
 
     const filterValue =
         String(chartFilterValue ?? "").trim();
@@ -1364,7 +1471,11 @@ function applyChartFilterToSelects() {
 
     let select = null;
 
-    const columnIndex = findColumnIndex(column);
+    const sourceColumnIndex = findColumnIndex(column);
+    const columnIndex = getTableColumns().findIndex(tableColumn =>
+        normalizeDatasetHeader(tableColumn.header) === normalizeDatasetHeader(column) ||
+        (sourceColumnIndex >= 0 && tableColumn.sourceIndex === sourceColumnIndex)
+    );
     if (columnIndex >= 0) {
         select = document.querySelector(
             `#datasetFilterFields select[data-column-index="${columnIndex}"]`
@@ -1394,8 +1505,9 @@ function renderTable() {
     if (!tableHead || !tableBody || !emptyTable) return;
 
     const table = document.getElementById("datasetTable");
+    const isParticipant = isParticipantDataset();
     table.style.width = "100%";
-    table.style.minWidth = "100%";
+    table.style.minWidth = isParticipant ? "1325px" : "100%";
     table.style.tableLayout = "fixed";
 
     tableHead.innerHTML = "";
@@ -1413,7 +1525,9 @@ function renderTable() {
 
     headerRow.appendChild(selectHeader);
 
-    headers.forEach((header, columnIndex) => {
+    const tableColumns = getTableColumns();
+
+    tableColumns.forEach((column, columnIndex) => {
         if (!visibleColumns[columnIndex]) return;
 
         const th = document.createElement("th");
@@ -1446,7 +1560,7 @@ function renderTable() {
         const title = document.createElement("span");
         title.className = "header-label";
         title.textContent =
-            header || `Lajur ${columnIndex + 1}`;
+            column.header || `Lajur ${columnIndex + 1}`;
 
         const sortIcon = document.createElement("span");
         sortIcon.className = "sort-icon";
@@ -1480,7 +1594,7 @@ function renderTable() {
     const actionHeader = document.createElement("th");
     actionHeader.className = "row-action-column";
     actionHeader.setAttribute("aria-label", "Tindakan");
-    applyColumnWidth(actionHeader, 48);
+    applyColumnWidth(actionHeader, isParticipant ? 84 : 48);
     headerRow.appendChild(actionHeader);
 
     tableHead.appendChild(headerRow);
@@ -1516,7 +1630,7 @@ function renderTable() {
         return;
     }
 
-    pageRows.forEach(row => {
+    pageRows.forEach((row, pageRowIndex) => {
         const actualRowIndex = rows.indexOf(row);
 
         if (actualRowIndex === -1) return;
@@ -1540,7 +1654,9 @@ function renderTable() {
             const rowNumber = document.createElement("span");
 
             rowNumber.className = "row-number";
-            rowNumber.textContent = actualRowIndex + 1;
+            rowNumber.textContent = isParticipant
+                ? startIndex + pageRowIndex + 1
+                : actualRowIndex + 1;
 
             selectCell.appendChild(rowNumber);
 
@@ -1556,14 +1672,16 @@ function renderTable() {
             const rowNumber = document.createElement("span");
 
             rowNumber.className = "row-number";
-            rowNumber.textContent = actualRowIndex + 1;
+            rowNumber.textContent = isParticipant
+                ? startIndex + pageRowIndex + 1
+                : actualRowIndex + 1;
 
             selectCell.appendChild(rowNumber);
         }
 
         tr.appendChild(selectCell);
 
-        headers.forEach((header, columnIndex) => {
+        tableColumns.forEach((column, columnIndex) => {
             if (!visibleColumns[columnIndex]) return;
 
             const td = document.createElement("td");
@@ -1571,11 +1689,16 @@ function renderTable() {
             td.className = "excel-cell";
             td.tabIndex = 0;
 
-            td.textContent = row[columnIndex] ?? "";
-            td.title = row[columnIndex] ?? "";
+            const value = getTableColumnValue(row, column);
+            td.textContent = value;
+            td.title = value;
 
             td.dataset.rowIndex = actualRowIndex;
             td.dataset.columnIndex = columnIndex;
+            td.dataset.sourceColumnIndex = column.sourceIndex;
+            td.dataset.readOnly = String(
+                column.sourceIndex < 0 || column.derived === "program-count"
+            );
 
             applyColumnWidth(
                 td,
@@ -1602,7 +1725,7 @@ function renderTable() {
             });
 
             td.addEventListener("dblclick", event => {
-                if (deleteMode) return;
+                if (deleteMode || td.dataset.readOnly === "true") return;
 
                 event.preventDefault();
                 startCellEditing(td, false);
@@ -1617,6 +1740,38 @@ function renderTable() {
 
         const actionCell = document.createElement("td");
         actionCell.className = "row-action-cell";
+
+        const rowLabel = isParticipant
+            ? String(
+                row[findColumnIndex("NAMA")] ||
+                row[findColumnIndex("KAD PENGENALAN")] ||
+                "peserta"
+            )
+            : `rekod ${actualRowIndex + 1}`;
+
+        const actionButtons = isParticipant
+            ? document.createElement("div")
+            : null;
+        if (actionButtons) {
+            actionButtons.className = "participant-row-actions";
+            const programsButton = document.createElement("button");
+            programsButton.type = "button";
+            programsButton.className = "budget-row-action";
+            programsButton.setAttribute(
+                "aria-label",
+                `Lihat senarai program untuk ${rowLabel}`
+            );
+            programsButton.title = "Lihat senarai program";
+            programsButton.innerHTML = '<i class="bi bi-three-dots" aria-hidden="true"></i>';
+            programsButton.addEventListener("mousedown", event => event.stopPropagation());
+            programsButton.addEventListener("dblclick", event => event.stopPropagation());
+            programsButton.addEventListener("click", event => {
+                event.stopPropagation();
+                openDatasetProgramsModal(row);
+            });
+            actionButtons.appendChild(programsButton);
+        }
+
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "row-delete-button";
@@ -1626,7 +1781,7 @@ function renderTable() {
             !window.canEditAppPage("dataset");
         deleteButton.setAttribute(
             "aria-label",
-            `Padam rekod ${actualRowIndex + 1}`
+            `Padam rekod ${rowLabel}`
         );
         deleteButton.title = "Padam rekod";
         deleteButton.innerHTML =
@@ -1635,7 +1790,12 @@ function renderTable() {
             event.stopPropagation();
             openDeleteConfirmation(actualRowIndex);
         });
-        actionCell.appendChild(deleteButton);
+        if (actionButtons) {
+            actionButtons.appendChild(deleteButton);
+            actionCell.appendChild(actionButtons);
+        } else {
+            actionCell.appendChild(deleteButton);
+        }
 
         tr.appendChild(actionCell);
 
@@ -1651,6 +1811,185 @@ function renderTable() {
     updateCellSelection();
     updateSelectionInfo();
     updateDeleteButton();
+}
+
+function openDatasetProgramsModal(row) {
+    const dialog = document.getElementById("participantProgramsDialog");
+    const title = document.getElementById("participantProgramsTitle");
+    const subtitle = document.getElementById("participantProgramsSubtitle");
+    const list = document.getElementById("participantProgramsList");
+    const programColumn = participantDisplayColumns?.find(column =>
+        column.derived === "program-count"
+    );
+
+    if (!dialog || !title || !subtitle || !list || !programColumn) return;
+
+    const nameIndex = findColumnIndex("NAMA");
+    const identityIndex = findColumnIndex("KAD PENGENALAN");
+    const participantName =
+        row[nameIndex] || row[identityIndex] || "Peserta";
+    const rawPrograms = String(row[programColumn.sourceIndex] ?? "");
+    const programs = rawPrograms.split(",").map(program => program.trim()).filter(Boolean);
+    const canEdit = typeof window.canEditAppPage === "function" &&
+        window.canEditAppPage("dataset");
+
+    datasetProgramsRow = row;
+    datasetProgramsSourceIndex = programColumn.sourceIndex;
+    datasetProgramsOriginalValue = rawPrograms;
+    datasetProgramsParticipantName = participantName;
+
+    title.textContent = "Program Disertai";
+    subtitle.textContent = `${participantName} · ${new Set(programs).size} program`;
+    list.replaceChildren();
+    list.classList.toggle("is-editing", canEdit);
+
+    if (canEdit) {
+        programs.forEach(program => appendDatasetProgramInput(program));
+        if (!programs.length) showEmptyDatasetPrograms();
+    } else if (programs.length) {
+        programs.forEach(program => {
+            const item = document.createElement("li");
+            item.textContent = program;
+            list.appendChild(item);
+        });
+    } else {
+        showEmptyDatasetPrograms();
+    }
+
+    document.getElementById("addParticipantProgramButton").hidden = !canEdit;
+    document.getElementById("participantProgramsSaveHint").hidden = !canEdit;
+    dialog.classList.remove("is-closing");
+    if (!dialog.open) dialog.showModal();
+    document.getElementById("closeParticipantPrograms")?.focus();
+}
+
+function showEmptyDatasetPrograms() {
+    const list = document.getElementById("participantProgramsList");
+    if (!list) return;
+    const item = document.createElement("li");
+    item.className = "participant-programs-empty";
+    item.textContent = "Tiada program disenaraikan.";
+    list.appendChild(item);
+}
+
+function appendDatasetProgramInput(value = "") {
+    const list = document.getElementById("participantProgramsList");
+    if (!list) return;
+
+    list.querySelector(".participant-programs-empty")?.remove();
+
+    const item = document.createElement("li");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "form-control participant-program-input";
+    input.dataset.programEntry = "true";
+    input.value = value;
+    input.setAttribute("aria-label", "Nama program");
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "participant-program-remove";
+    removeButton.dataset.removeProgram = "true";
+    removeButton.setAttribute("aria-label", "Buang program");
+    removeButton.innerHTML = '<i class="bi bi-trash3" aria-hidden="true"></i>';
+
+    item.append(input, removeButton);
+    list.appendChild(item);
+}
+
+function getDatasetProgramsDraft() {
+    return [...document.querySelectorAll(
+        "#participantProgramsList input[data-program-entry]"
+    )]
+        .map(input => input.value.trim())
+        .filter(Boolean);
+}
+
+function stageDatasetProgramsDraft() {
+    const rowIndex = rows.indexOf(datasetProgramsRow);
+    const newPrograms = getDatasetProgramsDraft();
+    const newValue = newPrograms.join(", ");
+    if (rowIndex < 0 || datasetProgramsSourceIndex < 0) return;
+    if (String(datasetProgramsRow[datasetProgramsSourceIndex] ?? "") === newValue) return;
+
+    datasetProgramsRow[datasetProgramsSourceIndex] = newValue;
+    const subtitle = document.getElementById("participantProgramsSubtitle");
+    if (subtitle) {
+        subtitle.textContent =
+            `${datasetProgramsParticipantName} · ${new Set(newPrograms).size} program`;
+    }
+    checkForChanges();
+
+    const tableColumns = getTableColumns();
+    const programCountColumnIndex = tableColumns.findIndex(column =>
+        column.derived === "program-count"
+    );
+    const programCountCell = document.querySelector(
+        `#tableBody td[data-row-index="${rowIndex}"][data-column-index="${programCountColumnIndex}"]`
+    );
+    if (programCountColumnIndex >= 0 && programCountCell) {
+        const value = getTableColumnValue(
+            datasetProgramsRow,
+            tableColumns[programCountColumnIndex]
+        );
+        programCountCell.textContent = value;
+        programCountCell.title = value;
+    }
+}
+
+function updateDatasetProgramsList() {
+    const list = document.getElementById("participantProgramsList");
+    if (!list) return;
+    if (!list.querySelector("input[data-program-entry]")) {
+        showEmptyDatasetPrograms();
+    } else {
+        list.querySelector(".participant-programs-empty")?.remove();
+    }
+    stageDatasetProgramsDraft();
+}
+
+function recordDatasetProgramsEdit() {
+    const rowIndex = rows.indexOf(datasetProgramsRow);
+    if (rowIndex < 0 || datasetProgramsSourceIndex < 0) return;
+
+    const newValue = String(
+        datasetProgramsRow[datasetProgramsSourceIndex] ?? ""
+    );
+    if (newValue === datasetProgramsOriginalValue) return;
+
+    addHistory({
+        type: "edit",
+        rowIndex,
+        columnIndex: datasetProgramsSourceIndex,
+        oldValue: datasetProgramsOriginalValue,
+        newValue
+    });
+}
+
+function closeDatasetProgramsModal() {
+    const dialog = document.getElementById("participantProgramsDialog");
+    if (!dialog?.open || dialog.classList.contains("is-closing") || savingChanges) return;
+
+    recordDatasetProgramsEdit();
+    applyFilters();
+    renderTable();
+    dialog.classList.add("is-closing");
+    let finished = false;
+    const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timeout);
+        dialog.removeEventListener("animationend", onAnimationEnd);
+        if (dialog.open) dialog.close();
+        dialog.classList.remove("is-closing");
+    };
+    const onAnimationEnd = event => {
+        if (event.target === dialog && event.animationName === "bpa-create-dialog-exit") {
+            finish();
+        }
+    };
+    const timeout = window.setTimeout(finish, 250);
+    dialog.addEventListener("animationend", onAnimationEnd);
 }
 
 function toggleDeleteRow(rowIndex) {
@@ -1871,7 +2210,7 @@ function getCellElement(rowIndex, columnIndex) {
 }
 
 function startCellEditing(td, replaceValue = false) {
-    if (!td || deleteMode) return;
+    if (!td || deleteMode || td.dataset.readOnly === "true") return;
 
     if (editingCell && editingCell !== td) {
         finishEditingCell();
@@ -1881,6 +2220,8 @@ function startCellEditing(td, replaceValue = false) {
 
     const rowIndex = Number(td.dataset.rowIndex);
     const columnIndex = Number(td.dataset.columnIndex);
+    const sourceColumnIndex = getSourceColumnIndexForCell(td);
+    if (sourceColumnIndex < 0) return;
 
     selectedCell = {
         rowIndex,
@@ -1900,7 +2241,7 @@ function startCellEditing(td, replaceValue = false) {
     };
 
     const oldValue =
-        String(rows[rowIndex]?.[columnIndex] ?? "");
+        String(rows[rowIndex]?.[sourceColumnIndex] ?? "");
 
     td.dataset.editOldValue = oldValue;
     td.contentEditable = "true";
@@ -1927,17 +2268,18 @@ function startCellEditing(td, replaceValue = false) {
 }
 
 function openDatasetCellSuggestions(td) {
+    const sourceColumnIndex = getSourceColumnIndexForCell(td);
     if (
         !(
             getDatasetType(dataset || {}) === "peserta" &&
             ["kategori", "status"].includes(
-                normalizeDatasetHeader(headers[Number(td.dataset.columnIndex)])
+                normalizeDatasetHeader(headers[sourceColumnIndex])
             )
         ) &&
         !(
             getDatasetType(dataset || {}) === "penerima" &&
             ["pekerjaan", "statuspekerjaan", "status", "catatan"].includes(
-            normalizeDatasetHeader(headers[Number(td.dataset.columnIndex)])
+            normalizeDatasetHeader(headers[sourceColumnIndex])
             )
         )
     ) return;
@@ -1974,7 +2316,7 @@ function updateDatasetCellSuggestions() {
     const state = cellSuggestionState;
     if (!state || !state.td.isConnected) return;
 
-    const columnIndex = Number(state.td.dataset.columnIndex);
+    const columnIndex = getSourceColumnIndexForCell(state.td);
     const currentValue = state.td.textContent.trim();
     const query = currentValue.toLocaleLowerCase();
     const values = new Set(
@@ -2031,7 +2373,7 @@ function finishEditingCell() {
     closeDatasetCellSuggestions();
 
     const rowIndex = Number(td.dataset.rowIndex);
-    const columnIndex = Number(td.dataset.columnIndex);
+    const columnIndex = getSourceColumnIndexForCell(td);
 
     const oldValue =
         td.dataset.editOldValue ??
@@ -2069,13 +2411,12 @@ function exportDatasetToExcel() {
         applyFilters();
         if (!window.XLSX) throw new Error("Pustaka eksport Excel tidak tersedia.");
 
-        const exportHeaders = headers.filter((_, index) => visibleColumns[index]);
+        const exportColumns = getTableColumns()
+            .filter((_, index) => visibleColumns[index]);
         const worksheetData = [
-            exportHeaders,
+            exportColumns.map(column => column.header),
             ...filteredRows.map(row =>
-                headers.flatMap((_, index) =>
-                    visibleColumns[index] ? [row[index] ?? ""] : []
-                )
+                exportColumns.map(column => getTableColumnValue(row, column))
             )
         ];
         const worksheet = window.XLSX.utils.aoa_to_sheet(worksheetData);
@@ -2130,6 +2471,7 @@ function handleCellKeydown(event, td) {
 
     const rowIndex = Number(td.dataset.rowIndex);
     const columnIndex = Number(td.dataset.columnIndex);
+    const sourceColumnIndex = getSourceColumnIndexForCell(td);
 
     if (event.key === "Escape") {
         event.preventDefault();
@@ -2138,8 +2480,8 @@ function handleCellKeydown(event, td) {
         const oldValue =
             td.dataset.editOldValue ?? "";
 
-        if (rows[rowIndex]) {
-            rows[rowIndex][columnIndex] = oldValue;
+        if (rows[rowIndex] && sourceColumnIndex >= 0) {
+            rows[rowIndex][sourceColumnIndex] = oldValue;
         }
 
         td.textContent = oldValue;
@@ -2337,7 +2679,7 @@ function beginTypingEdit(character) {
             selectedCell.columnIndex
         );
 
-    if (!td) return;
+    if (!td || td.dataset.readOnly === "true") return;
 
     startCellEditing(td, true);
 
@@ -2355,7 +2697,7 @@ function beginTypingEdit(character) {
 }
 
 function getVisibleColumnIndexes() {
-    return headers
+    return getTableColumns()
         .map((_, index) => index)
         .filter(index => visibleColumns[index] !== false);
 }
@@ -2686,7 +3028,8 @@ function moveToCell(
     extendSelection = false,
     preserveAnchor = false
 ) {
-    if (!rows.length || !headers.length || deleteMode) return;
+    const columnCount = getTableColumns().length;
+    if (!rows.length || !columnCount || deleteMode) return;
 
     rowIndex =
         Math.max(
@@ -2697,7 +3040,7 @@ function moveToCell(
     columnIndex =
         Math.max(
             0,
-            Math.min(headers.length - 1, columnIndex)
+            Math.min(columnCount - 1, columnIndex)
         );
 
     if (extendSelection) {
@@ -2892,6 +3235,7 @@ function buildClipboardText() {
     if (!selectionRange && !selectedCell) return "";
 
     const cells = getSelectedCellCoordinates();
+    const tableColumns = getTableColumns();
 
     if (!cells.length) return "";
 
@@ -2935,8 +3279,9 @@ function buildClipboardText() {
             columnIndex++
         ) {
             values.push(
-                String(
-                    rows[rowIndex]?.[columnIndex] ?? ""
+                getTableColumnValue(
+                    rows[rowIndex] || [],
+                    tableColumns[columnIndex] || { sourceIndex: -1 }
                 )
             );
         }
@@ -3005,8 +3350,9 @@ function pasteText(text) {
     if (deleteMode) return;
 
     const matrix = parseClipboardText(text);
+    const tableColumns = getTableColumns();
 
-    if (!matrix.length || !headers.length) return;
+    if (!matrix.length || !tableColumns.length) return;
 
     const startRow = selectedCell.rowIndex;
     const startColumn = selectedCell.columnIndex;
@@ -3061,10 +3407,14 @@ function pasteText(text) {
         if (targetRow === undefined) return;
 
         pasteRow.forEach((value, columnOffset) => {
-            const targetColumn =
+            const targetDisplayColumn =
                 startColumn + columnOffset;
 
-            if (targetColumn >= headers.length) return;
+            if (targetDisplayColumn >= tableColumns.length) return;
+
+            const column = tableColumns[targetDisplayColumn];
+            const targetColumn = column.sourceIndex;
+            if (targetColumn < 0 || column.derived) return;
 
             const oldValue =
                 rows[targetRow][targetColumn] ?? "";
@@ -3115,7 +3465,7 @@ function pasteText(text) {
 
     const endColumn =
         Math.min(
-            headers.length - 1,
+            tableColumns.length - 1,
             startColumn + maxPasteColumns - 1
         );
 
@@ -3151,15 +3501,18 @@ function clearSelectedCells() {
     const changes = [];
 
     cells.forEach(({ rowIndex, columnIndex }) => {
-        const oldValue =
-            rows[rowIndex]?.[columnIndex] ?? "";
+        const column = getTableColumns()[columnIndex];
+        const sourceColumnIndex = column?.sourceIndex ?? -1;
+        if (sourceColumnIndex < 0 || column.derived) return;
+
+        const oldValue = rows[rowIndex]?.[sourceColumnIndex] ?? "";
 
         if (oldValue !== "") {
-            rows[rowIndex][columnIndex] = "";
+            rows[rowIndex][sourceColumnIndex] = "";
 
             changes.push({
                 rowIndex,
-                columnIndex,
+                columnIndex: sourceColumnIndex,
                 oldValue,
                 newValue: ""
             });
@@ -3180,6 +3533,9 @@ function clearSelectedCells() {
 function sortDataset(columnIndex) {
     if (deleteMode) return;
 
+    const column = getTableColumns()[columnIndex];
+    if (!column) return;
+
     if (currentSortColumn === columnIndex) {
         currentSortDirection =
             currentSortDirection === "asc"
@@ -3194,10 +3550,10 @@ function sortDataset(columnIndex) {
 
     rows.sort((a, b) => {
         const valueA =
-            String(a[columnIndex] ?? "").trim();
+            getTableColumnValue(a, column).trim();
 
         const valueB =
-            String(b[columnIndex] ?? "").trim();
+            getTableColumnValue(b, column).trim();
 
         const numberA =
             Number(valueA.replace(/,/g, ""));
@@ -4686,11 +5042,47 @@ function bindDatasetViewEvents(detailView) {
             }
         });
 
+    document.getElementById("closeParticipantPrograms")
+        ?.addEventListener("click", closeDatasetProgramsModal);
+
+    document.getElementById("addParticipantProgramButton")
+        ?.addEventListener("click", () => {
+            appendDatasetProgramInput();
+            const inputs = document.querySelectorAll(
+                "#participantProgramsList input[data-program-entry]"
+            );
+            inputs[inputs.length - 1]?.focus();
+        });
+
+    document.getElementById("participantProgramsList")
+        ?.addEventListener("input", stageDatasetProgramsDraft);
+
+    document.getElementById("participantProgramsList")
+        ?.addEventListener("click", event => {
+            const removeButton = event.target.closest("[data-remove-program]");
+            if (!removeButton) return;
+            removeButton.closest("li")?.remove();
+            updateDatasetProgramsList();
+        });
+
+    document.getElementById("participantProgramsDialog")
+        ?.addEventListener("cancel", event => {
+            event.preventDefault();
+            closeDatasetProgramsModal();
+        });
+
     document.addEventListener("keydown", event => {
         const addForm = document.getElementById("addForm");
         if (event.key === "Escape" && addForm?.open) {
             event.preventDefault();
             closeAddForm();
+            return;
+        }
+
+        const programsDialog = document.getElementById("participantProgramsDialog");
+        if (event.key === "Escape" && programsDialog?.open) {
+            event.preventDefault();
+            closeDatasetProgramsModal();
             return;
         }
 

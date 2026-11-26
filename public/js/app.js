@@ -196,6 +196,22 @@ document.addEventListener("click", event => {
         return;
     }
 
+    if (event.target instanceof HTMLDialogElement && event.target.open) {
+        const dialog = event.target;
+        const bounds = dialog.getBoundingClientRect();
+        const clickedOutside = event.clientX < bounds.left || event.clientX > bounds.right
+            || event.clientY < bounds.top || event.clientY > bounds.bottom;
+        if (!clickedOutside) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const cancelEvent = new Event("cancel", { cancelable: true });
+        if (dialog.dispatchEvent(cancelEvent) && dialog.open) {
+            dialog.close();
+        }
+        return;
+    }
+
     const noteClose = event.target instanceof Element
         ? event.target.closest("[data-sku-note-close], [data-budget-note-close]")
         : null;
@@ -1637,7 +1653,7 @@ function initializeBpaDashboardSwitcher() {
     }]]);
 
     const toolbar = document.createElement("section");
-    toolbar.className = "bpa-dashboard-selector";
+    toolbar.className = "bpa-dashboard-selector bpa-dashboard-selector--units";
     toolbar.setAttribute("aria-label", "Pilih papan pemuka unit");
     toolbar.innerHTML = allowedCards.map(card => `
         <button type="button" class="bpa-dashboard-card bpa-dashboard-card--${card.color}"
@@ -3169,7 +3185,10 @@ async function submitBpaAddForm(form) {
         const response = await fetch(modal.url, {
             method: "POST",
             body: new FormData(form),
-            headers: { "X-Requested-With": "XMLHttpRequest" }
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-App-Modal": "true"
+            }
         });
 
         if (response.headers.get("content-type")?.includes("application/json")) {
@@ -3285,7 +3304,9 @@ async function submitBpaAddForm(form) {
 
 async function openBpaAddModal(url, trigger) {
     const target = new URL(url, window.location.href);
-    const response = await fetch(target.href);
+    const response = await fetch(target.href, {
+        headers: { "X-App-Modal": "true" }
+    });
     if (!response.ok) {
         throw new Error(`Borang tidak dapat dimuat (HTTP ${response.status}).`);
     }
@@ -3512,7 +3533,7 @@ async function navigateTo(url, replace = false) {
     const supported =
         targetPathname === "/" ||
         targetPathname === "/set-data" ||
-        targetPathname.startsWith("/set-data/") ||
+        /^\/set-data\/\d+$/.test(targetPathname) ||
         targetPathname === "/muat-naik" ||
         targetPathname === "/penerima-peserta" ||
         targetPathname === "/peserta-program" ||
@@ -3520,12 +3541,30 @@ async function navigateTo(url, replace = false) {
         targetPathname === "/aktiviti-pengguna" ||
         targetPathname === "/akaun-pengguna" ||
         targetPathname === "/pengurusan-pengguna";
-    const isBpaPage = targetPathname.startsWith("/bpa/");
+    const navigableBpaPages = [
+        "/bpa/dashboard",
+        "/bpa/admin/bajet_list",
+        "/bpa/admin/sku_list",
+        "/bpa/admin/user_list",
+        "/bpa/admin/user_edit",
+        "/bpa/laporan/program_list"
+    ];
+    const isBpaPage = navigableBpaPages.some(path =>
+        targetPathname === path || targetPathname === `${path}.php`
+    );
 
-    if (
-        target.origin !== window.location.origin ||
-        (!supported && !isBpaPage)
-    ) {
+    if (target.origin !== window.location.origin) {
+        window.location.assign(target.href);
+        return;
+    }
+    if (targetPathname.startsWith("/bpa/") && !isBpaPage) {
+        const dashboardUrl = typeof window.appUrl === "function"
+            ? window.appUrl("/bpa/dashboard")
+            : "/bpa/dashboard";
+        window.location.assign(dashboardUrl);
+        return;
+    }
+    if (!supported && !isBpaPage) {
         window.location.assign(target.href);
         return;
     }
@@ -3603,7 +3642,11 @@ async function navigateTo(url, replace = false) {
         if (!markup) {
             const response = await fetch(
                 target.pathname + target.search,
-                isBpaPage ? undefined : {
+                isBpaPage ? {
+                    headers: {
+                        "X-App-Navigation": "true"
+                    }
+                } : {
                     headers: {
                         "X-App-Fragment": "true"
                     }

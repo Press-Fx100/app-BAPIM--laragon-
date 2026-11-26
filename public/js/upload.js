@@ -7,6 +7,26 @@ let csvRows = null;
 let activeSheet = 0;
 
 const PREVIEW_ROWS = 10;
+const USAHAWAN10K_HEADERS = [
+    "NAMA",
+    "KAD PENGENALAN",
+    "TELEFON",
+    "LOKASI",
+    "PRODUK",
+    "TARIKH SESI",
+    "STATUS",
+    "CATATAN"
+];
+const USAHAWAN10K_FIELDS = [
+    ["name", "NAMA"],
+    ["identity", "KAD PENGENALAN"],
+    ["phone", "TELEFON"],
+    ["location", "LOKASI"],
+    ["product", "PRODUK"],
+    ["sessionDate", "TARIKH SESI"],
+    ["status", "STATUS"],
+    ["notes", "CATATAN"]
+];
 
 let uploadOverlay;
 let uploadCard;
@@ -56,6 +76,12 @@ let recipientHeaderMapping = {
 };
 let recipientHeaderMappingContainer;
 let recipientHeaderSelects = {};
+let usahawan10kHeaderMapping = {
+    name: "", identity: "", phone: "", location: "",
+    product: "", sessionDate: "", status: "", notes: ""
+};
+let usahawan10kHeaderMappingContainer;
+let usahawan10kHeaderSelects = {};
 
 function formatFileSize(bytes) {
     const size = Number(bytes);
@@ -199,7 +225,19 @@ function readCSV(file) {
 
             renderParticipantHeaderMapping();
             renderRecipientHeaderMapping();
-            if (uploadMode === "peserta") {
+            renderUsahawan10kHeaderMapping();
+            if (uploadMode === "usahawan10k") {
+                if (usahawan10kHeadersAreValid()) {
+                    const usahawanRows = buildUsahawan10kRows(true);
+                    uploadPreviewRows.textContent = `${Math.max(usahawanRows.length - 1, 0).toLocaleString()} baris pratonton`;
+                    renderTable(usahawanRows);
+                    importUploadButton.disabled = false;
+                } else {
+                    uploadPreviewRows.textContent = "-";
+                    uploadPreviewTable.replaceChildren();
+                    importUploadButton.disabled = true;
+                }
+            } else if (uploadMode === "peserta") {
                 if (participantHeadersAreValid()) {
                     const participantRows = buildParticipantRows(true);
                     uploadPreviewRows.textContent = `${Math.min(
@@ -216,7 +254,12 @@ function readCSV(file) {
                 importUploadButton.disabled = !recipientHeadersAreValid();
             }
 
-            if (uploadMode === "peserta" && !participantHeadersAreValid()) {
+            if (uploadMode === "usahawan10k" && !usahawan10kHeadersAreValid()) {
+                showUploadStatus(
+                    "Padankan Nama, Kad Pengenalan dan Telefon, dan pastikan setiap lajur yang dipilih berbeza.",
+                    "error"
+                );
+            } else if (uploadMode === "peserta" && !participantHeadersAreValid()) {
                 showUploadStatus(
                     "Pilih lajur NAMA, KAD PENGENALAN dan PROGRAM yang berbeza.",
                     "error"
@@ -417,6 +460,27 @@ function updateSheetSelection() {
         renderParticipantHeaderMapping();
         renderRecipientHeaderMapping();
     }
+    renderUsahawan10kHeaderMapping();
+
+    if (uploadMode === "usahawan10k" && selectedType === "csv") {
+        uploadSelectedSheetCount.textContent = "Fail CSV dipilih";
+        if (!usahawan10kHeadersAreValid()) {
+            uploadPreviewRows.textContent = "-";
+            uploadPreviewTable.replaceChildren();
+            importUploadButton.disabled = true;
+            showUploadStatus(
+                "Padankan Nama, Kad Pengenalan dan Telefon, dan pastikan setiap lajur yang dipilih berbeza.",
+                "error"
+            );
+            return;
+        }
+        const usahawanRows = buildUsahawan10kRows(true);
+        uploadPreviewRows.textContent = `${Math.max(usahawanRows.length - 1, 0).toLocaleString()} baris pratonton`;
+        renderTable(usahawanRows);
+        importUploadButton.disabled = false;
+        hideUploadStatus();
+        return;
+    }
 
     if (uploadMode === "peserta" && selectedType === "csv") {
         uploadSelectedSheetCount.textContent = "Fail CSV dipilih";
@@ -484,6 +548,25 @@ function updateSheetSelection() {
 
     if (!excelSheets[activeSheet]?.selected) {
         activeSheet = excelSheets.findIndex(sheet => sheet.selected);
+    }
+
+    if (uploadMode === "usahawan10k") {
+        if (!usahawan10kHeadersAreValid()) {
+            uploadPreviewRows.textContent = "-";
+            uploadPreviewTable.replaceChildren();
+            importUploadButton.disabled = true;
+            showUploadStatus(
+                "Setiap helaian terpilih mesti mempunyai lajur yang dipadankan untuk Nama, Kad Pengenalan dan Telefon.",
+                "error"
+            );
+            return;
+        }
+        const usahawanRows = buildUsahawan10kRows(true);
+        uploadPreviewRows.textContent = `${Math.max(usahawanRows.length - 1, 0).toLocaleString()} baris pratonton`;
+        renderTable(usahawanRows);
+        importUploadButton.disabled = false;
+        hideUploadStatus();
+        return;
     }
 
     if (uploadMode === "peserta") {
@@ -918,6 +1001,161 @@ function getSourceHeaders() {
     return getParticipantHeaders();
 }
 
+function getUsahawan10kSheetHeaders(sheet) {
+    const worksheet = workbook?.Sheets[sheet.name];
+    if (!worksheet?.["!ref"]) return [];
+    const range = XLSX.utils.decode_range(worksheet["!ref"]);
+    const headers = [];
+    for (let column = range.s.c; column <= range.e.c; column += 1) {
+        headers.push(participantCellText(
+            worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: column })]
+        ).trim());
+    }
+    return headers;
+}
+
+function getUsahawan10kSourceHeaders() {
+    if (selectedType === "csv") {
+        return (csvRows?.[0] || [])
+            .map(value => String(value ?? "").trim())
+            .filter(Boolean);
+    }
+
+    const headers = new Set();
+    excelSheets
+        .filter(sheet => sheet.selected)
+        .forEach(sheet => {
+            getUsahawan10kSheetHeaders(sheet).filter(Boolean).forEach(header => headers.add(header));
+        });
+    return Array.from(headers);
+}
+
+function renderUsahawan10kHeaderMapping() {
+    if (!usahawan10kHeaderMappingContainer) return;
+    if (uploadMode !== "usahawan10k" || !["csv", "xlsx", "xls"].includes(selectedType)) {
+        usahawan10kHeaderMappingContainer.style.display = "none";
+        return;
+    }
+
+    const headers = getUsahawan10kSourceHeaders();
+    usahawan10kHeaderMappingContainer.style.display = "block";
+    usahawan10kHeaderMappingContainer.querySelector(
+        ".dataset-upload-section-title span"
+    ).textContent = headers.length
+        ? "Pilih lajur sumber yang sepadan dengan setiap medan."
+        : "Tiada pengepala sumber ditemui.";
+
+    USAHAWAN10K_FIELDS.forEach(([field, expectedHeader]) => {
+        const select = usahawan10kHeaderSelects[field];
+        const currentValue = usahawan10kHeaderMapping[field];
+        select.replaceChildren();
+
+        const unselected = document.createElement("option");
+        unselected.value = "";
+        unselected.textContent = "Pilih lajur";
+        select.appendChild(unselected);
+
+        headers.forEach(header => {
+            const option = document.createElement("option");
+            option.value = header;
+            option.textContent = header;
+            select.appendChild(option);
+        });
+
+        select.value = headers.includes(currentValue)
+            ? currentValue
+            : findExactHeader(headers, expectedHeader);
+        usahawan10kHeaderMapping[field] = select.value;
+    });
+}
+
+function usahawan10kHeadersAreValid() {
+    const mappedHeaders = USAHAWAN10K_FIELDS.map(([field]) => usahawan10kHeaderMapping[field]);
+    const requiredHeaders = [
+        usahawan10kHeaderMapping.name,
+        usahawan10kHeaderMapping.identity,
+        usahawan10kHeaderMapping.phone
+    ];
+    const selectedHeaders = mappedHeaders.filter(Boolean);
+    if (
+        !requiredHeaders.every(Boolean) ||
+        new Set(selectedHeaders).size !== selectedHeaders.length
+    ) {
+        return false;
+    }
+    if (selectedType === "csv") {
+        const headers = (csvRows?.[0] || []).map(value => String(value ?? "").trim());
+        return requiredHeaders.every(header => headers.includes(header));
+    }
+    if (!["xlsx", "xls"].includes(selectedType)) return false;
+    const selectedSheets = excelSheets.filter(sheet => sheet.selected);
+    return selectedSheets.length > 0 && selectedSheets.every(sheet => {
+        const headers = getUsahawan10kSheetHeaders(sheet);
+        return requiredHeaders.every(header => headers.includes(header));
+    });
+}
+
+function buildUsahawan10kRows(previewOnly = false) {
+    const output = [USAHAWAN10K_HEADERS];
+    const appendRows = (headers, rows, identityText = value => String(value ?? "").trim()) => {
+        const normalizedHeaders = headers.map(value => String(value ?? "").trim());
+        const indexes = USAHAWAN10K_FIELDS.map(([field]) =>
+            usahawan10kHeaderMapping[field]
+                ? normalizedHeaders.indexOf(usahawan10kHeaderMapping[field])
+                : -1
+        );
+        if (indexes.slice(0, 3).some(index => index < 0)) return;
+
+        for (const row of rows) {
+            const values = indexes.map((index, fieldIndex) => {
+                if (index < 0) return "";
+                const value = row[index] ?? "";
+                return fieldIndex === 1 ? identityText(value) : String(value).trim();
+            });
+            if (values.some(value => value !== "")) output.push(values);
+            if (previewOnly && output.length > PREVIEW_ROWS) break;
+        }
+    };
+
+    if (selectedType === "csv") {
+        appendRows(
+            csvRows?.[0] || [],
+            (csvRows || []).slice(1, previewOnly ? PREVIEW_ROWS + 1 : undefined),
+            participantIdentityText
+        );
+        return output;
+    }
+
+    for (const sheet of excelSheets.filter(item => item.selected)) {
+        const worksheet = workbook?.Sheets[sheet.name];
+        if (!worksheet?.["!ref"]) continue;
+        const range = XLSX.utils.decode_range(worksheet["!ref"]);
+        const headers = getUsahawan10kSheetHeaders(sheet);
+        const indexes = USAHAWAN10K_FIELDS.map(([field]) =>
+            usahawan10kHeaderMapping[field]
+                ? headers.indexOf(usahawan10kHeaderMapping[field])
+                : -1
+        );
+        if (indexes.slice(0, 3).some(index => index < 0)) continue;
+
+        for (let rowIndex = range.s.r + 1; rowIndex <= range.e.r; rowIndex += 1) {
+            const values = indexes.map((columnIndex, fieldIndex) => {
+                if (columnIndex < 0) return "";
+                const cell = worksheet[XLSX.utils.encode_cell({
+                    r: rowIndex,
+                    c: range.s.c + columnIndex
+                })];
+                return fieldIndex === 1
+                    ? participantIdentityCellText(cell)
+                    : participantCellText(cell);
+            });
+            if (values.some(value => value !== "")) output.push(values);
+            if (previewOnly && output.length > PREVIEW_ROWS) return output;
+        }
+    }
+    return output;
+}
+
 function findExactHeader(headers, expectedName) {
     const expected = String(expectedName).trim().toLocaleLowerCase();
     return headers.find(header =>
@@ -1242,9 +1480,12 @@ async function importDataset() {
 
     if (
         (uploadMode === "peserta" && !participantHeadersAreValid()) ||
-        (uploadMode === "penerima" && !recipientHeadersAreValid())
+        (uploadMode === "penerima" && !recipientHeadersAreValid()) ||
+        (uploadMode === "usahawan10k" && !usahawan10kHeadersAreValid())
     ) {
-        alert("Sila pilih header untuk NAMA dan KAD PENGENALAN.");
+        alert(uploadMode === "usahawan10k"
+            ? "Padankan Nama, Kad Pengenalan dan Telefon, dan pastikan setiap lajur yang dipilih berbeza."
+            : "Sila pilih header untuk NAMA dan KAD PENGENALAN.");
         return;
     }
 
@@ -1282,10 +1523,12 @@ async function importDataset() {
     try {
         const formData = new FormData();
 
-        if (uploadMode === "peserta" || uploadMode === "penerima") {
+        if (["peserta", "penerima", "usahawan10k"].includes(uploadMode)) {
             const normalizedRows = uploadMode === "peserta"
                 ? buildParticipantRows()
-                : buildRecipientRows();
+                : uploadMode === "usahawan10k"
+                    ? buildUsahawan10kRows()
+                    : buildRecipientRows();
 
             if (normalizedRows.length < 2) {
                 throw new Error("Tiada data yang sah ditemui.");
@@ -1303,7 +1546,11 @@ async function importDataset() {
             formData.append(
                 "name",
                 uploadDatasetName.value.trim() ||
-                (uploadMode === "peserta" ? "Peserta Program" : "Penerima Bantuan")
+                (uploadMode === "peserta"
+                    ? "Peserta Program"
+                    : uploadMode === "usahawan10k"
+                        ? "Usahawan 10K"
+                        : "Penerima Bantuan")
             );
             formData.append("datasetType", uploadMode);
             formData.append("unitInCharge", uploadUnitInCharge.value);
@@ -1374,7 +1621,7 @@ async function importDataset() {
             );
         }
 
-        if (selectedType === "csv" || uploadMode === "peserta") {
+        if (selectedType === "csv" || uploadMode === "peserta" || uploadMode === "usahawan10k") {
             window.showAppAlert?.(
                 `Berjaya import "${result.name || uploadDatasetName.value}" (${Number(result.rows || 0).toLocaleString()} baris).`,
                 "success"
@@ -1458,6 +1705,10 @@ function resetUpload(resetSelections = false) {
         name: "", identity: "", phone: "", email: "",
         status: "", notes: "", pic: ""
     };
+    usahawan10kHeaderMapping = {
+        name: "", identity: "", phone: "", location: "",
+        product: "", sessionDate: "", status: "", notes: ""
+    };
 
     datasetFileInput.value = "";
 
@@ -1476,6 +1727,7 @@ function resetUpload(resetSelections = false) {
 
     uploadDatasetName.value = "";
     uploadUnitInCharge.value = "";
+    uploadUnitInCharge.dispatchEvent(new Event("change", { bubbles: true }));
 
     uploadSelectedSheetCount.textContent =
         "0 sheet dipilih";
@@ -1483,6 +1735,7 @@ function resetUpload(resetSelections = false) {
     uploadPreviewRows.textContent = "-";
     participantHeaderMappingContainer.style.display = "none";
     recipientHeaderMappingContainer.style.display = "none";
+    usahawan10kHeaderMappingContainer.style.display = "none";
 
     importUploadButton.disabled = true;
     setImportButtonLabel("Import Data");
@@ -1547,7 +1800,20 @@ function initializeUploadController() {
         notes: document.getElementById("recipientNotesHeader"),
         pic: document.getElementById("recipientPicHeader")
     };
+    usahawan10kHeaderMappingContainer = document.getElementById("usahawan10kHeaderMapping");
+    usahawan10kHeaderSelects = {
+        name: document.getElementById("usahawan10kNameHeader"),
+        identity: document.getElementById("usahawan10kIdentityHeader"),
+        phone: document.getElementById("usahawan10kPhoneHeader"),
+        location: document.getElementById("usahawan10kLocationHeader"),
+        product: document.getElementById("usahawan10kProductHeader"),
+        sessionDate: document.getElementById("usahawan10kSessionDateHeader"),
+        status: document.getElementById("usahawan10kStatusHeader"),
+        notes: document.getElementById("usahawan10kNotesHeader")
+    };
     uploadMode = uploadDatasetType?.value || "penerima";
+    const usahawanHint = document.getElementById("usahawan10kUploadHint");
+    if (usahawanHint) usahawanHint.hidden = uploadMode !== "usahawan10k";
 
     if (!uploadCard) {
         return;
@@ -1575,14 +1841,22 @@ function initializeUploadController() {
 
     uploadDatasetType?.addEventListener("change", () => {
         uploadMode = uploadDatasetType.value;
+        const usahawanHint = document.getElementById("usahawan10kUploadHint");
+        if (usahawanHint) usahawanHint.hidden = uploadMode !== "usahawan10k";
+        if (uploadMode === "usahawan10k") {
+            uploadUnitInCharge.value = "UPU";
+            uploadUnitInCharge.dispatchEvent(new Event("change", { bubbles: true }));
+        }
 
         if (selectedFile) {
             renderParticipantHeaderMapping();
             renderRecipientHeaderMapping();
+            renderUsahawan10kHeaderMapping();
             updateSheetSelection();
         } else {
             renderParticipantHeaderMapping();
             renderRecipientHeaderMapping();
+            renderUsahawan10kHeaderMapping();
         }
     });
 
@@ -1612,6 +1886,13 @@ function initializeUploadController() {
     Object.entries(recipientHeaderSelects).forEach(([field, select]) => {
         select?.addEventListener("change", () => {
             recipientHeaderMapping[field] = select.value;
+            updateSheetSelection();
+        });
+    });
+
+    Object.entries(usahawan10kHeaderSelects).forEach(([field, select]) => {
+        select?.addEventListener("change", () => {
+            usahawan10kHeaderMapping[field] = select.value;
             updateSheetSelection();
         });
     });

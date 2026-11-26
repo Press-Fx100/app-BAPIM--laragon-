@@ -107,8 +107,8 @@
 
                     <div class="content-card mb-4 dataset-page-header sku-search-card-standard">
                         <div>
-                            <h4>Carian Set Data</h4>
-                            <p>Cari dan tapis rekod dalam set data ini.</p>
+                            <h4 id="datasetSearchTitle">Carian Set Data</h4>
+                            <p id="datasetSearchDescription">Cari dan tapis rekod dalam set data ini.</p>
                         </div>
                         <div class="dataset-header-controls">
                             <div class="search-toolbar-group dataset-detail-toolbar-group">
@@ -161,8 +161,8 @@
 
                         <div class="dataset-detail-table-card-header">
                             <div>
-                                <h5>Senarai Rekod</h5>
-                                <span>Rekod dalam set data ini.</span>
+                                <h5 id="datasetTableCardTitle">Senarai Rekod</h5>
+                                <span id="datasetTableCardDescription">Rekod dalam set data ini.</span>
                             </div>
                             <span id="datasetRecordCount" class="recipient-record-count">0 rekod</span>
                         </div>
@@ -307,6 +307,7 @@
                     <select id="datasetEditType" class="form-select" required>
                         <option value="penerima">PENERIMA BANTUAN</option>
                         <option value="peserta">PESERTA PROGRAM</option>
+                        <option value="usahawan10k">USAHAWAN 10K</option>
                     </select>
                 </div>
                 <div class="dataset-edit-field">
@@ -386,6 +387,31 @@
                 <span>Tambah</span>
             </button>
         </footer>
+    </dialog>
+
+    <dialog id="participantProgramsDialog"
+        class="bpa-create-dialog bpa-create-dialog--structured participant-programs-dialog"
+        aria-labelledby="participantProgramsTitle" aria-describedby="participantProgramsSubtitle">
+        <header class="bpa-create-dialog__header">
+            <div class="bpa-create-dialog__heading">
+                <h2 id="participantProgramsTitle">Program Disertai</h2>
+                <p id="participantProgramsSubtitle" class="bpa-create-dialog__subtitle">
+                    Senarai program peserta.
+                </p>
+            </div>
+            <button type="button" id="closeParticipantPrograms" class="bpa-create-dialog__close"
+                aria-label="Tutup senarai program">&times;</button>
+        </header>
+        <div class="bpa-create-dialog__body participant-programs-body">
+            <ul id="participantProgramsList" class="participant-programs-list"></ul>
+            <button type="button" id="addParticipantProgramButton" class="participant-program-add-button"
+                data-permission-edit="dataset" aria-label="Tambah program" title="Tambah program" hidden>
+                <i class="bi bi-plus-lg" aria-hidden="true"></i>
+            </button>
+            <p id="participantProgramsSaveHint" class="participant-program-save-hint" hidden>
+                Tutup dialog, kemudian tekan Simpan pada kad carian untuk menyimpan perubahan.
+            </p>
+        </div>
     </dialog>
 
     <div id="deleteConfirm" class="delete-confirmation-overlay" aria-hidden="true">

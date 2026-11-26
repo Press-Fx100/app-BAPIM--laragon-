@@ -53,6 +53,8 @@
                                 data-dataset-type="penerima" role="menuitem">Penerima Bantuan</button>
                             <button type="button" class="dataset-type-filter-option"
                                 data-dataset-type="peserta" role="menuitem">Peserta Program</button>
+                            <button type="button" class="dataset-type-filter-option"
+                                data-dataset-type="usahawan10k" role="menuitem">Usahawan 10K</button>
                         </div>
                     </div>
                 </div>
@@ -119,6 +121,7 @@
                             <select id="uploadDatasetType" class="form-select">
                                 <option value="penerima">PENERIMA BANTUAN</option>
                                 <option value="peserta">PESERTA PROGRAM</option>
+                                <option value="usahawan10k">USAHAWAN 10K</option>
                             </select>
                         </div>
                         <div>
@@ -131,6 +134,28 @@
                                 <option value="UAK">UAK</option>
                                 <option value="UPA">UPA</option>
                             </select>
+                        </div>
+                    </div>
+                    <p id="usahawan10kUploadHint" class="text-muted small" hidden>
+                        Nama, Kad Pengenalan dan Telefon wajib dipadankan. Medan lain adalah pilihan.
+                    </p>
+
+                    <div id="usahawan10kHeaderMapping" class="dataset-upload-header-mapping" style="display:none;">
+                        <div class="dataset-upload-section-title">
+                            <div>
+                                <strong>Padankan Pengepala Usahawan 10K</strong>
+                                <span>Pilih lajur sumber yang sepadan dengan setiap medan.</span>
+                            </div>
+                        </div>
+                        <div class="dataset-upload-fields">
+                            <div><label for="usahawan10kNameHeader">NAMA <span class="required">*</span></label><select id="usahawan10kNameHeader" class="form-select"></select></div>
+                            <div><label for="usahawan10kIdentityHeader">KAD PENGENALAN <span class="required">*</span></label><select id="usahawan10kIdentityHeader" class="form-select"></select></div>
+                            <div><label for="usahawan10kPhoneHeader">TELEFON <span class="required">*</span></label><select id="usahawan10kPhoneHeader" class="form-select"></select></div>
+                            <div><label for="usahawan10kLocationHeader">LOKASI</label><select id="usahawan10kLocationHeader" class="form-select"></select></div>
+                            <div><label for="usahawan10kProductHeader">PRODUK</label><select id="usahawan10kProductHeader" class="form-select"></select></div>
+                            <div><label for="usahawan10kSessionDateHeader">TARIKH SESI</label><select id="usahawan10kSessionDateHeader" class="form-select"></select></div>
+                            <div><label for="usahawan10kStatusHeader">STATUS</label><select id="usahawan10kStatusHeader" class="form-select"></select></div>
+                            <div><label for="usahawan10kNotesHeader">CATATAN</label><select id="usahawan10kNotesHeader" class="form-select"></select></div>
                         </div>
                     </div>
 
@@ -310,6 +335,7 @@
                         <select id="datasetEditType" class="form-select" required>
                             <option value="penerima">PENERIMA BANTUAN</option>
                             <option value="peserta">PESERTA PROGRAM</option>
+                            <option value="usahawan10k">USAHAWAN 10K</option>
                         </select>
                     </div>
                     <div class="dataset-edit-field">
